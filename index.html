@@ -11,19 +11,24 @@
     <h1>Partial Fractions Integral Practice</h1>
     <p class="subtitle">Find the antiderivative using partial fractions.</p>
 
-    <div class="card">
-      <div class="label">Problem</div>
-      <math-field id="problem" read-only class="display-field"></math-field>
+    <div id="problemCardSlot">
+      <div class="card problem-card" id="problemCard">
+        <div class="label">Evaluate the integral</div>
+        <math-field id="problem" read-only class="display-field"></math-field>
+      </div>
     </div>
 
-    <div class="card">
-      <div class="label">Your answer (antiderivative — the "+ C" is optional)</div>
+    <div class="card answer-card" id="answerCard">
+      <div class="answer-badge" id="answerBadge"></div>
+      <div class="answer-status-text" id="answerStatusText"></div>
+      <div class="label">Your answer</div>
+      <div class="answer-hint">Type <b>ln</b> for the logarithm and use <b>| |</b> for absolute value. The “+ C” is optional.</div>
       <math-field id="answer" class="input-field" virtual-keyboard-mode="onfocus"></math-field>
     </div>
 
     <div class="buttons">
       <button id="checkBtn">Check</button>
-      <button id="nextBtn" class="secondary">Next exercise</button>
+      <button id="nextBtn">Another exercise</button>
     </div>
 
     <div id="feedback" class="feedback"></div>

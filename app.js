@@ -1,4 +1,10 @@
-import "https://esm.run/mathlive";
+import "https://esm.run/mathlive@0.110.0"; // registers the <math-field> custom element
+import { MathfieldElement } from "https://esm.run/mathlive@0.110.0";
+
+// esm.run's asset resolution for MathLive's math fonts is unreliable -
+// point it at a CDN path that actually serves them.
+MathfieldElement.fontsDirectory = "https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";
+MathfieldElement.soundsDirectory = null;
 
 // ---------------------------------------------------------------------------
 // LaTeX -> JS evaluator
@@ -316,27 +322,97 @@ function checkAnswer(problem, latex) {
 // ---------------------------------------------------------------------------
 
 let currentProblem = null;
+let solved = false;
+let outgoingClone = null;
 
+const problemCardEl = document.getElementById("problemCard");
+const problemCardSlotEl = document.getElementById("problemCardSlot");
 const problemField = document.getElementById("problem");
+const answerCardEl = document.getElementById("answerCard");
+const answerBadgeEl = document.getElementById("answerBadge");
+const answerStatusEl = document.getElementById("answerStatusText");
 const answerField = document.getElementById("answer");
 const feedbackEl = document.getElementById("feedback");
 const checkBtn = document.getElementById("checkBtn");
 const nextBtn = document.getElementById("nextBtn");
 
-function showNextExercise() {
+// Marks the answer card itself as null (neutral, while working) or
+// "correct"/"incorrect" (graded: border glow, a check/cross badge and a
+// small label on the card). Called fresh on every grade so a second wrong
+// attempt gets its own clear signal.
+function setAnswerState(state) {
+  answerCardEl.classList.remove("correct", "incorrect");
+  answerBadgeEl.classList.remove("show", "correct", "incorrect");
+  answerBadgeEl.textContent = "";
+  answerStatusEl.classList.remove("show", "correct", "incorrect");
+  answerStatusEl.textContent = "";
+  if (!state) return;
+  void answerCardEl.offsetWidth; // restart the shake if "incorrect" is set twice in a row
+  answerCardEl.classList.add(state);
+  answerBadgeEl.classList.add("show", state);
+  answerBadgeEl.textContent = state === "correct" ? "✓" : "✗";
+  answerStatusEl.classList.add("show", state);
+  answerStatusEl.textContent = state === "correct" ? "Correct" : "Incorrect";
+}
+
+function removeOutgoingClone() {
+  if (outgoingClone) {
+    outgoingClone.remove();
+    outgoingClone = null;
+  }
+}
+
+// Slides a snapshot of the whole outgoing problem card away while the next
+// one is already rendered underneath. <math-field> keeps its content in a
+// shadow root that cloneNode doesn't copy, so the clone's value is re-set.
+function slideOutCurrentCard() {
+  removeOutgoingClone(); // in case a previous transition is still mid-flight
+  const rect = problemCardEl.getBoundingClientRect();
+  const slotRect = problemCardSlotEl.getBoundingClientRect();
+  const clone = problemCardEl.cloneNode(true);
+  clone.removeAttribute("id");
+  clone.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  clone.classList.add("problem-card-outgoing");
+  clone.style.left = `${rect.left - slotRect.left}px`;
+  clone.style.top = `${rect.top - slotRect.top}px`;
+  clone.style.width = `${rect.width}px`;
+  clone.querySelector("math-field").value = problemField.value;
+  problemCardSlotEl.appendChild(clone);
+  outgoingClone = clone;
+  void clone.offsetWidth; // force a reflow so the transition below actually animates
+  clone.classList.add("animate-out");
+  clone.addEventListener("transitionend", removeOutgoingClone, { once: true });
+}
+
+function showNextExercise({ animate = false } = {}) {
+  if (animate && problemField.value) slideOutCurrentCard();
   currentProblem = generateProblem();
+  solved = false;
+  gradedValue = null;
   problemField.value = problemToLatex(currentProblem);
   answerField.value = "";
   feedbackEl.textContent = "";
   feedbackEl.className = "feedback";
+  setAnswerState(null);
+  checkBtn.disabled = false;
+  nextBtn.classList.remove("ready");
   answerField.focus();
 }
 
+// The field's content when it was last graded. An "input" event only counts
+// as an edit if the content really differs from it: MathLive fires input
+// events late (just after a check) and may not wipe the grade just shown.
+let gradedValue = null;
+
 checkBtn.addEventListener("click", () => {
+  gradedValue = answerField.value;
   const result = checkAnswer(currentProblem, answerField.value);
   if (result.ok) {
-    feedbackEl.textContent = "Correct! Your derivative matches the integrand.";
-    feedbackEl.className = "feedback correct";
+    solved = true;
+    feedbackEl.textContent = "";
+    setAnswerState("correct");
+    checkBtn.disabled = true;
+    nextBtn.classList.add("ready");
     return;
   }
   let msg = result.reason;
@@ -346,8 +422,19 @@ checkBtn.addEventListener("click", () => {
   }
   feedbackEl.textContent = msg;
   feedbackEl.className = "feedback incorrect";
+  setAnswerState("incorrect");
 });
 
-nextBtn.addEventListener("click", showNextExercise);
+// Editing the answer at all returns the card to neutral, so the next wrong
+// attempt starts from a clean slate instead of a stale red border.
+answerField.addEventListener("input", () => {
+  if (solved || answerField.value === gradedValue) return;
+  gradedValue = null;
+  setAnswerState(null);
+  feedbackEl.textContent = "";
+  feedbackEl.className = "feedback";
+});
+
+nextBtn.addEventListener("click", () => showNextExercise({ animate: true }));
 
 showNextExercise();
