@@ -308,319 +308,46 @@ function checkAnswer(problem, latex) {
 }
 
 // ---------------------------------------------------------------------------
-// Game: capped real-time meter + coin economy
+// UI wiring
+//
+// The game layer (meter, wallet, swap, win/lose) is shelved in
+// shelved/game-version/ - this file is just: show an exercise, check the
+// answer, move on to the next one.
 // ---------------------------------------------------------------------------
 
-const METER_CAP = 20; // minutes
-const BASE_REWARD = 15; // coins for a correct answer with 0 mistakes
-const MISTAKE_PENALTY = 3; // coins lost per wrong attempt on the current question
-const TIME_BONUS_TIERS = [
-  [10, 3],
-  [12.5, 2],
-  [15, 1],
-]; // [under this many minutes, this many bonus coins], checked in order
-const SWAP_DELAY_MS = 20000; // question must be visible this long before it can be swapped
-const SWAP_COST = 5; // coins
-const WIN_TARGET = 4; // correct answers needed to win
-const STORAGE_KEY = "calcapp-checkpoint-v1";
-
-const game = {
-  wallet: 0,
-  meter: METER_CAP,
-  correctCount: 0,
-  problem: null,
-  mistakes: 0,
-  questionShownAt: 0,
-  swapAvailableAt: 0,
-  ended: null, // null | "win" | "lose"
-};
-let tickHandle = null;
+let currentProblem = null;
 
 const problemField = document.getElementById("problem");
 const answerField = document.getElementById("answer");
 const feedbackEl = document.getElementById("feedback");
-const debugOut = document.getElementById("debugOut");
 const checkBtn = document.getElementById("checkBtn");
-const swapBtn = document.getElementById("swapBtn");
-const walletValueEl = document.getElementById("walletValue");
-const meterValueEl = document.getElementById("meterValue");
-const meterFillEl = document.getElementById("meterFill");
-const meterCardEl = document.querySelector(".meter-card");
-const progressValueEl = document.getElementById("progressValue");
-const addOneBtn = document.getElementById("addOneBtn");
-const addFiveBtn = document.getElementById("addFiveBtn");
-const overlayEl = document.getElementById("overlay");
-const overlayTitleEl = document.getElementById("overlayTitle");
-const overlayBodyEl = document.getElementById("overlayBody");
-const overlayBtnEl = document.getElementById("overlayBtn");
+const nextBtn = document.getElementById("nextBtn");
 
-function loadCheckpoint() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const cp = JSON.parse(raw);
-    if (typeof cp.wallet !== "number" || typeof cp.meter !== "number" || typeof cp.correctCount !== "number") {
-      return null;
-    }
-    return cp;
-  } catch {
-    return null;
-  }
-}
-
-function saveCheckpoint() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({ wallet: game.wallet, meter: game.meter, correctCount: game.correctCount })
-  );
-}
-
-function clearCheckpoint() {
-  localStorage.removeItem(STORAGE_KEY);
-}
-
-function fmtTime(minutes) {
-  const totalSeconds = Math.max(0, Math.round(minutes * 60));
-  const mm = Math.floor(totalSeconds / 60);
-  const ss = totalSeconds % 60;
-  return `${mm}:${String(ss).padStart(2, "0")}`;
-}
-
-function startNewQuestion() {
-  game.problem = generateProblem();
-  game.mistakes = 0;
-  game.questionShownAt = Date.now();
-  game.swapAvailableAt = game.questionShownAt + SWAP_DELAY_MS;
-  problemField.value = problemToLatex(game.problem);
+function showNextExercise() {
+  currentProblem = generateProblem();
+  problemField.value = problemToLatex(currentProblem);
   answerField.value = "";
+  feedbackEl.textContent = "";
+  feedbackEl.className = "feedback";
   answerField.focus();
 }
 
-function clearFeedback() {
-  feedbackEl.textContent = "";
-  feedbackEl.className = "feedback";
-}
-
-function updateWalletUI() {
-  walletValueEl.textContent = String(game.wallet);
-}
-
-function updateProgressUI() {
-  progressValueEl.textContent = `${game.correctCount} / ${WIN_TARGET}`;
-}
-
-function updateMeterUI() {
-  const pct = Math.max(0, Math.min(100, (game.meter / METER_CAP) * 100));
-  meterFillEl.style.width = `${pct}%`;
-  meterValueEl.textContent = fmtTime(game.meter);
-
-  meterFillEl.classList.remove("meter-warn", "meter-danger");
-  meterCardEl.classList.remove("meter-danger");
-  if (pct < 25) {
-    meterFillEl.classList.add("meter-danger");
-    meterCardEl.classList.add("meter-danger");
-  } else if (pct < 50) {
-    meterFillEl.classList.add("meter-warn");
-  }
-
-  const roomInMeter = Math.floor(METER_CAP - game.meter + 1e-9);
-  addOneBtn.disabled = game.ended !== null || roomInMeter <= 0 || game.wallet <= 0;
-  addFiveBtn.disabled = game.ended !== null || roomInMeter <= 0 || game.wallet <= 0;
-}
-
-function updateSwapUI() {
-  if (game.ended) {
-    swapBtn.disabled = true;
-    return;
-  }
-  const remainingMs = game.swapAvailableAt - Date.now();
-  if (remainingMs > 0) {
-    swapBtn.disabled = true;
-    swapBtn.textContent = `Swap question (available in ${Math.ceil(remainingMs / 1000)}s)`;
-  } else {
-    swapBtn.textContent = `Swap question (-${SWAP_COST} coins)`;
-    swapBtn.disabled = game.wallet < SWAP_COST;
-  }
-}
-
-function updateAll() {
-  updateWalletUI();
-  updateProgressUI();
-  updateMeterUI();
-  updateSwapUI();
-  debugOut.textContent = JSON.stringify(
-    { ...game.problem, wallet: game.wallet, meter: game.meter.toFixed(2), correctCount: game.correctCount, mistakes: game.mistakes },
-    null,
-    0
-  );
-}
-
-function addToMeter(amount) {
-  if (game.ended) return;
-  // The meter drains continuously as a float, so "room to cap" is rarely a
-  // whole number - floor it so coins (always whole) never buy a fractional
-  // minute and the wallet stays an integer.
-  const room = Math.floor(METER_CAP - game.meter + 1e-9);
-  const spend = Math.max(0, Math.min(amount, room, game.wallet));
-  if (spend <= 0) return;
-  game.meter += spend;
-  game.wallet -= spend;
-  updateAll();
-}
-
-function stopTicking() {
-  if (tickHandle !== null) {
-    clearInterval(tickHandle);
-    tickHandle = null;
-  }
-}
-
-function tick() {
-  if (game.ended) return;
-  game.meter = Math.max(0, game.meter - 0.2 / 60);
-  if (game.meter <= 0) {
-    loseGame();
-    return;
-  }
-  updateMeterUI();
-  updateSwapUI();
-}
-
-function startTicking() {
-  stopTicking();
-  tickHandle = setInterval(tick, 200);
-}
-
-function showOverlay(title, body, buttonText) {
-  overlayTitleEl.textContent = title;
-  overlayBodyEl.textContent = body;
-  overlayBtnEl.textContent = buttonText;
-  overlayEl.classList.remove("hidden");
-}
-
-function hideOverlay() {
-  overlayEl.classList.add("hidden");
-}
-
-function winGame() {
-  game.ended = "win";
-  stopTicking();
-  clearCheckpoint();
-  checkBtn.disabled = true;
-  showOverlay(
-    "You made it!",
-    `You solved ${WIN_TARGET} integrals before the meter ran out.\nFinal score: ${game.wallet} coins`,
-    "Play again"
-  );
-}
-
-function loseGame() {
-  game.ended = "lose";
-  stopTicking();
-  clearCheckpoint();
-  checkBtn.disabled = true;
-  updateMeterUI();
-  showOverlay(
-    "Time's up",
-    `The meter ran out on question ${game.correctCount + 1} of ${WIN_TARGET}.`,
-    "Try again"
-  );
-}
-
-function computeReward() {
-  const elapsedMin = (Date.now() - game.questionShownAt) / 60000;
-  let reward = Math.max(0, BASE_REWARD - MISTAKE_PENALTY * game.mistakes);
-  let bonus = 0;
-  for (const [thresholdMin, bonusCoins] of TIME_BONUS_TIERS) {
-    if (elapsedMin < thresholdMin) {
-      bonus = bonusCoins;
-      break;
-    }
-  }
-  reward += bonus;
-  return { reward, bonus, elapsedMin };
-}
-
-function resetGame() {
-  game.wallet = 0;
-  game.meter = METER_CAP;
-  game.correctCount = 0;
-  game.ended = null;
-  checkBtn.disabled = false;
-  hideOverlay();
-  clearFeedback();
-  startNewQuestion();
-  saveCheckpoint();
-  startTicking();
-  updateAll();
-}
-
 checkBtn.addEventListener("click", () => {
-  if (game.ended) return;
-  const latex = answerField.value;
-  const result = checkAnswer(game.problem, latex);
-
+  const result = checkAnswer(currentProblem, answerField.value);
   if (result.ok) {
-    const { reward, bonus, elapsedMin } = computeReward();
-    game.wallet += reward;
-    game.correctCount += 1;
-    feedbackEl.textContent =
-      `Correct! +${reward} coins ` +
-      `(base ${BASE_REWARD}${game.mistakes ? ` - ${MISTAKE_PENALTY * game.mistakes} mistakes` : ""}${bonus ? ` + ${bonus} speed bonus` : ""}), ` +
-      `solved in ${elapsedMin.toFixed(1)} min.`;
+    feedbackEl.textContent = "Correct! Your derivative matches the integrand.";
     feedbackEl.className = "feedback correct";
-
-    if (game.correctCount >= WIN_TARGET) {
-      winGame();
-      return;
-    }
-    startNewQuestion();
-    saveCheckpoint();
-  } else {
-    game.mistakes += 1;
-    let msg = result.reason;
-    if (result.failures) {
-      const f0 = result.failures[0];
-      msg += `\nAt x ≈ ${f0.x.toFixed(2)}: expected f(x) ≈ ${f0.expected.toFixed(4)}, your F'(x) ≈ ${Number.isFinite(f0.got) ? f0.got.toFixed(4) : "undefined"}.`;
-    }
-    msg += `\nThat mistake will cost you ${MISTAKE_PENALTY} coins off this question's reward.`;
-    feedbackEl.textContent = msg;
-    feedbackEl.className = "feedback incorrect";
+    return;
   }
-  updateAll();
+  let msg = result.reason;
+  if (result.failures) {
+    const f0 = result.failures[0];
+    msg += `\nAt x ≈ ${f0.x.toFixed(2)}: expected f(x) ≈ ${f0.expected.toFixed(4)}, your F'(x) ≈ ${Number.isFinite(f0.got) ? f0.got.toFixed(4) : "undefined"}.`;
+  }
+  feedbackEl.textContent = msg;
+  feedbackEl.className = "feedback incorrect";
 });
 
-swapBtn.addEventListener("click", () => {
-  if (game.ended) return;
-  if (Date.now() < game.swapAvailableAt) return;
-  if (game.wallet < SWAP_COST) return;
-  game.wallet -= SWAP_COST;
-  clearFeedback();
-  startNewQuestion();
-  saveCheckpoint();
-  updateAll();
-});
+nextBtn.addEventListener("click", showNextExercise);
 
-addOneBtn.addEventListener("click", () => addToMeter(1));
-addFiveBtn.addEventListener("click", () => addToMeter(5));
-overlayBtnEl.addEventListener("click", resetGame);
-
-// Closing/reloading the tab always forfeits whatever happened during the
-// current in-progress question and resumes from the last checkpoint - see
-// design discussion: this keeps the real-time pressure honest (no free
-// pausing) while capping the cost of a genuine interruption to one question.
-function initGame() {
-  const cp = loadCheckpoint();
-  if (cp) {
-    game.wallet = cp.wallet;
-    game.meter = cp.meter;
-    game.correctCount = cp.correctCount;
-  }
-  clearFeedback();
-  startNewQuestion();
-  saveCheckpoint();
-  startTicking();
-  updateAll();
-}
-
-initGame();
+showNextExercise();

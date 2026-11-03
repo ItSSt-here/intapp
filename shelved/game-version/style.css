@@ -1,0 +1,337 @@
+:root {
+  --bg: #f6f7fb;
+  --card-bg: #ffffff;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --border: #e2e5ec;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --good: #16a34a;
+  --good-bg: #ecfdf3;
+  --bad: #dc2626;
+  --bad-bg: #fef2f2;
+  --warn: #d97706;
+  --coin: #b45309;
+  --coin-bg: #fffbeb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+  padding: 40px 16px;
+  /* A math-field can render wider than the screen after a symbol insert
+     (e.g. a square root). Without this, mobile browsers respond to that
+     overflow by auto-zooming the whole page out to fit it, which then
+     desyncs MathLive's virtual keyboard (positioned for the original
+     viewport) and leaves it rendered off-screen. */
+  overflow-x: hidden;
+}
+
+.container {
+  width: 100%;
+  max-width: 640px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+math-field.display-field {
+  font-size: 1.4rem;
+  border: none;
+  padding: 8px 0;
+}
+
+math-field.input-field {
+  font-size: 1.3rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+math-field.input-field:focus-within {
+  border-color: var(--accent);
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+button {
+  font-size: 1rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+
+button:hover { background: var(--accent-hover); }
+
+button.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+button.secondary:hover { background: #eee; }
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary:disabled:hover { background: transparent; }
+
+.feedback {
+  min-height: 24px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  white-space: pre-line;
+}
+
+.feedback.correct {
+  background: var(--good-bg);
+  color: var(--good);
+}
+
+.feedback.incorrect {
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+
+.debug {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.debug pre {
+  white-space: pre-wrap;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* ---------------------------------------------------------------------- */
+/* HUD                                                                    */
+/* ---------------------------------------------------------------------- */
+
+.hud {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.hud-chip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.hud-chip .hud-icon {
+  font-size: 0.7rem;
+  color: var(--coin);
+}
+
+.wallet-chip .hud-icon { color: var(--coin); }
+
+.hud-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hud-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hud-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Meter                                                                  */
+/* ---------------------------------------------------------------------- */
+
+.meter-card {
+  padding-bottom: 18px;
+}
+
+.meter-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.meter-top .label {
+  margin-bottom: 0;
+}
+
+.meter-top .hud-value {
+  font-size: 1.5rem;
+  transition: color 0.3s ease;
+}
+
+.meter-track {
+  position: relative;
+  height: 16px;
+  border-radius: 999px;
+  background: #eef0f6;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.meter-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  transition: width 0.25s linear, background 0.4s ease;
+}
+
+.meter-fill.meter-warn {
+  background: linear-gradient(90deg, #fbbf24, #d97706);
+}
+
+.meter-fill.meter-danger {
+  background: linear-gradient(90deg, #f87171, #dc2626);
+  animation: meter-pulse 1s ease-in-out infinite;
+}
+
+.meter-card.meter-danger .meter-top .hud-value {
+  color: var(--bad);
+}
+
+@keyframes meter-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+
+.meter-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.meter-btn {
+  flex: 1;
+  background: var(--coin-bg);
+  color: var(--coin);
+  border: 1px solid #fde68a;
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.meter-btn:hover:not(:disabled) {
+  background: #fef3c7;
+}
+
+.meter-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.coin-icon {
+  color: var(--coin);
+  font-size: 0.6rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Overlay (win / lose)                                                   */
+/* ---------------------------------------------------------------------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 17, 26, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.overlay-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.overlay-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.overlay-body {
+  color: var(--muted);
+  margin-bottom: 22px;
+  white-space: pre-line;
+  line-height: 1.5;
+}
+
+.overlay-btn {
+  width: 100%;
+}
