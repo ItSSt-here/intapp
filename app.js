@@ -231,34 +231,78 @@ function fmtSigned(n, isFirst) {
   return "-" + Math.abs(n);
 }
 
-function problemToLatex({ A, B, a, b }) {
-  const coeffX = A + B; // combined x-coefficient of the numerator
-  const constTerm = -(A * b + B * a); // combined constant of the numerator
-
-  let numerator;
-  if (coeffX === 0) {
-    numerator = `${constTerm}`;
-  } else {
-    const axTerm = coeffX === 1 ? "x" : coeffX === -1 ? "-x" : `${coeffX}x`;
-    numerator = constTerm === 0 ? axTerm : axTerm + fmtSigned(constTerm, false);
-  }
-  const aTerm = a === 0 ? "x" : `x${fmtSigned(-a, false)}`;
-  const bTerm = b === 0 ? "x" : `x${fmtSigned(-b, false)}`;
-  return `\\int \\frac{${numerator}}{(${aTerm})(${bTerm})}\\,dx`;
+// The combined numerator (A+B)x - (A*b + B*a), as LaTeX.
+function numeratorLatex({ A, B, a, b }) {
+  const coeffX = A + B;
+  const constTerm = -(A * b + B * a);
+  if (coeffX === 0) return `${constTerm}`;
+  const axTerm = coeffX === 1 ? "x" : coeffX === -1 ? "-x" : `${coeffX}x`;
+  return constTerm === 0 ? axTerm : axTerm + fmtSigned(constTerm, false);
 }
 
-// The worked solution: the partial-fraction split, then the antiderivative.
-function solutionToLatex(problem) {
-  const { A, B, a, b } = problem;
-  const lin = (r) => (r === 0 ? "x" : `x${fmtSigned(-r, false)}`);
-  const sign = (c, isFirst) => (c < 0 ? "-" : isFirst ? "" : "+");
-  const frac = (c, r, isFirst) => `${sign(c, isFirst)}\\frac{${Math.abs(c)}}{${lin(r)}}`;
-  const ln = (c, r, isFirst) => `${sign(c, isFirst)}${Math.abs(c) === 1 ? "" : Math.abs(c)}\\ln|${lin(r)}|`;
+// "x - r" as LaTeX (just "x" for r = 0).
+function linearLatex(r) {
+  return r === 0 ? "x" : `x${fmtSigned(-r, false)}`;
+}
+
+// (x-a)(x-b) multiplied out: x^2 - (a+b)x + a*b, as LaTeX.
+function expandedDenominatorLatex({ a, b }) {
+  const s = -(a + b);
+  const p = a * b;
+  let out = "x^2";
+  if (s !== 0) out += s === 1 ? "+x" : s === -1 ? "-x" : `${fmtSigned(s, false)}x`;
+  if (p !== 0) out += fmtSigned(p, false);
+  return out;
+}
+
+// Type 1: the denominator is given already factored.
+function factoredProblemToLatex(problem) {
+  const { a, b } = problem;
+  return `\\int \\frac{${numeratorLatex(problem)}}{(${linearLatex(a)})(${linearLatex(b)})}\\,dx`;
+}
+
+// Type 2: the denominator is multiplied out - the student has to factor it.
+function expandedProblemToLatex(problem) {
+  return `\\int \\frac{${numeratorLatex(problem)}}{${expandedDenominatorLatex(problem)}}\\,dx`;
+}
+
+const signLatex = (c, isFirst) => (c < 0 ? "-" : isFirst ? "" : "+");
+
+// "A/(x-a) + B/(x-b)" - the partial-fraction split, as LaTeX.
+function splitLatex({ A, B, a, b }) {
+  const frac = (c, r, isFirst) => `${signLatex(c, isFirst)}\\frac{${Math.abs(c)}}{${linearLatex(r)}}`;
+  return `${frac(A, a, true)}${frac(B, b, false)}`;
+}
+
+// "A ln|x-a| + B ln|x-b| + C" - the antiderivative, as LaTeX.
+function antiderivativeLatex({ A, B, a, b }) {
+  const ln = (c, r, isFirst) =>
+    `${signLatex(c, isFirst)}${Math.abs(c) === 1 ? "" : Math.abs(c)}\\ln|${linearLatex(r)}|`;
+  return `${ln(A, a, true)}${ln(B, b, false)}+C`;
+}
+
+// Worked solutions: each step on its own aligned line.
+function factoredSolutionToLatex(problem) {
   return (
-    `\\begin{aligned}${problemToLatex(problem)} &= \\int\\left(${frac(A, a, true)}${frac(B, b, false)}\\right)dx \\\\` +
-    ` &= ${ln(A, a, true)}${ln(B, b, false)}+C\\end{aligned}`
+    `\\begin{aligned}${factoredProblemToLatex(problem)} &= \\int\\left(${splitLatex(problem)}\\right)dx \\\\` +
+    ` &= ${antiderivativeLatex(problem)}\\end{aligned}`
   );
 }
+
+function expandedSolutionToLatex(problem) {
+  return (
+    `\\begin{aligned}${expandedProblemToLatex(problem)} &= ${factoredProblemToLatex(problem)} \\\\` +
+    ` &= \\int\\left(${splitLatex(problem)}\\right)dx \\\\` +
+    ` &= ${antiderivativeLatex(problem)}\\end{aligned}`
+  );
+}
+
+// Exercise types. Every type draws the same {A, B, a, b} answer-first problem
+// and is graded the same way; they differ in how the question is shown.
+const EXERCISE_TYPES = [
+  { id: "factored", label: "factored denominator", problemToLatex: factoredProblemToLatex, solutionToLatex: factoredSolutionToLatex },
+  { id: "expanded", label: "denominator to factor", problemToLatex: expandedProblemToLatex, solutionToLatex: expandedSolutionToLatex },
+];
 
 function integrandFn({ A, B, a, b }) {
   return (x) => A / (x - a) + B / (x - b);
@@ -335,6 +379,7 @@ function checkAnswer(problem, latex) {
 // ---------------------------------------------------------------------------
 
 let currentProblem = null;
+let currentType = EXERCISE_TYPES[0];
 let solved = false;
 let outgoingClone = null;
 
@@ -409,7 +454,7 @@ function showNextExercise({ animate = false } = {}) {
   currentProblem = generateProblem();
   solved = false;
   gradedValue = null;
-  problemField.value = problemToLatex(currentProblem);
+  problemField.value = currentType.problemToLatex(currentProblem);
   answerField.value = "";
   feedbackEl.textContent = "";
   feedbackEl.className = "feedback";
@@ -453,7 +498,7 @@ solutionBtn.addEventListener("click", () => {
   feedbackEl.textContent = "";
   feedbackEl.className = "feedback";
   setAnswerState("solution");
-  solutionField.value = solutionToLatex(currentProblem);
+  solutionField.value = currentType.solutionToLatex(currentProblem);
   solutionLabelEl.hidden = false;
   solutionField.hidden = false;
   checkBtn.disabled = true;
@@ -473,4 +518,19 @@ answerField.addEventListener("input", () => {
 
 nextBtn.addEventListener("click", () => showNextExercise({ animate: true }));
 
+// TEMP: a deliberately plain button that cycles through the exercise types,
+// until there is a real way to choose one.
+const typeBtn = document.getElementById("typeBtn");
+
+function updateTypeBtn() {
+  typeBtn.textContent = `[temp] Type: ${currentType.label} - click to switch`;
+}
+
+typeBtn.addEventListener("click", () => {
+  currentType = EXERCISE_TYPES[(EXERCISE_TYPES.indexOf(currentType) + 1) % EXERCISE_TYPES.length];
+  updateTypeBtn();
+  showNextExercise();
+});
+
+updateTypeBtn();
 showNextExercise();
