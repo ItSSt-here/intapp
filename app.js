@@ -231,13 +231,16 @@ function fmtSigned(n, isFirst) {
   return "-" + Math.abs(n);
 }
 
+// "p x + q" as LaTeX, dropping a zero or unit coefficient.
+function linearFromCoeffsLatex(p, q) {
+  if (p === 0) return `${q}`;
+  const px = p === 1 ? "x" : p === -1 ? "-x" : `${p}x`;
+  return q === 0 ? px : px + fmtSigned(q, false);
+}
+
 // The combined numerator (A+B)x - (A*b + B*a), as LaTeX.
 function numeratorLatex({ A, B, a, b }) {
-  const coeffX = A + B;
-  const constTerm = -(A * b + B * a);
-  if (coeffX === 0) return `${constTerm}`;
-  const axTerm = coeffX === 1 ? "x" : coeffX === -1 ? "-x" : `${coeffX}x`;
-  return constTerm === 0 ? axTerm : axTerm + fmtSigned(constTerm, false);
+  return linearFromCoeffsLatex(A + B, -(A * b + B * a));
 }
 
 // "x - r" as LaTeX (just "x" for r = 0).
@@ -258,7 +261,11 @@ function expandedDenominatorLatex({ a, b }) {
 // Type 1: the denominator is given already factored.
 function factoredProblemToLatex(problem) {
   const { a, b } = problem;
-  return `\\int \\frac{${numeratorLatex(problem)}}{(${linearLatex(a)})(${linearLatex(b)})}\\,dx`;
+  // A root at 0 is just "x" - no parentheses, and written first: x(x-3).
+  const factors = [a, b]
+    .sort((r, s) => (r === 0 ? -1 : s === 0 ? 1 : 0))
+    .map((r) => (r === 0 ? "x" : `(${linearLatex(r)})`));
+  return `\\int \\frac{${numeratorLatex(problem)}}{${factors.join("")}}\\,dx`;
 }
 
 // Type 2: the denominator is multiplied out - the student has to factor it.
@@ -297,11 +304,121 @@ function expandedSolutionToLatex(problem) {
   );
 }
 
-// Exercise types. Every type draws the same {A, B, a, b} answer-first problem
-// and is graded the same way; they differ in how the question is shown.
+// ---------------------------------------------------------------------------
+// Non-monic denominators: (m1 x - n1)(m2 x - n2), whole numbers throughout
+//
+// Integer roots would force a common factor k out of any integer quadratic,
+// so a genuinely non-monic denominator has a fractional root. The factors
+// themselves (and the answer's coefficients) stay whole.
+//
+// Answer first again: A ln|m1 x - n1| + B ln|m2 x - n2| + C. Since
+// d/dx ln|m x - n| = m / (m x - n) = 1 / (x - n/m), the integrand is
+// A/(x - a) + B/(x - b) with the rational poles a = n1/m1, b = n2/m2 - so
+// A, B, a, b keep their meaning and the grader needs no changes.
+// ---------------------------------------------------------------------------
+
+function gcd(x, y) {
+  x = Math.abs(x);
+  y = Math.abs(y);
+  while (y) [x, y] = [y, x % y];
+  return x;
+}
+
+function generateNonMonicProblem() {
+  let A, B, m1, n1, m2, n2;
+  do {
+    A = randInt(-6, 6);
+  } while (A === 0);
+  do {
+    B = randInt(-6, 6);
+  } while (B === 0);
+  do {
+    m1 = randInt(1, 3);
+    m2 = randInt(1, 3);
+    n1 = randInt(-5, 5);
+    n2 = randInt(-5, 5);
+  } while (
+    m1 * m2 === 1 || // at least one factor is non-monic
+    m1 * m2 > 6 || // keep the leading coefficient small
+    gcd(m1, n1) !== 1 || // each factor in lowest terms: no hidden common
+    gcd(m2, n2) !== 1 || //   factor like (2x - 4); also rules out 2x with n = 0
+    n1 * m2 === n2 * m1 // distinct roots
+  );
+  return { A, B, a: n1 / m1, b: n2 / m2, m1, n1, m2, n2 };
+}
+
+// "m x - n" as LaTeX (m = 1 and n = 0 are dropped).
+function mxLatex(m, n) {
+  return `${m === 1 ? "" : m}x${n === 0 ? "" : fmtSigned(-n, false)}`;
+}
+
+// The two factors side by side; a bare x (root 0) goes first, unparenthesized.
+function nonMonicFactorsLatex({ m1, n1, m2, n2 }) {
+  return [[m1, n1], [m2, n2]]
+    .sort(([, r], [, s]) => (r === 0 ? -1 : s === 0 ? 1 : 0))
+    .map(([m, n]) => (n === 0 ? mxLatex(m, n) : `(${mxLatex(m, n)})`))
+    .join("");
+}
+
+// A m1/(m1 x - n1) + B m2/(m2 x - n2) over (m1 x - n1)(m2 x - n2).
+function nonMonicNumeratorLatex({ A, B, m1, n1, m2, n2 }) {
+  return linearFromCoeffsLatex(m1 * m2 * (A + B), -(A * m1 * n2 + B * m2 * n1));
+}
+
+// k x^2 + s x + c, as LaTeX.
+function quadraticLatex(k, s, c) {
+  let out = k === 1 ? "x^2" : `${k}x^2`;
+  if (s !== 0) out += s === 1 ? "+x" : s === -1 ? "-x" : `${fmtSigned(s, false)}x`;
+  if (c !== 0) out += fmtSigned(c, false);
+  return out;
+}
+
+function nonMonicFactoredProblemToLatex(problem) {
+  return `\\int \\frac{${nonMonicNumeratorLatex(problem)}}{${nonMonicFactorsLatex(problem)}}\\,dx`;
+}
+
+function nonMonicExpandedProblemToLatex(problem) {
+  const { m1, n1, m2, n2 } = problem;
+  const denominator = quadraticLatex(m1 * m2, -(m1 * n2 + m2 * n1), n1 * n2);
+  return `\\int \\frac{${nonMonicNumeratorLatex(problem)}}{${denominator}}\\,dx`;
+}
+
+// "A m1/(m1 x - n1) + B m2/(m2 x - n2)" - the partial-fraction split.
+function nonMonicSplitLatex({ A, B, m1, n1, m2, n2 }) {
+  const frac = (c, m, n, isFirst) => `${signLatex(c, isFirst)}\\frac{${Math.abs(c) * m}}{${mxLatex(m, n)}}`;
+  return `${frac(A, m1, n1, true)}${frac(B, m2, n2, false)}`;
+}
+
+// "A ln|m1 x - n1| + B ln|m2 x - n2| + C" - the antiderivative.
+function nonMonicAntiderivativeLatex({ A, B, m1, n1, m2, n2 }) {
+  const ln = (c, m, n, isFirst) =>
+    `${signLatex(c, isFirst)}${Math.abs(c) === 1 ? "" : Math.abs(c)}\\ln|${mxLatex(m, n)}|`;
+  return `${ln(A, m1, n1, true)}${ln(B, m2, n2, false)}+C`;
+}
+
+function nonMonicFactoredSolutionToLatex(problem) {
+  return (
+    `\\begin{aligned}${nonMonicFactoredProblemToLatex(problem)} &= \\int\\left(${nonMonicSplitLatex(problem)}\\right)dx \\\\` +
+    ` &= ${nonMonicAntiderivativeLatex(problem)}\\end{aligned}`
+  );
+}
+
+function nonMonicExpandedSolutionToLatex(problem) {
+  return (
+    `\\begin{aligned}${nonMonicExpandedProblemToLatex(problem)} &= ${nonMonicFactoredProblemToLatex(problem)} \\\\` +
+    ` &= \\int\\left(${nonMonicSplitLatex(problem)}\\right)dx \\\\` +
+    ` &= ${nonMonicAntiderivativeLatex(problem)}\\end{aligned}`
+  );
+}
+
+// Exercise types. Every type draws an answer-first {A, B, a, b} problem and
+// is graded the same way; they differ in the denominators and in how the
+// question is shown.
 const EXERCISE_TYPES = [
-  { id: "factored", label: "factored denominator", problemToLatex: factoredProblemToLatex, solutionToLatex: factoredSolutionToLatex },
-  { id: "expanded", label: "denominator to factor", problemToLatex: expandedProblemToLatex, solutionToLatex: expandedSolutionToLatex },
+  { id: "factored", label: "factored denominator", generate: generateProblem, problemToLatex: factoredProblemToLatex, solutionToLatex: factoredSolutionToLatex },
+  { id: "expanded", label: "denominator to factor", generate: generateProblem, problemToLatex: expandedProblemToLatex, solutionToLatex: expandedSolutionToLatex },
+  { id: "nonmonic-factored", label: "non-monic, factored", generate: generateNonMonicProblem, problemToLatex: nonMonicFactoredProblemToLatex, solutionToLatex: nonMonicFactoredSolutionToLatex },
+  { id: "nonmonic-expanded", label: "non-monic, to factor", generate: generateNonMonicProblem, problemToLatex: nonMonicExpandedProblemToLatex, solutionToLatex: nonMonicExpandedSolutionToLatex },
 ];
 
 function integrandFn({ A, B, a, b }) {
@@ -451,7 +568,7 @@ function slideOutCurrentCard() {
 
 function showNextExercise({ animate = false } = {}) {
   if (animate && problemField.value) slideOutCurrentCard();
-  currentProblem = generateProblem();
+  currentProblem = currentType.generate();
   solved = false;
   gradedValue = null;
   problemField.value = currentType.problemToLatex(currentProblem);
