@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partial Fractions: Survive the Countdown</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Partial Fractions Integral Practice</h1>
+    <p class="subtitle">Solve 4 correct integrals before the meter runs out.</p>
+
+    <div class="hud">
+      <div class="hud-chip wallet-chip">
+        <span class="hud-icon" aria-hidden="true">&#9679;</span>
+        <div class="hud-text">
+          <span class="hud-label">Wallet</span>
+          <span class="hud-value" id="walletValue">0</span>
+        </div>
+      </div>
+
+      <div class="hud-chip progress-chip">
+        <div class="hud-text">
+          <span class="hud-label">Progress</span>
+          <span class="hud-value" id="progressValue">0 / 4</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card meter-card">
+      <div class="meter-top">
+        <span class="label">Meter</span>
+        <span class="hud-value" id="meterValue">20:00</span>
+      </div>
+      <div class="meter-track">
+        <div class="meter-fill" id="meterFill"></div>
+      </div>
+      <div class="meter-actions">
+        <button id="addOneBtn" class="meter-btn">+1 min <span class="coin-icon">&#9679;</span>1</button>
+        <button id="addFiveBtn" class="meter-btn">+5 min <span class="coin-icon">&#9679;</span>5</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="label">Problem</div>
+      <math-field id="problem" read-only class="display-field"></math-field>
+    </div>
+
+    <div class="card">
+      <div class="label">Your answer (antiderivative — the "+ C" is optional)</div>
+      <math-field id="answer" class="input-field" virtual-keyboard-mode="onfocus"></math-field>
+    </div>
+
+    <div class="buttons">
+      <button id="checkBtn">Check</button>
+      <button id="swapBtn" class="secondary" disabled></button>
+    </div>
+
+    <div id="feedback" class="feedback"></div>
+
+    <details class="debug">
+      <summary>Debug info</summary>
+      <pre id="debugOut"></pre>
+    </details>
+  </div>
+
+  <div id="overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <div id="overlayTitle" class="overlay-title"></div>
+      <div id="overlayBody" class="overlay-body"></div>
+      <button id="overlayBtn" class="overlay-btn"></button>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
