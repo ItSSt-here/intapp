@@ -247,6 +247,19 @@ function problemToLatex({ A, B, a, b }) {
   return `\\int \\frac{${numerator}}{(${aTerm})(${bTerm})}\\,dx`;
 }
 
+// The worked solution: the partial-fraction split, then the antiderivative.
+function solutionToLatex(problem) {
+  const { A, B, a, b } = problem;
+  const lin = (r) => (r === 0 ? "x" : `x${fmtSigned(-r, false)}`);
+  const sign = (c, isFirst) => (c < 0 ? "-" : isFirst ? "" : "+");
+  const frac = (c, r, isFirst) => `${sign(c, isFirst)}\\frac{${Math.abs(c)}}{${lin(r)}}`;
+  const ln = (c, r, isFirst) => `${sign(c, isFirst)}${Math.abs(c) === 1 ? "" : Math.abs(c)}\\ln|${lin(r)}|`;
+  return (
+    `\\begin{aligned}${problemToLatex(problem)} &= \\int\\left(${frac(A, a, true)}${frac(B, b, false)}\\right)dx \\\\` +
+    ` &= ${ln(A, a, true)}${ln(B, b, false)}+C\\end{aligned}`
+  );
+}
+
 function integrandFn({ A, B, a, b }) {
   return (x) => A / (x - a) + B / (x - b);
 }
@@ -334,6 +347,9 @@ const answerStatusEl = document.getElementById("answerStatusText");
 const answerField = document.getElementById("answer");
 const feedbackEl = document.getElementById("feedback");
 const checkBtn = document.getElementById("checkBtn");
+const solutionBtn = document.getElementById("solutionBtn");
+const solutionLabelEl = document.getElementById("solutionLabel");
+const solutionField = document.getElementById("solution");
 const nextBtn = document.getElementById("nextBtn");
 
 // Marks the answer card itself as null (neutral, while working) or
@@ -341,12 +357,16 @@ const nextBtn = document.getElementById("nextBtn");
 // small label on the card). Called fresh on every grade so a second wrong
 // attempt gets its own clear signal.
 function setAnswerState(state) {
-  answerCardEl.classList.remove("correct", "incorrect");
+  answerCardEl.classList.remove("correct", "incorrect", "solution");
   answerBadgeEl.classList.remove("show", "correct", "incorrect");
   answerBadgeEl.textContent = "";
   answerStatusEl.classList.remove("show", "correct", "incorrect");
   answerStatusEl.textContent = "";
   if (!state) return;
+  if (state === "solution") {
+    answerCardEl.classList.add("solution");
+    return;
+  }
   void answerCardEl.offsetWidth; // restart the shake if "incorrect" is set twice in a row
   answerCardEl.classList.add(state);
   answerBadgeEl.classList.add("show", state);
@@ -394,6 +414,9 @@ function showNextExercise({ animate = false } = {}) {
   feedbackEl.textContent = "";
   feedbackEl.className = "feedback";
   setAnswerState(null);
+  solutionLabelEl.hidden = true;
+  solutionField.hidden = true;
+  solutionBtn.hidden = false;
   checkBtn.disabled = false;
   nextBtn.classList.remove("ready");
   answerField.focus();
@@ -415,14 +438,27 @@ checkBtn.addEventListener("click", () => {
     nextBtn.classList.add("ready");
     return;
   }
-  let msg = result.reason;
-  if (result.failures) {
-    const f0 = result.failures[0];
-    msg += `\nAt x ≈ ${f0.x.toFixed(2)}: expected f(x) ≈ ${f0.expected.toFixed(4)}, your F'(x) ≈ ${Number.isFinite(f0.got) ? f0.got.toFixed(4) : "undefined"}.`;
+  // A wrong answer is just marked on the card; only an unreadable one (no
+  // `failures`) gets a message, since a typo shouldn't look like wrong math.
+  if (!result.failures) {
+    feedbackEl.textContent = result.reason;
+    feedbackEl.className = "feedback incorrect";
   }
-  feedbackEl.textContent = msg;
-  feedbackEl.className = "feedback incorrect";
   setAnswerState("incorrect");
+});
+
+solutionBtn.addEventListener("click", () => {
+  solved = true; // resolved: stop grading, only moving on is left
+  gradedValue = answerField.value;
+  feedbackEl.textContent = "";
+  feedbackEl.className = "feedback";
+  setAnswerState("solution");
+  solutionField.value = solutionToLatex(currentProblem);
+  solutionLabelEl.hidden = false;
+  solutionField.hidden = false;
+  checkBtn.disabled = true;
+  solutionBtn.hidden = true;
+  nextBtn.classList.add("ready");
 });
 
 // Editing the answer at all returns the card to neutral, so the next wrong

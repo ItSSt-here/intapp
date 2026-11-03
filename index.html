@@ -24,10 +24,13 @@
       <div class="label">Your answer</div>
       <div class="answer-hint">Type <b>ln</b> for the logarithm and use <b>| |</b> for absolute value. The “+ C” is optional.</div>
       <math-field id="answer" class="input-field" virtual-keyboard-mode="onfocus"></math-field>
+      <div id="solutionLabel" class="label showing-solution" hidden>Solution</div>
+      <math-field id="solution" read-only class="solution-field" hidden></math-field>
     </div>
 
     <div class="buttons">
       <button id="checkBtn">Check</button>
+      <button id="solutionBtn">Show solution</button>
       <button id="nextBtn">Another exercise</button>
     </div>
 
