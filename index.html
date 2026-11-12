@@ -54,8 +54,25 @@
         <div class="answer-badge" id="answerBadge"></div>
         <div class="answer-status-text" id="answerStatusText"></div>
         <div class="label">התשובה שלך</div>
-        <div class="answer-hint">כתבו <b dir="ltr">ln</b> ללוגריתם ו-<b dir="ltr">| |</b> לערך מוחלט. ה-<bdi dir="ltr">+C</bdi> לא חובה. אפשר ללחוץ <b>Enter</b> לבדיקה.</div>
-        <math-field id="answer" class="input-field" dir="ltr" virtual-keyboard-mode="onfocus"></math-field>
+        <div class="answer-hint">כתבו <b dir="ltr">ln</b> ללוגריתם ו-<b dir="ltr">| |</b> לערך מוחלט. סימנים נוספים בכפתור <span class="field-menu-btn" aria-hidden="true">▾</span>. ה-<bdi dir="ltr">+C</bdi> לא חובה. אפשר ללחוץ <b>Enter</b> לבדיקה.</div>
+        <span class="field-wrap" id="answerFieldWrap">
+          <math-field id="answer" class="input-field" dir="ltr" virtual-keyboard-mode="onfocus"></math-field>
+          <button type="button" class="field-menu-btn" id="answerMenuBtn" title="סימנים נוספים" aria-label="סימנים נוספים" aria-expanded="false">▾</button>
+          <div class="field-menu" id="answerMenu" dir="ltr" hidden>
+            <button type="button" class="field-menu-item" data-insert="\sqrt{#0}" title="שורש">√</button>
+            <button type="button" class="field-menu-item" data-insert="\sqrt[#0]{#1}" title="שורש n">ⁿ√</button>
+            <button type="button" class="field-menu-item" data-insert="\frac{#0}{#1}" title="שבר">a⁄b</button>
+            <button type="button" class="field-menu-item" data-insert="^{#0}" title="חזקה">x²</button>
+            <button type="button" class="field-menu-item" data-insert="e^{#0}" title="e בחזקה">eˣ</button>
+            <button type="button" class="field-menu-item" data-insert="\ln\left|#0\right|" title="ln">ln</button>
+            <button type="button" class="field-menu-item" data-insert="\left|#0\right|" title="ערך מוחלט">|x|</button>
+            <button type="button" class="field-menu-item" data-insert="\sin\left(#0\right)" title="sin">sin</button>
+            <button type="button" class="field-menu-item" data-insert="\cos\left(#0\right)" title="cos">cos</button>
+            <button type="button" class="field-menu-item" data-insert="\tan\left(#0\right)" title="tan">tan</button>
+            <button type="button" class="field-menu-item" data-insert="\arctan\left(#0\right)" title="arctan">arctan</button>
+            <button type="button" class="field-menu-item" data-insert="\arcsin\left(#0\right)" title="arcsin">arcsin</button>
+          </div>
+        </span>
         <div id="solutionLabel" class="label showing-solution" hidden>פתרון</div>
         <div class="solution-scroll">
           <math-field id="solution" read-only class="solution-field" dir="ltr" hidden></math-field>

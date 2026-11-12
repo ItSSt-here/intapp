@@ -1742,3 +1742,100 @@ body { overflow-x: clip; }
 @media (max-width: 759px) {
   .entrance .torch { display: none; }
 }
+
+/* ---------------------------------------------------------------------- */
+/* The answer field's ▾ symbol menu (as in Calcapp)                        */
+/* ---------------------------------------------------------------------- */
+
+.field-wrap { position: relative; display: block; }
+
+.field-menu-btn {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  font-size: 11px;
+  border-radius: 50%;
+  border: 1px solid var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.field-menu-btn:hover,
+.field-menu-btn[aria-expanded="true"] { background: var(--accent); border-color: var(--accent); color: white; }
+
+/* The static copy in the hint, so students know what to look for. */
+.answer-hint .field-menu-btn {
+  position: static;
+  display: inline-flex;
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  cursor: default;
+}
+
+.field-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px;
+  padding: 6px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(20, 22, 30, 0.15);
+}
+.field-menu[hidden] { display: none; }
+
+.field-menu-item {
+  font-family: "Cambria Math", Georgia, serif;
+  font-size: 1rem;
+  min-width: 40px;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+}
+.field-menu-item:hover { background: var(--accent-tint); border-color: var(--accent); }
+
+/* ---------------------------------------------------------------------- */
+/* Floor 1 map: one row of rooms, the corridor, the entrance; stairs up    */
+/* ---------------------------------------------------------------------- */
+
+.room-card.soon { opacity: 0.55; filter: saturate(0.35); cursor: default; box-shadow: none; }
+.room-card.soon:hover { transform: none; }
+
+.stairs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: var(--tiles), #e2d9c6;
+  border: 4px solid var(--wall);
+  border-radius: 4px;
+  opacity: 0.8;
+}
+.stairs-steps { width: 64px; height: auto; }
+.stairs-steps rect { fill: #cfc3a8; stroke: #5e5446; stroke-width: 1.5; }
+.stairs-label { font-size: 0.85rem; font-weight: 600; color: #6b5a3c; }
+.stairs-soon { font-size: 0.75rem; color: var(--muted); }
+
+@media (min-width: 760px) {
+  .floor-grid.floor-basic { grid-template-rows: auto 16px auto 16px auto; }
+}

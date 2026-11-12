@@ -9,9 +9,11 @@ MathfieldElement.soundsDirectory = null;
 // ---------------------------------------------------------------------------
 // LaTeX -> JS evaluator
 //
-// Parses a narrow subset of LaTeX (numbers, x, + - * / ^, \frac{}{},
-// \ln, |...| / \left|...\right| / \lvert...\rvert, parentheses, unary minus,
-// implicit multiplication) into a closure (x) => number.
+// Parses a narrow subset of LaTeX (numbers, x, e, π, + - * / ^, \frac{}{},
+// \sqrt{} and \sqrt[n]{}, \ln, \sin \cos \tan \cot, \arcsin \arctan (and the
+// tg / ctg / arctg spellings), |...| / \left|...\right| / \lvert...\rvert,
+// parentheses, unary minus, implicit multiplication) into a closure
+// (x) => number.
 // ---------------------------------------------------------------------------
 
 // LaTeX (and MathLive) allow a one-character argument without braces:
@@ -47,6 +49,30 @@ function braceFracArgs(s) {
   return out;
 }
 
+// A real n-th root, also of a negative number when n is odd.
+function nthRoot(v, n) {
+  if (v < 0 && Number.isInteger(n) && n % 2 === 1) return -Math.pow(-v, 1 / n);
+  return Math.pow(v, 1 / n);
+}
+
+// Function names, longest first so "arcsin" wins over "sin" and "ctg" over
+// "tg". Each is recognized as a LaTeX command (\sin) and as a bare word,
+// which MathLive leaves when it doesn't expand a typed name.
+const FUNCTIONS = [
+  ["arcsin", Math.asin],
+  ["arctan", Math.atan],
+  ["arctg", Math.atan],
+  ["sin", Math.sin],
+  ["cos", Math.cos],
+  ["tan", Math.tan],
+  ["ctg", (v) => 1 / Math.tan(v)],
+  ["cot", (v) => 1 / Math.tan(v)],
+  ["tg", Math.tan],
+  ["exp", Math.exp],
+  ["ln", Math.log],
+  ["log", Math.log],
+];
+
 function tokenize(latex) {
   let s = latex;
 
@@ -54,29 +80,33 @@ function tokenize(latex) {
   s = s.replace(/\\left|\\right|\\mleft|\\mright|\\bigl|\\bigr|\\Bigl|\\Bigr|\\big|\\Big/g, "");
   s = s.replace(/\\cdot|\\times/g, "*");
   s = s.replace(/\\lvert|\\rvert|\\vert|\\mid/g, "|");
-  s = s.replace(/\\operatorname\{(ln|log|arctan)\}/g, "\\$1");
-  s = s.replace(/\\tan\^\{-1\}|\\tan\^-1/g, "\\arctan");
+  s = s.replace(/\\exponentialE|\\mathrm\{e\}/g, "e");
+  s = s.replace(/\\mathrm\{d\}x|dx/g, ""); // drop trailing "dx" if present
+  s = s.replace(/\\operatorname\{([a-z]+)\}|\\mathrm\{([a-z]+)\}/g, (m, a, b) => `\\${a || b}`);
+  s = s.replace(/\\(tan|sin)\^\{-1\}|\\(tan|sin)\^-1/g, (m, a, b) => `\\arc${a || b}`);
   s = s.replace(/\\dfrac|\\tfrac/g, "\\frac");
   s = s.replace(/\\,|\\!|\\;|\\:|\\ /g, "");
-  s = s.replace(/\\mathrm\{d\}x|dx/g, ""); // drop trailing "dx" if present
   s = s.replace(/\s+/g, "");
   s = braceFracArgs(s);
 
   const tokens = [];
   let i = 0;
   let pipeOpen = false; // '|' is both the open and close delimiter for abs value; alternate roles
-  while (i < s.length) {
+  outer: while (i < s.length) {
     const rest = s.slice(i);
     if (rest.startsWith("\\frac")) { tokens.push({ t: "FRAC" }); i += 5; continue; }
-    if (rest.startsWith("\\arctan")) { tokens.push({ t: "ATAN" }); i += 7; continue; }
     if (rest.startsWith("\\sqrt")) { tokens.push({ t: "SQRT" }); i += 5; continue; }
-    if (rest.startsWith("\\ln")) { tokens.push({ t: "LN" }); i += 3; continue; }
-    if (rest.startsWith("\\log")) { tokens.push({ t: "LN" }); i += 4; continue; }
-    // MathLive doesn't always expand a typed "ln"/"log" into the \ln macro
-    // (it may leave it as plain italic letters) - recognize the bare word too.
-    if (rest.startsWith("arctan")) { tokens.push({ t: "ATAN" }); i += 6; continue; }
-    if (rest.startsWith("ln")) { tokens.push({ t: "LN" }); i += 2; continue; }
-    if (rest.startsWith("log")) { tokens.push({ t: "LN" }); i += 3; continue; }
+    if (rest.startsWith("sqrt")) { tokens.push({ t: "SQRT" }); i += 4; continue; } // left unexpanded
+    if (rest.startsWith("\\pi")) { tokens.push({ t: "NUM", v: Math.PI }); i += 3; continue; }
+    for (const [name, fn] of FUNCTIONS) {
+      for (const word of [`\\${name}`, name]) {
+        if (rest.startsWith(word)) {
+          tokens.push({ t: "FN", fn });
+          i += word.length;
+          continue outer;
+        }
+      }
+    }
     const c = s[i];
     if (/[0-9.]/.test(c)) {
       let j = i;
@@ -86,6 +116,7 @@ function tokenize(latex) {
       continue;
     }
     if (c === "x") { tokens.push({ t: "VAR" }); i++; continue; }
+    if (c === "e") { tokens.push({ t: "NUM", v: Math.E }); i++; continue; }
     if (c === "C" || c === "c") { tokens.push({ t: "CONST" }); i++; continue; } // integration constant, treated as 0
     if (c === "|") {
       tokens.push({ t: pipeOpen ? "PIPE_CLOSE" : "PIPE_OPEN" });
@@ -93,8 +124,8 @@ function tokenize(latex) {
       i++;
       continue;
     }
-    if ("+-*/^(){}".includes(c)) {
-      const map = { "(": "LPAREN", ")": "RPAREN", "{": "LBRACE", "}": "RBRACE" };
+    if ("+-*/^(){}[]".includes(c)) {
+      const map = { "(": "LPAREN", ")": "RPAREN", "{": "LBRACE", "}": "RBRACE", "[": "LBRACK", "]": "RBRACK" };
       tokens.push({ t: map[c] || c });
       i++;
       continue;
@@ -136,7 +167,7 @@ function buildEvaluator(latex) {
 
   function startsFactor(tok) {
     if (!tok) return false;
-    return ["NUM", "VAR", "CONST", "LPAREN", "LBRACE", "PIPE_OPEN", "LN", "ATAN", "SQRT", "FRAC"].includes(tok.t);
+    return ["NUM", "VAR", "CONST", "LPAREN", "LBRACE", "PIPE_OPEN", "FN", "SQRT", "FRAC"].includes(tok.t);
   }
 
   function parseTerm() {
@@ -190,6 +221,21 @@ function buildEvaluator(latex) {
     return node;
   }
 
+  // A function's argument: a bracketed group, or a bare run of numbers and
+  // x's - "sin 2x" is sin(2x), "ln x^2" is ln(x^2) - as students write it.
+  function parseFuncArg() {
+    const tok = peek();
+    // "\sin(x)^2" is (sin x)^2: the power is left for the caller.
+    if (tok && ["LPAREN", "LBRACE", "PIPE_OPEN"].includes(tok.t)) return parsePrimary();
+    let node = parseUnary();
+    while (peek() && (peek().t === "NUM" || peek().t === "VAR")) {
+      const rhs = parsePower();
+      const lhs = node;
+      node = (x) => lhs(x) * rhs(x);
+    }
+    return node;
+  }
+
   function parsePrimary() {
     const tok = peek();
     if (!tok) throw new ParseError("Unexpected end of input");
@@ -216,20 +262,21 @@ function buildEvaluator(latex) {
       expect("PIPE_CLOSE");
       return (x) => Math.abs(e(x));
     }
-    if (tok.t === "LN") {
+    if (tok.t === "FN") {
       next();
-      const arg = parseUnary();
-      return (x) => Math.log(arg(x));
-    }
-    if (tok.t === "ATAN") {
-      next();
-      const arg = parseUnary();
-      return (x) => Math.atan(arg(x));
+      const arg = parseFuncArg();
+      return (x) => tok.fn(arg(x));
     }
     if (tok.t === "SQRT") {
       next();
-      const arg = parseUnary(); // \sqrt{...}: the braces parse as a group
-      return (x) => Math.sqrt(arg(x));
+      let index = null;
+      if (peek() && peek().t === "LBRACK") { // sqrt[n]{...}
+        next();
+        index = parseExpr();
+        expect("RBRACK");
+      }
+      const arg = parseUnary(); // sqrt{...}: the braces parse as a group
+      return index ? (x) => nthRoot(arg(x), index(x)) : (x) => Math.sqrt(arg(x));
     }
     if (tok.t === "FRAC") {
       next();
@@ -449,6 +496,7 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "basic") return basicProblemLatex(p);
   if (p.kind === "nmr") return nmrProblemLatex(p);
   if (p.kind === "nmi") return nmiProblemLatex(p);
   if (p.kind === "irr") return irrProblemLatex(p);
@@ -470,6 +518,7 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "basic") return basicAntiderivativeLatex(p);
   if (p.kind === "nmr") return nmrAntiderivativeLatex(p);
   if (p.kind === "nmi") return nmiAntiderivativeLatex(p);
   if (p.kind === "irr") return irrAntiderivativeLatex(p);
@@ -485,6 +534,7 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "basic") return basicSolutionLatex(p);
   if (p.kind === "nmr") return nmrSolutionLatex(p);
   if (p.kind === "nmi") return nmiSolutionLatex(p);
   if (p.kind === "irr") return irrSolutionLatex(p);
@@ -893,6 +943,7 @@ function nmiNearMissVariants(q) {
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "basic") return basicIntegrandFn(p);
   if (p.kind === "nmr") return nmrIntegrandFn(p);
   if (p.kind === "nmi") return nmiIntegrandFn(p);
   if (p.kind === "irr") return irrIntegrandFn(p);
@@ -901,6 +952,7 @@ function integrandFn(p) {
 }
 
 function sampleZones(p) {
+  if (p.kind === "basic") return basicSampleZones(p);
   if (p.kind === "nmr") return sampleZones({ kind: "rep", a: p.n / p.m });
   if (p.kind === "nmi") return irrSampleZones({ p: p.p / p.m });
   if (p.kind === "irr") return irrSampleZones(p);
@@ -924,6 +976,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "basic") return basicNearMissVariants(p);
   if (p.kind === "nmr") return nmrNearMissVariants(p);
   if (p.kind === "nmi") return nmiNearMissVariants(p);
   if (p.kind === "irr") return irrNearMissVariants(p);
@@ -952,7 +1005,7 @@ function nearMissVariants(p) {
 // -> { status: "unreadable" } | { status: "correct" } | { status: "wrong", nearMiss? }
 function checkAnswer(p, latex) {
   // Still in the substitution variable: a reminder, not a mistake.
-  if (/t/.test(latex.replace(/\\[a-zA-Z]+/g, "").replace(/arctan|tan|sqrt/g, ""))) {
+  if (/t/.test(latex.replace(/\\[a-zA-Z]+/g, "").replace(/arctan|arctg|tan|ctg|tg|cot|sqrt/g, ""))) {
     return { status: "unreadable", reason: "t" };
   }
   let F;
@@ -1022,10 +1075,409 @@ const NEAR_MISS_TEXT = {
 };
 
 // ---------------------------------------------------------------------------
+// Basic integrals (floor 1, room 1): sums of entries from the integral table
+//
+// Answer first: the integrand is a sum of terms, each a whole coefficient
+// times one table function, and the answer is the sum of their integrals.
+//   { t: "pow", c, p, q }   c x^(p/q)  (q > 0, p/q in lowest terms)
+//   { t: "exp", c }         c e^x
+//   { t: "sin", c } / { t: "cos", c }
+//   { t: "sec2", c }        c / cos^2 x
+//   { t: "atan", c }        c / (1 + x^2)
+// Only the near-miss variants use { t: "lnq", c } (2c x/(1+x^2), the
+// derivative of c ln(1+x^2)) and a whole-integrand override `fn`.
+// Problem: { kind: "basic", shown, terms, steps?, boss? } where `shown` is
+// the integrand as the exam writes it (roots, fractions) and `steps` are the
+// rewriting lines of a "simplify first" exercise.
+// ---------------------------------------------------------------------------
+
+const ratio = (n, d) => {
+  if (d < 0) [n, d] = [-n, -d];
+  const g = gcd(n, d) || 1;
+  return [n / g, d / g];
+};
+
+function shuffled(a) {
+  const out = [...a];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = randInt(0, i);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+const pick = (a) => a[randInt(0, a.length - 1)];
+const pow = (c, p, q = 1) => ({ t: "pow", c, p, q });
+
+// --- values -----------------------------------------------------------------
+
+function basicTermValue(term, x) {
+  const { c } = term;
+  switch (term.t) {
+    case "pow": return c * (term.q === 1 ? x ** term.p : Math.pow(x, term.p / term.q));
+    case "exp": return c * Math.exp(x);
+    case "sin": return c * Math.sin(x);
+    case "cos": return c * Math.cos(x);
+    case "sec2": return c / Math.cos(x) ** 2;
+    case "atan": return c / (1 + x * x);
+    case "lnq": return (2 * c * x) / (1 + x * x);
+  }
+  return NaN;
+}
+
+const basicIntegrandFn = (p) => p.fn || ((x) => p.terms.reduce((s, t) => s + basicTermValue(t, x), 0));
+
+// Points near 0 and further out, on both sides of 0 (so ln x without | |
+// shows up). Within the checker's 1% tolerance a slip in one term hides
+// where another term is far bigger: a wrong 1/x^n or a dropped constant
+// shows near 0, a wrong x^5 only further out - so both bands are sampled.
+// Roots: x > 0 only. 1/cos^2 x, and 1/(1+x^2) (whose slip is tan x):
+// inside (-pi/2, pi/2).
+function basicSampleZones(p) {
+  if (p.terms.some((t) => t.t === "pow" && t.q > 1)) return [[0.2, 0.5], [0.6, 1], [1.2, 2.5]];
+  const trig = p.terms.some((t) => t.t === "sec2" || t.t === "atan");
+  const pole = p.terms.some((t) => t.t === "pow" && t.p < 0);
+  const [a, b, c, d] = trig ? [0.15, 0.6, 0.7, 1.3] : pole ? [0.25, 0.7, 0.8, 1.6] : [0.2, 0.8, 1, 2];
+  return [[-d, -c], [-b, -a], [a, b], [c, d]];
+}
+
+// --- LaTeX ------------------------------------------------------------------
+
+const absCoef = (c) => (Math.abs(c) === 1 ? "" : Math.abs(c)); // "x", not "1x"
+
+// x^p inside a root: "\sqrt{x}", "\sqrt[3]{x^2}".
+function rootLatex(p, q) {
+  const inner = p === 1 ? "x" : `x^${p}`;
+  return q === 2 ? `\\sqrt{${inner}}` : `\\sqrt[${q}]{${inner}}`;
+}
+
+// One term as the exam shows it: roots and fractions, whole coefficients.
+function shownTermLatex(term, isFirst) {
+  const sign = signLatex(term.c, isFirst);
+  const abs = Math.abs(term.c);
+  switch (term.t) {
+    case "pow": {
+      const { p, q } = term;
+      if (q === 1) {
+        if (p === 0) return sign + abs;
+        if (p > 0) return sign + absCoef(term.c) + xPower(p);
+        return `${sign}\\frac{${abs}}{${xPower(-p)}}`;
+      }
+      if (p > 0) return sign + absCoef(term.c) + rootLatex(p, q);
+      return `${sign}\\frac{${abs}}{${rootLatex(-p, q)}}`;
+    }
+    case "exp": return `${sign}${absCoef(term.c)}e^x`;
+    case "sin": return `${sign}${absCoef(term.c)}\\sin x`;
+    case "cos": return `${sign}${absCoef(term.c)}\\cos x`;
+    case "sec2": return `${sign}\\frac{${abs}}{\\cos^2x}`;
+    case "atan": return `${sign}\\frac{${abs}}{1+x^2}`;
+  }
+  return "";
+}
+
+// "x^{\frac{2}{5}}", "x^{-\frac{1}{2}}", "x^{-3}".
+function powerLatex(p, q) {
+  if (q === 1) return p === 0 ? "" : p === 1 ? "x" : `x^{${p}}`;
+  return `x^{${p < 0 ? "-" : ""}\\frac{${Math.abs(p)}}{${q}}}`;
+}
+
+// The same term written as a power of x, ready for the power rule.
+function powerTermLatex(term, isFirst) {
+  if (term.t !== "pow" || (term.p >= 0 && term.q === 1) || term.p === -term.q) return shownTermLatex(term, isFirst);
+  return signLatex(term.c, isFirst) + absCoef(term.c) + powerLatex(term.p, term.q);
+}
+
+// (num/den) x^(P/Q), reduced; negative powers go under a fraction bar.
+function powerAnswerLatex(num, den, P, Q, isFirst) {
+  const sign = signLatex(num, isFirst);
+  const abs = Math.abs(num);
+  const coef = den === 1 ? (abs === 1 && P !== 0 ? "" : `${abs}`) : `\\frac{${abs}}{${den}}`;
+  if (P === 0) return sign + coef;
+  if (P > 0) {
+    const body = Q === 2 && P === 1 ? "\\sqrt{x}" : powerLatex(P, Q);
+    return sign + coef + body;
+  }
+  // c x^(-k) = c / x^k; a root when 0 < k < 1
+  const under = Q === 1 ? xPower(-P) : -P < Q ? rootLatex(-P, Q) : powerLatex(-P, Q);
+  return `${sign}\\frac{${abs}}{${den === 1 ? "" : den}${under}}`;
+}
+
+function integratedTermLatex(term, isFirst) {
+  const { c } = term;
+  switch (term.t) {
+    case "pow": {
+      const { p, q } = term;
+      if (p === -q) return `${signLatex(c, isFirst)}${absCoef(c)}\\ln|x|`;
+      const [P, Q] = ratio(p + q, q); // the new exponent
+      const [num, den] = ratio(c * q, p + q); // c divided by it
+      return powerAnswerLatex(num, den, P, Q, isFirst);
+    }
+    case "exp": return `${signLatex(c, isFirst)}${absCoef(c)}e^x`;
+    case "sin": return `${signLatex(-c, isFirst)}${absCoef(c)}\\cos x`;
+    case "cos": return `${signLatex(c, isFirst)}${absCoef(c)}\\sin x`;
+    case "sec2": return `${signLatex(c, isFirst)}${absCoef(c)}\\tan x`;
+    case "atan": return `${signLatex(c, isFirst)}${absCoef(c)}\\arctan x`;
+  }
+  return "";
+}
+
+const sumLatex = (terms, fmt) => terms.map((t, i) => fmt(t, i === 0)).join("");
+const sumIntegrand = (terms, fmt) => (terms.length > 1 ? `\\left(${sumLatex(terms, fmt)}\\right)` : sumLatex(terms, fmt));
+
+const basicProblemLatex = (p) => `\\int ${p.shown}\\,dx`;
+const basicAntiderivativeLatex = (p) => sumLatex(p.terms, integratedTermLatex) + "+C";
+
+// Worked solution: the exercise, any rewriting (simplify, then powers of x),
+// and the integral.
+function basicSolutionLatex(p) {
+  const lines = (p.steps || []).map((s) => `\\int ${s}\\,dx`);
+  const asPowers = `\\int ${sumIntegrand(p.terms, powerTermLatex)}\\,dx`;
+  if (asPowers !== basicProblemLatex(p) && !lines.includes(asPowers)) lines.push(asPowers);
+  lines.push(basicAntiderivativeLatex(p));
+  return `\\begin{aligned}${basicProblemLatex(p)} &= ${lines.join(" \\\\ &= ")}\\end{aligned}`;
+}
+
+function basicProblem(terms, extra = {}) {
+  return { kind: "basic", shown: sumIntegrand(terms, shownTermLatex), terms, ...extra };
+}
+
+// --- generators ---------------------------------------------------------------
+
+// A coefficient for c x^(p/q) that, with probability `clean`, the power rule
+// divides evenly: a multiple of the new exponent's numerator p + q.
+function powCoef(p, q, clean = 0.65, range = 2, loose = 9) {
+  const m = Math.abs(p + q);
+  if (m > 1 && chance(clean)) return m * nonZero(-range, range);
+  return nonZero(-loose, loose);
+}
+
+const ROOT_POWERS = [[1, 2], [1, 3], [2, 3], [3, 4], [2, 5], [3, 5]];
+const ROOT_POWERS_NEG = [[-1, 2], [-1, 2], [-1, 3], [-2, 3]];
+
+// 1. Polynomial: a x^n + b x + c.
+function genBasicPoly() {
+  const n = randInt(2, 5);
+  return basicProblem([pow(powCoef(n, 1, 0.65, 2), n), pow(nonZero(-9, 9), 1), pow(nonZero(-9, 9), 0)]);
+}
+
+// 2. Negative powers: a/x^n (+ b/x^m), n, m in 2..4.
+function genBasicNegative() {
+  const ns = shuffled([2, 3, 4]).slice(0, chance(0.6) ? 2 : 1);
+  return basicProblem(ns.map((n) => pow(powCoef(-n, 1, 0.6, 3), -n)));
+}
+
+// 3. Roots: a root of a power of x, and one in a denominator.
+function genBasicRoots() {
+  const [p1, q1] = pick(ROOT_POWERS);
+  const [p2, q2] = pick(ROOT_POWERS_NEG);
+  return basicProblem([pow(powCoef(p1, q1, 0.7, 2, 6), p1, q1), pow(powCoef(p2, q2, 0.6, 3, 6), p2, q2)]);
+}
+
+// 4. 1/x next to 1/x^n (and sometimes a constant), in a shuffled order.
+function genBasicLn() {
+  const n = randInt(2, 3);
+  const terms = [pow(nonZero(-9, 9), -1), pow(powCoef(-n, 1, 0.6, 3), -n)];
+  if (chance(0.4)) terms.push(pow(nonZero(-9, 9), 0));
+  return basicProblem(shuffled(terms));
+}
+
+// 5. The function table: three of e^x, sin, cos, 1/cos^2, 1/(1+x^2), always
+// with sin or cos and with 1/cos^2 or 1/(1+x^2).
+function genBasicTable() {
+  const a = pick(["sin", "cos"]);
+  const b = pick(["sec2", "atan"]);
+  const c = pick(["exp", "sin", "cos", "sec2", "atan"].filter((t) => t !== a && t !== b));
+  return basicProblem(shuffled([a, b, c]).map((t) => ({ t, c: nonZero(-6, 6) })));
+}
+
+// 6. Boss: simplify first, then integrate - one of three templates.
+function genBasicBoss() {
+  return pick([bossDivide, bossSquare, bossProduct])();
+}
+
+// (a) A polynomial over x^k: split into powers, one of them 1/x.
+function bossDivide() {
+  const k = randInt(1, 2);
+  const powers = k === 2 ? [randInt(3, 4), 1, 0] : chance(0.5) ? [randInt(2, 3), 1, 0] : [randInt(2, 3), 0];
+  const N = [];
+  powers.forEach((j, i) => {
+    N[j] = i === 0 ? powCoef(j - k, 1, 0.6, 2, 6) : nonZero(-6, 6);
+  });
+  for (let j = 0; j < N.length; j++) N[j] = N[j] || 0;
+  const terms = powers.map((j) => pow(N[j], j - k));
+  const split = powers.map((j, i) => `${signLatex(N[j], i === 0)}\\frac{${j === 0 ? Math.abs(N[j]) : absCoef(N[j]) + xPower(j)}}{${xPower(k)}}`).join("");
+  return {
+    kind: "basic",
+    shown: `\\frac{${polyLatex(N)}}{${xPower(k)}}`,
+    terms,
+    steps: [`\\left(${split}\\right)`],
+    boss: { type: "divide", N, k },
+  };
+}
+
+// (b) (sqrt x + b)^2 over x or over sqrt x: expand, then split.
+function bossSquare() {
+  const b = nonZero(-3, 3);
+  const overRoot = chance(0.5);
+  // (sqrt x + b)^2 = x + 2b sqrt x + b^2
+  const terms = overRoot
+    ? [pow(1, 1, 2), pow(2 * b, 0), pow(b * b, -1, 2)]
+    : [pow(1, 0), pow(2 * b, -1, 2), pow(b * b, -1)];
+  const den = overRoot ? "\\sqrt{x}" : "x";
+  const expanded = `x${signLatex(b, false)}${Math.abs(2 * b)}\\sqrt{x}+${b * b}`;
+  return {
+    kind: "basic",
+    shown: `\\frac{\\left(\\sqrt{x}${fmtSigned(b, false)}\\right)^2}{${den}}`,
+    terms,
+    steps: [`\\frac{${expanded}}{${den}}`],
+    boss: { type: "square", b, overRoot },
+  };
+}
+
+// (c) Products of powers: c x^a * root, and d / (x * root).
+function bossProduct() {
+  const roots = [[1, 2], [1, 3], [2, 3], [1, 4], [3, 4]];
+  const a = randInt(1, 2);
+  const [m1, n1] = pick(roots);
+  const [m2, n2] = pick(roots);
+  const c1 = nonZero(-5, 5);
+  const c2 = m2 * nonZero(-3, 3); // so its integral's coefficient comes out whole
+  const [p1, q1] = ratio(a * n1 + m1, n1);
+  const [p2, q2] = ratio(-(n2 + m2), n2);
+  const terms = [pow(c1, p1, q1), pow(c2, p2, q2)];
+  const shown =
+    `\\left(${signLatex(c1, true)}${absCoef(c1)}${xPower(a)}${rootLatex(m1, n1)}` +
+    `${signLatex(c2, false)}\\frac{${Math.abs(c2)}}{x${rootLatex(m2, n2)}}\\right)`;
+  const step =
+    `\\left(${signLatex(c1, true)}${absCoef(c1)}x^{${a}+\\frac{${m1}}{${n1}}}` +
+    `${signLatex(c2, false)}${absCoef(c2)}x^{-1-\\frac{${m2}}{${n2}}}\\right)`;
+  return { kind: "basic", shown, terms, steps: [step], boss: { type: "product", a, m1, n1, m2, n2 } };
+}
+
+// --- common slips -------------------------------------------------------------
+
+const numDeriv = (F) => (x) => (F(x + 1e-5) - F(x - 1e-5)) / 2e-5;
+
+// The antiderivative of a polynomial (coefficients lowest first).
+const polyIntegralEval = (N, x) => N.reduce((s, c, j) => s + (c * x ** (j + 1)) / (j + 1), 0);
+
+// Each slip as the problem the slipped answer would be correct for.
+function basicNearMissVariants(p) {
+  const variants = [];
+  const replace = (i, t) => ({ ...p, terms: p.terms.map((u, j) => (j === i ? t : u)).filter(Boolean) });
+  const boss = p.boss;
+
+  // Integrating the numerator and the denominator separately.
+  if (boss && boss.type === "divide") {
+    const F = (x) => polyIntegralEval(boss.N, x) / (x ** (boss.k + 1) / (boss.k + 1));
+    variants.push({ kind: "split", problem: { ...p, fn: numDeriv(F) } });
+  }
+  if (boss && boss.type === "square") {
+    const { b, overRoot } = boss;
+    const F = (x) =>
+      (x * x / 2 + (4 * b / 3) * x ** 1.5 + b * b * x) / (overRoot ? (2 / 3) * x ** 1.5 : (x * x) / 2);
+    variants.push({ kind: "split", problem: { ...p, fn: numDeriv(F) } });
+    variants.push({ kind: "squareExpand", problem: replace(1, null) }); // (sqrt x + b)^2 as x + b^2
+  }
+  if (boss && boss.type === "product") {
+    const { a, m1, n1, m2, n2 } = boss;
+    // x^a * x^(m/n) taken as x^(a*m/n); 1/(x * x^(m/n)) as x^(-m/n)
+    const [p1, q1] = ratio(a * m1, n1);
+    variants.push({ kind: "expAdd", problem: replace(0, pow(p.terms[0].c, p1, q1)) });
+    variants.push({ kind: "expAdd", problem: replace(1, pow(p.terms[1].c, -m2, n2)) });
+  }
+
+  p.terms.forEach((t, i) => {
+    if (t.t === "pow") {
+      const e = t.p / t.q;
+      if (e === -1) return;
+      if (e === 0) {
+        variants.push({ kind: "constX", problem: replace(i, null) });
+        return;
+      }
+      const at = (c, num, den) => ({ ...t, c, p: num, q: den });
+      variants.push({ kind: "powCoef", problem: replace(i, { ...t, c: (t.c * (e + 1)) / e }) }); // divided by n, not n+1
+      if ((e + 1) ** 2 !== 1) variants.push({ kind: "powCoef", problem: replace(i, { ...t, c: t.c * (e + 1) ** 2 }) }); // multiplied
+      if (e < 0) {
+        variants.push({ kind: "powLn", problem: replace(i, pow(t.c, -1)) }); // c ln|x|
+        const [P, Q] = ratio(t.p - 2 * t.q, t.q); // exponent went down: c x^(e-1)/(e-1)
+        variants.push({ kind: "powExp", problem: replace(i, at(t.c, P, Q)) });
+      }
+      if (t.q > 1) {
+        const [P, Q] = ratio(Math.sign(t.p) * t.q, Math.abs(t.p)); // root read upside down
+        variants.push({ kind: "rootConv", problem: replace(i, at(t.c, P, Q)) });
+      }
+    }
+    if (t.t === "sin" || t.t === "cos") variants.push({ kind: "trigSign", problem: replace(i, { ...t, c: -t.c }) });
+    if (t.t === "sec2") {
+      variants.push({ kind: "tanSign", problem: replace(i, { ...t, c: -t.c }) });
+      variants.push({ kind: "tanAtan", problem: replace(i, { t: "atan", c: t.c }) });
+    }
+    if (t.t === "atan") {
+      variants.push({ kind: "atanLn", problem: replace(i, { t: "lnq", c: t.c }) });
+      variants.push({ kind: "tanAtan", problem: replace(i, { t: "sec2", c: t.c }) });
+    }
+  });
+  // Both sin and cos with the wrong sign.
+  if (p.terms.filter((t) => t.t === "sin" || t.t === "cos").length > 1) {
+    variants.push({ kind: "trigSign", problem: { ...p, terms: p.terms.map((t) => (t.t === "sin" || t.t === "cos" ? { ...t, c: -t.c } : t)) } });
+  }
+  p.terms.forEach((t, i) => {
+    if (t.t !== "sin" && t.t !== "cos" && t.t !== "sec2") variants.push({ kind: "sign", problem: replace(i, { ...t, c: -t.c }) });
+  });
+  return variants;
+}
+
+Object.assign(GENERATORS, {
+  basicPoly: genBasicPoly,
+  basicNegative: genBasicNegative,
+  basicRoots: genBasicRoots,
+  basicLn: genBasicLn,
+  basicTable: genBasicTable,
+  basicBoss: genBasicBoss,
+});
+
+Object.assign(NEAR_MISS_TEXT, {
+  powCoef: `כמעט! בדקו את המקדם: ${ltr("∫xⁿdx = xⁿ⁺¹/(n+1)")} - מחלקים בחזקה החדשה.`,
+  powExp: `כמעט! בדקו את החזקה: באינטגרל החזקה עולה ב-1, גם כשהיא שלילית (${ltr("x⁻³ → x⁻²")}).`,
+  powLn: `כמעט! ${ltr("ln")} מתקבל רק מ-${ltr("1/x")}. לחזקה אחרת של ${ltr("x")} משתמשים בכלל החזקה.`,
+  constX: `כמעט! האינטגרל של קבוע ${ltr("k")} הוא ${ltr("kx")}.`,
+  rootConv: `כמעט! בדקו את המעבר משורש לחזקה: ${ltr("ⁿ√xᵐ = x^(m/n)")}.`,
+  trigSign: `כמעט! בדקו סימנים: ${ltr("∫sin x dx = −cos x")} ו-${ltr("∫cos x dx = sin x")}.`,
+  tanSign: `כמעט! ${ltr("∫dx/cos²x = tan x")}, בלי מינוס.`,
+  tanAtan: `כמעט! נראה ש-${ltr("tan")} ו-${ltr("arctan")} התחלפו.`,
+  atanLn: `כמעט! ${ltr("∫dx/(1+x²) = arctan x")}, לא ${ltr("ln")}.`,
+  split: "לא מבצעים אינטגרל למונה ולמכנה בנפרד. קודם מפשטים לסכום של חזקות.",
+  squareExpand: `כמעט! בפתיחת הסוגריים חסר האיבר האמצעי: ${ltr("(a+b)² = a²+2ab+b²")}.`,
+  expAdd: `כמעט! בכפל חזקות מחברים את המעריכים: ${ltr("xᵃ·xᵇ = xᵃ⁺ᵇ")}.`,
+});
+
+// ---------------------------------------------------------------------------
 // The tower: floor 1
 // ---------------------------------------------------------------------------
 
+// Which floor the map shows. Floor 2 (rational functions) is kept intact but
+// not shown while floor 1 (basic integrals) is being built.
+const ACTIVE_FLOOR = 1;
+
 const ROOMS = [
+  {
+    id: "basic",
+    floor: 1,
+    kind: "core",
+    num: 1,
+    title: "אינטגרלים מיידיים",
+    en: "Basic integrals",
+    tag: "טבלת האינטגרלים",
+    nodes: [
+      { gen: "basicPoly" },
+      { gen: "basicNegative" },
+      { gen: "basicRoots" },
+      { gen: "basicLn" },
+      { gen: "basicTable" },
+      { gen: "basicBoss", boss: true },
+    ],
+  },
   {
     id: "division",
     kind: "prep",
@@ -1166,6 +1618,7 @@ function isLocked(room) {
 }
 
 function recommendedRoomId() {
+  if (ACTIVE_FLOOR === 1) return isConquered("basic") ? null : "basic";
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -1477,7 +1930,69 @@ function goToMedals() {
 
 $("medalBackBtn").addEventListener("click", () => goToMap());
 
-// Top-down plan of floor 1. Grid columns run right to left (RTL): rooms 1-3,
+function renderMap() {
+  if (ACTIVE_FLOOR === 1) renderBasicFloor();
+  else renderRationalFloor();
+}
+
+// Stone steps rising away from the corridor: the way up to the next floor.
+const STAIRS_SVG = `
+  <svg class="stairs-steps" viewBox="0 0 80 96" aria-hidden="true">
+    ${[0, 1, 2, 3, 4, 5]
+      .map((i) => {
+        const w = 76 - i * 8;
+        return `<rect x="${(80 - w) / 2}" y="${82 - i * 15}" width="${w}" height="13" rx="1.5"/>`;
+      })
+      .join("")}
+  </svg>`;
+
+// Top-down plan of floor 1 (basic integrals). Grid columns run right to left
+// (RTL):
+//   row 1  room 1 · room 2 (still to come) · a torch · the stairs up
+//   row 3  corridor
+//   row 5  entrance
+function renderBasicFloor() {
+  const soonCard = (num, title) => `
+    <div class="room-card room-core soon" aria-disabled="true">
+      <div class="room-head"><span class="room-num">${num}</span><span class="room-title" dir="ltr">${title}</span></div>
+      <div class="room-label">בקרוב</div>
+    </div>`;
+  towerEl.innerHTML = `
+    <div class="floor-map">
+      <div class="floor-label">קומה 1 · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
+      ${store.mapTipSeen ? "" : `
+        <div class="map-tip" role="note">
+          <span>לוחצים על חדר כדי להיכנס, או זזים בחיצים ונכנסים ב-<kbd dir="ltr">Enter</kbd></span>
+          <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
+        </div>`}
+      <div class="floor-grid floor-basic">
+        ${mapTorch(3, 1)}
+        <div class="cell" style="grid-column:1;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
+        <div class="cell" style="grid-column:2;grid-row:1">${soonCard(2, "F(ax+b)")}</div>
+        <div class="cell stairs" style="grid-column:4;grid-row:1 / 4" aria-label="מדרגות לקומה 2 - בקרוב">
+          ${STAIRS_SVG}
+          <span class="stairs-label">לקומה 2</span>
+          <span class="stairs-soon">בקרוב</span>
+        </div>
+        ${doorway(1, 2)}${doorway(2, 2)}
+        <div class="cell corridor main" style="grid-column:1 / 4;grid-row:3"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
+        ${doorway(2, 4)}
+        <div class="cell entrance" style="grid-column:2;grid-row:5" data-node="entrance">
+          ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
+        </div>
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
+        </div>
+      </div>
+    </div>`;
+  justConquered = null;
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
+}
+
+// Top-down plan of floor 2. Grid columns run right to left (RTL): rooms 1-3,
 // then the gate up to the upper wing.
 //   row 1  upper wing: review · non-monic · the topic medal
 //   row 3  upper corridor (fogged until the wing opens)
@@ -1486,7 +2001,7 @@ $("medalBackBtn").addEventListener("click", () => goToMap());
 //   row 9  polynomial division (walk through it - or solve it)
 //   row 11 entrance
 // Even rows are the walls, with doorways through them.
-function renderMap() {
+function renderRationalFloor() {
   const [prep, rep, core, irr, review, ext] = ["division", "repeated", "pf1", "irreducible", "review", "nonmonic"].map((id) => ROOM_BY_ID[id]);
   const open = wingOpen();
   const reveal = open && !store.wingRevealed;
@@ -1504,7 +2019,7 @@ function renderMap() {
 
   towerEl.innerHTML = `
     <div class="floor-map">
-      <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
+      <div class="floor-label">קומה 2 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
       ${store.mapTipSeen ? "" : `
         <div class="map-tip" role="note">
           <span>לוחצים על חדר כדי להיכנס, או זזים בחיצים ונכנסים ב-<kbd dir="ltr">Enter</kbd></span>
@@ -1557,7 +2072,12 @@ function renderMap() {
 // keys step it between neighbouring places; Enter goes in. A click on a room
 // walks it there along the corridors, then goes in.
 
-const MAP_NODES = {
+const BASIC_FLOOR_NODES = {
+  entrance: { area: "lower", at: "top", nav: { up: "basic", right: "basic" } },
+  basic: { area: "lower", at: "bottom", nav: { down: "entrance", left: "entrance" } },
+};
+
+const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
   division: { area: "lower", at: "top", nav: { up: "pf1", down: "entrance" } },
   repeated: { area: "lower", at: "bottom", nav: { left: "pf1", down: "division" } },
@@ -1568,6 +2088,8 @@ const MAP_NODES = {
   nonmonic: { area: "upper", at: "bottom", nav: { right: "review", left: "trophy", down: "gate" } },
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
+
+const MAP_NODES = ACTIVE_FLOOR === 1 ? BASIC_FLOOR_NODES : RATIONAL_FLOOR_NODES;
 
 const markerNode = () => (MAP_NODES[store.lastRoom] ? store.lastRoom : "entrance");
 let markerBusy = false;
@@ -1597,11 +2119,14 @@ function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
-  const lowY = corridorY("main");
-  const upY = corridorY("upper");
-  const g = nodePoint("gate");
   const fa = MAP_NODES[from].area;
   const ta = MAP_NODES[to].area;
+  const lowY = corridorY("main");
+  if (fa === "lower" && ta === "lower") {
+    return [a, { x: a.x, y: lowY }, { x: b.x, y: lowY }, b].filter((p, i, pts) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
+  }
+  const upY = corridorY("upper");
+  const g = nodePoint("gate");
   const pts = [a];
   if (fa === "lower") pts.push({ x: a.x, y: lowY });
   if (fa === "upper") pts.push({ x: a.x, y: upY });
@@ -2159,6 +2684,7 @@ function showProblem({ animate, arriving = false }) {
   checkBtn.disabled = false;
   nextBtn.hidden = true;
   nextBtn.classList.remove("ready");
+  setAnswerMenu(false);
   answerField.focus();
 }
 
@@ -2286,6 +2812,36 @@ answerField.addEventListener("change", () => {
   }
 });
 
+// The field's ▾ symbol menu (roots, fraction, power, e, ln, trig), as in
+// Calcapp. mousedown is cancelled so the field keeps focus; insert() needs
+// it active.
+const answerMenuBtn = $("answerMenuBtn");
+const answerMenu = $("answerMenu");
+
+function setAnswerMenu(open) {
+  answerMenu.hidden = !open;
+  answerMenuBtn.setAttribute("aria-expanded", String(open));
+}
+
+$("answerFieldWrap").addEventListener("mousedown", (e) => {
+  if (e.target.closest("#answerMenuBtn, .field-menu-item")) e.preventDefault();
+});
+answerMenuBtn.addEventListener("click", () => setAnswerMenu(answerMenu.hidden));
+answerMenu.addEventListener("click", (e) => {
+  const item = e.target.closest(".field-menu-item");
+  if (!item || view.resolved) return;
+  answerField.focus();
+  answerField.insert(item.dataset.insert, { selectionMode: "placeholder" });
+  answerField.dispatchEvent(new Event("input", { bubbles: true }));
+  setAnswerMenu(false);
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#answerFieldWrap")) setAnswerMenu(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !answerMenu.hidden) setAnswerMenu(false);
+});
+
 // Tablets: MathLive's on-screen keyboard covers the bottom of the page.
 // Pad the page by its height and scroll so the exercise, the answer and the
 // buttons sit in the space that is left (the exercise is the first to give
@@ -2408,7 +2964,8 @@ function showConquest(room, { score, prevBest, wins, before }) {
   // Where to go next.
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next = "";
-  if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
+  if (room.floor === 1) next = "";
+  else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
   else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
 
@@ -2446,7 +3003,7 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
-  } else if (location.hash === "#/medals" && wingOpen()) {
+  } else if (location.hash === "#/medals" && ACTIVE_FLOOR === 2 && wingOpen()) {
     store.lastRoom = "trophy";
     saveStore();
     renderMedalView();
