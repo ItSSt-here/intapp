@@ -364,6 +364,54 @@ button:disabled {
 
 .marker-hint:empty { display: none; }
 
+/* Walking: the pin hops step by step, with a shadow that stays on the floor. */
+.map-marker.walking .marker-pin { animation: pin-step 0.2s ease-in-out infinite alternate; }
+.map-marker.walking::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 9px;
+  width: 16px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+}
+@keyframes pin-step {
+  from { transform: translateY(0) scale(1.06, 0.94); }
+  to { transform: translateY(-6px) scale(0.96, 1.04); }
+}
+
+/* First visit only: how to move on the map. */
+.map-tip {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: -6px auto 14px;
+  padding: 6px 8px 6px 14px;
+  font-size: 0.85rem;
+  color: #f3ead6;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(242, 201, 76, 0.6);
+  border-radius: 10px;
+  animation: fade-up 0.4s ease 0.6s both;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.map-tip.leaving { opacity: 0; transform: translateY(-6px); }
+.map-tip kbd {
+  font: 700 0.75rem "Segoe UI", Arial, sans-serif;
+  padding: 0 5px;
+  color: #4b3f2b;
+  background: #efe6d2;
+  border-radius: 4px;
+  box-shadow: 0 2px 0 #8a7a5e;
+}
+.map-tip-close { padding: 2px 6px; font-size: 0.8rem; color: #b9ad95; background: none; }
+.map-tip-close:hover { color: white; }
+
 @keyframes here-pulse {
   0%, 100% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(226, 83, 58, 0.55); }
   50% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(226, 83, 58, 0); }
@@ -1278,11 +1326,15 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 
 /* Narrow tablets: tighter columns so the room names still fit. */
 @media (min-width: 760px) and (max-width: 940px) {
-  .floor-map { padding: 16px 14px 20px; }
-  .floor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) 104px; column-gap: 12px; }
-  .floor-map .room-title { font-size: 0.95rem; }
-  .floor-map .room-card { padding: 9px 10px; }
+  body { padding-inline: 12px; }
+  .floor-map { padding: 16px 10px 20px; }
+  .floor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) 88px; column-gap: 10px; }
+  .floor-map .room-title { font-size: 0.92rem; }
+  .floor-map .room-card { padding: 9px 8px; }
+  .floor-map .room-head { gap: 4px; }
   .floor-en { display: none; }
+  .padlock { width: 21px; height: 27px; }
+  .gate-locks { gap: 1px; }
 }
 
 /* Phones: no gate drawing, so the wing's "open anyway" sits on its corridor. */
@@ -1296,7 +1348,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   border-color: #c9971c;
   box-shadow: var(--frame), 0 0 0 2px #f2c94c, 0 0 16px 3px rgba(240, 180, 40, 0.55), inset 0 0 18px rgba(255, 186, 60, 0.35);
 }
-.conquered-flag { width: 26px; height: 37px; top: -12px; }
+/* Hangs from the wall above the room, clear of the room's name. */
+.conquered-flag { width: 22px; height: 31px; top: -21px; z-index: 2; }
 
 /* The step the student is on: bright orange, so it stands out from the teal. */
 :root { --now: #f07a12; --now-glow: rgba(240, 122, 18, 0.35); }

@@ -1477,6 +1477,11 @@ function renderMap() {
   towerEl.innerHTML = `
     <div class="floor-map">
       <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
+      ${store.mapTipSeen ? "" : `
+        <div class="map-tip" role="note">
+          <span>לוחצים על חדר כדי להיכנס, או זזים בחיצים ונכנסים ב-<kbd dir="ltr">Enter</kbd></span>
+          <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
+        </div>`}
       <div class="floor-grid">
         <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
         <div class="cell wing${wingCls}" style="grid-column:2;grid-row:1">${roomCardHtml(ext)}</div>
@@ -1605,8 +1610,25 @@ function placeMarker(id, save = true) {
   }
 }
 
+// The first-visit tip goes away for good once the student has moved the
+// marker (or closed it).
+function dismissMapTip() {
+  if (store.mapTipSeen) return;
+  store.mapTipSeen = true;
+  saveStore();
+  const tip = towerEl.querySelector(".map-tip");
+  if (!tip) return;
+  tip.classList.add("leaving");
+  setTimeout(() => tip.remove(), reducedMotion() ? 0 : 350);
+}
+
+towerEl.addEventListener("click", (e) => {
+  if (e.target.closest("[data-tip-close]")) dismissMapTip();
+});
+
 // Walk to a place; resolves when the marker has arrived.
 function walkTo(id) {
+  dismissMapTip();
   const from = markerNode();
   const marker = towerEl.querySelector(".map-marker");
   if (from === id || !marker) {
@@ -1623,10 +1645,12 @@ function walkTo(id) {
   });
   marker.querySelector(".marker-hint").textContent = "";
   markerBusy = true;
+  marker.classList.add("walking");
   const duration = Math.min(700, Math.max(180, total * 1.1));
   const anim = marker.animate(frames, { duration, easing: "ease-in-out" });
   return anim.finished.catch(() => {}).then(() => {
     markerBusy = false;
+    marker.classList.remove("walking");
     placeMarker(id);
   });
 }
