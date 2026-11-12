@@ -1893,26 +1893,29 @@ function sparkToNode(i) {
   const y0 = a.top + 14;
   const x1 = b.left + b.width / 2;
   const y1 = b.top + b.height / 2;
-  const spark = document.createElement("div");
-  spark.className = "spark";
-  document.body.appendChild(spark);
   const at = (x, y, s = 1) => `translate(${x}px, ${y}px) scale(${s})`;
   // A gentle arc: out sideways a little on the way up.
-  const mx = (x0 + x1) / 2 + (x1 > x0 ? -40 : 40);
+  const mx = (x0 + x1) / 2 + (x1 > x0 ? -50 : 50);
   const my = (y0 + y1) / 2;
-  const anim = spark.animate(
-    [
-      { transform: at(x0, y0, 0.4), opacity: 0 },
-      { transform: at(x0, y0 - 8, 1), opacity: 1, offset: 0.12 },
-      { transform: at(mx, my, 1), offset: 0.55 },
-      { transform: at(x1, y1, 0.7), opacity: 1 },
-    ],
-    { duration: 560, easing: "cubic-bezier(0.4, 0, 0.3, 1)" }
-  );
-  return anim.finished.catch(() => {}).then(() => {
-    spark.remove();
-    land();
+  const frames = (o) => [
+    { transform: at(x0, y0, 0.4), opacity: 0 },
+    { transform: at(x0, y0 - 10, 1), opacity: o, offset: 0.15 },
+    { transform: at(mx, my, 1), opacity: o, offset: 0.55 },
+    { transform: at(x1, y1, 0.75), opacity: o },
+  ];
+  // The spark, plus two fainter copies just behind it as a short tail.
+  const els = [];
+  const parts = [1, 0.45, 0.2].map((o, k) => {
+    const el = document.createElement("div");
+    el.className = k ? "spark spark-tail" : "spark";
+    document.body.appendChild(el);
+    els.push(el);
+    return el.animate(frames(o), { duration: 850, delay: k * 45, easing: "cubic-bezier(0.45, 0, 0.3, 1)", fill: "backwards" });
   });
+  return parts[0].finished.catch(() => {}).then(() => {
+    land();
+    return Promise.all(parts.map((a) => a.finished.catch(() => {})));
+  }).then(() => els.forEach((el) => el.remove()));
 }
 
 // "Room cleared": the last step is solved. The path lights up gold node by
@@ -2082,16 +2085,38 @@ function slideOutCurrentCard() {
   clone.addEventListener("transitionend", removeOutgoingClone, { once: true });
 }
 
-function slideInCurrentCard() {
+function slideInCurrentCard(arriving) {
+  const node = view.room.nodes[view.node];
+  if (arriving && node && node.boss && !reducedMotion()) {
+    bossEntrance();
+    return;
+  }
   problemCardEl.classList.add("enter-start");
   void problemCardEl.offsetWidth;
   problemCardEl.classList.remove("enter-start");
 }
 
-function showProblem({ animate }) {
+// The boss: a short, quiet beat instead of the usual slide. The card settles
+// down into place a moment later, its amber bar draws across, and the two
+// torches on the room's walls flare once.
+function bossEntrance() {
+  problemCardEl.classList.remove("boss-enter");
+  roomView.classList.remove("boss-entering");
+  void problemCardEl.offsetWidth;
+  problemCardEl.classList.add("boss-enter");
+  roomView.classList.add("boss-entering");
+  setTimeout(() => {
+    problemCardEl.classList.remove("boss-enter");
+    roomView.classList.remove("boss-entering");
+  }, 1300);
+}
+
+// arriving: the student just stepped onto this node (not a fresh exercise
+// for the same node after "show solution").
+function showProblem({ animate, arriving = false }) {
   if (animate && problemField.value) slideOutCurrentCard();
   problemField.value = problemLatex(view.problem);
-  if (animate) slideInCurrentCard();
+  if (animate) slideInCurrentCard(arriving);
   view.resolved = false;
   gradedValue = null;
   answerField.value = "";
@@ -2206,7 +2231,7 @@ nextBtn.addEventListener("click", () => {
   view.node = node;
   view.problem = problem;
   if (advance) updatePath(true);
-  showProblem({ animate: true });
+  showProblem({ animate: true, arriving: advance });
 });
 
 // Editing the answer returns the card to neutral, so the next wrong attempt

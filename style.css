@@ -851,16 +851,17 @@ button:disabled {
 /* Correct answer: one small gold spark flies up to the node... */
 .spark {
   position: fixed;
-  top: -4px;
-  left: -4px;
-  width: 8px;
-  height: 8px;
+  top: -7px;
+  left: -7px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: #ffe7a0;
-  box-shadow: 0 0 6px 2px rgba(242, 201, 76, 0.85), 0 0 14px 4px rgba(242, 180, 40, 0.35);
+  background: radial-gradient(circle, #fffdf2 0 25%, #ffc22e 55%, #e8900c 100%);
+  box-shadow: 0 0 8px 3px rgba(240, 150, 20, 0.75), 0 0 22px 7px rgba(240, 170, 40, 0.35);
   pointer-events: none;
   z-index: 20;
 }
+.spark-tail { width: 10px; height: 10px; top: -5px; left: -5px; box-shadow: 0 0 6px 2px rgba(240, 150, 20, 0.5); }
 
 /* ...and the node fills in with a single soft ring as it lands. */
 .pnode.just-done { animation: node-land 0.5s ease-out; }
@@ -980,6 +981,28 @@ math-field.display-field {
   transform: translateX(-70px);
   opacity: 0;
   transition: none;
+}
+
+/* Boss: the card comes down into place a beat later instead of sliding in,
+   then its amber bar draws across; the room's torches flare once. */
+.problem-card.boss-enter { animation: boss-card-in 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) 0.15s both; }
+.problem-card.boss-enter::before { transform-origin: right; animation: boss-bar-draw 0.5s ease 0.6s both; }
+
+@keyframes boss-card-in {
+  from { transform: translateY(-18px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes boss-bar-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+#roomView.boss-entering .room-header::before,
+#roomView.boss-entering .room-header::after {
+  animation: torch-flare 1s ease;
+}
+@keyframes torch-flare {
+  40% { transform: scale(1.35, 1.5); box-shadow: 0 0 18px 10px rgba(255, 120, 40, 0.55); }
 }
 
 .problem-card-outgoing {
