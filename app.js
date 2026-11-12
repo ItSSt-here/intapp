@@ -54,7 +54,8 @@ function tokenize(latex) {
   s = s.replace(/\\left|\\right|\\mleft|\\mright|\\bigl|\\bigr|\\Bigl|\\Bigr|\\big|\\Big/g, "");
   s = s.replace(/\\cdot|\\times/g, "*");
   s = s.replace(/\\lvert|\\rvert|\\vert|\\mid/g, "|");
-  s = s.replace(/\\operatorname\{(ln|log)\}/g, "\\$1");
+  s = s.replace(/\\operatorname\{(ln|log|arctan)\}/g, "\\$1");
+  s = s.replace(/\\tan\^\{-1\}|\\tan\^-1/g, "\\arctan");
   s = s.replace(/\\dfrac|\\tfrac/g, "\\frac");
   s = s.replace(/\\,|\\!|\\;|\\:|\\ /g, "");
   s = s.replace(/\\mathrm\{d\}x|dx/g, ""); // drop trailing "dx" if present
@@ -67,10 +68,13 @@ function tokenize(latex) {
   while (i < s.length) {
     const rest = s.slice(i);
     if (rest.startsWith("\\frac")) { tokens.push({ t: "FRAC" }); i += 5; continue; }
+    if (rest.startsWith("\\arctan")) { tokens.push({ t: "ATAN" }); i += 7; continue; }
+    if (rest.startsWith("\\sqrt")) { tokens.push({ t: "SQRT" }); i += 5; continue; }
     if (rest.startsWith("\\ln")) { tokens.push({ t: "LN" }); i += 3; continue; }
     if (rest.startsWith("\\log")) { tokens.push({ t: "LN" }); i += 4; continue; }
     // MathLive doesn't always expand a typed "ln"/"log" into the \ln macro
     // (it may leave it as plain italic letters) - recognize the bare word too.
+    if (rest.startsWith("arctan")) { tokens.push({ t: "ATAN" }); i += 6; continue; }
     if (rest.startsWith("ln")) { tokens.push({ t: "LN" }); i += 2; continue; }
     if (rest.startsWith("log")) { tokens.push({ t: "LN" }); i += 3; continue; }
     const c = s[i];
@@ -132,7 +136,7 @@ function buildEvaluator(latex) {
 
   function startsFactor(tok) {
     if (!tok) return false;
-    return ["NUM", "VAR", "CONST", "LPAREN", "LBRACE", "PIPE_OPEN", "LN", "FRAC"].includes(tok.t);
+    return ["NUM", "VAR", "CONST", "LPAREN", "LBRACE", "PIPE_OPEN", "LN", "ATAN", "SQRT", "FRAC"].includes(tok.t);
   }
 
   function parseTerm() {
@@ -216,6 +220,16 @@ function buildEvaluator(latex) {
       next();
       const arg = parseUnary();
       return (x) => Math.log(arg(x));
+    }
+    if (tok.t === "ATAN") {
+      next();
+      const arg = parseUnary();
+      return (x) => Math.atan(arg(x));
+    }
+    if (tok.t === "SQRT") {
+      next();
+      const arg = parseUnary(); // \sqrt{...}: the braces parse as a group
+      return (x) => Math.sqrt(arg(x));
     }
     if (tok.t === "FRAC") {
       next();
@@ -376,6 +390,10 @@ const GENERATORS = {
   repFactored: () => ({ ...generateRepeated(false), display: "factored" }),
   repExpanded: () => ({ ...generateRepeated(false), display: "expanded" }),
   repDegree2: () => ({ ...generateRepeated(true), display: "expanded" }),
+  // irreducible quadratic (x+p)^2 + k^2: complete the square, ln and arctan
+  irrPlain: () => generateIrreducible([]),
+  irrDegree2: () => generateIrreducible([nonZero(-3, 3)]),
+  irrBoss: () => generateIrreducible([randInt(-4, 4), nonZero(-3, 3)]),
 };
 
 // --- LaTeX ------------------------------------------------------------------
@@ -428,6 +446,7 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "irr") return irrProblemLatex(p);
   if (p.kind === "rep") return repProblemLatex(p);
   return `\\int \\frac{${polyLatex(numeratorPoly(p))}}{${shownDenLatex(p)}}\\,dx`;
 }
@@ -446,6 +465,7 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "irr") return irrAntiderivativeLatex(p);
   if (p.kind === "rep") return repAntiderivativeLatex(p);
   let out = "";
   for (let k = p.Q.length - 1; k >= 0; k--) out += fracMonomialLatex(p.Q[k], k + 1, k + 1, out === "");
@@ -458,6 +478,7 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "irr") return irrSolutionLatex(p);
   if (p.kind === "rep") return repSolutionLatex(p);
   const lines = [problemLatex(p)];
   const q = p.Q.length ? polyLatex(p.Q) : "";
@@ -583,16 +604,131 @@ function repNearMissVariants(p) {
 }
 
 // ---------------------------------------------------------------------------
+// Irreducible quadratic: denominator (x + p)^2 + k^2, no real roots
+//
+// Taught as: (divide,) complete the square, substitute t = x + p, then use
+// the two known formulas (no second substitution for the ln):
+//   ∫ t/(t^2+k^2) dt = ½ ln(t^2+k^2)     ∫ 1/(t^2+k^2) dt = (1/k) arctan(t/k)
+// Answer first: integrand = Q(x) + (2c t + d k)/(t^2 + k^2), so the answer is
+// ∫Q + c ln((x+p)^2+k^2) + d arctan((x+p)/k) + C with whole c and d; k^2 is
+// a perfect square, so no square roots appear.
+// Problem: { kind: "irr", p, k, c, d, Q }  (+ ka, only in near-miss variants:
+// the k inside the arctan when it differs from the one in the denominator)
+// ---------------------------------------------------------------------------
+
+function generateIrreducible(Q) {
+  let c, d;
+  do {
+    c = chance(0.2) ? 0 : nonZero(-4, 4); // c = 0: arctan only
+    d = chance(0.2) ? 0 : nonZero(-4, 4); // d = 0: ln only
+  } while (c === 0 && d === 0);
+  return { kind: "irr", p: chance(0.1) ? 0 : nonZero(-4, 4), k: randInt(1, 3), c, d, Q };
+}
+
+const irrDenPoly = ({ p, k }) => [p * p + k * k, 2 * p, 1];
+const irrRemainderPoly = ({ p, k, c, d }) => trimPoly([2 * c * p + d * k, 2 * c]); // 2c(x+p) + dk
+const irrNumeratorPoly = (q) => polyAdd(polyMul(q.Q, irrDenPoly(q)), irrRemainderPoly(q));
+const irrShift = (q) => (q.p === 0 ? "x" : mxLatex(1, -q.p)); // "x + p"
+const irrSquareLatex = (q) => (q.p === 0 ? "x^2" : `(${irrShift(q)})^2`) + `+${q.k * q.k}`;
+
+function irrProblemLatex(q) {
+  return `\\int \\frac{${polyLatex(irrNumeratorPoly(q))}}{${polyLatex(irrDenPoly(q))}}\\,dx`;
+}
+
+// ∫Q dx, e.g. "\frac{1}{2}x^2-3x"
+function integratedQLatex(Q) {
+  let out = "";
+  for (let i = Q.length - 1; i >= 0; i--) out += fracMonomialLatex(Q[i], i + 1, i + 1, out === "");
+  return out;
+}
+
+// c ln(lnArg) + d arctan(atanNum / k)
+function irrLogAtanLatex(q, lnArg, atanNum) {
+  let out = "";
+  if (q.c) out += signLatex(q.c, true) + (Math.abs(q.c) === 1 ? "" : Math.abs(q.c)) + `\\ln\\left(${lnArg}\\right)`;
+  if (q.d) {
+    const arg = q.k === 1 ? atanNum : `\\frac{${atanNum}}{${q.k}}`;
+    out += signLatex(q.d, out === "") + (Math.abs(q.d) === 1 ? "" : Math.abs(q.d)) + `\\arctan\\left(${arg}\\right)`;
+  }
+  return out;
+}
+
+const joinPlus = (a, b) => (a && b && !b.startsWith("-") ? `${a}+${b}` : `${a}${b}`);
+
+function irrAntiderivativeLatex(q) {
+  return joinPlus(integratedQLatex(q.Q), irrLogAtanLatex(q, polyLatex(irrDenPoly(q)), irrShift(q))) + "+C";
+}
+
+// Worked solution: divide, complete the square, substitute, split, apply the
+// two formulas, substitute back.
+function irrSolutionLatex(q) {
+  const rows = [];
+  const R = irrRemainderPoly(q);
+  const D = polyLatex(irrDenPoly(q));
+  const sq = irrSquareLatex(q);
+  const Iq = integratedQLatex(q.Q);
+  const v = q.p === 0 ? "x" : "t"; // with p = 0 there is nothing to substitute
+  const vDen = `${v}^2+${q.k * q.k}`;
+
+  if (q.Q.length) {
+    rows.push(`&= \\int\\left(${polyLatex(q.Q)}${fracTermLatex(R, D)}\\right)dx`);
+    rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${polyLatex(R)}}{${D}}\\,dx`)}`);
+  }
+  if (q.p !== 0) {
+    rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${polyLatex(R)}}{${sq}}\\,dx`)}`);
+    rows.push(`&\\qquad \\left[\\,t=${irrShift(q)},\\ \\ x=t${fmtSigned(-q.p, false)},\\ \\ dx=dt\\,\\right]`);
+    const substituted = polyInLatex(R, `(t${fmtSigned(-q.p, false)})`);
+    const inT = polyLatex(trimPoly([q.d * q.k, 2 * q.c]), "t");
+    rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${substituted}}{${vDen}}\\,dt`)}`);
+    if (inT !== substituted) rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${inT}}{${vDen}}\\,dt`)}`);
+  }
+  const parts = [];
+  if (q.c) parts.push(`${signLatex(q.c, parts.length === 0)}\\frac{${Math.abs(2 * q.c)}${v}}{${vDen}}`);
+  if (q.d) parts.push(`${signLatex(q.d, parts.length === 0)}\\frac{${Math.abs(q.d * q.k)}}{${vDen}}`);
+  if (parts.length === 2) rows.push(`&= ${joinPlus(Iq, `\\int\\left(${parts.join("")}\\right)d${v}`)}`);
+  rows.push(`&= ${joinPlus(Iq, irrLogAtanLatex(q, vDen, v))}+C`);
+  if (q.p !== 0) rows.push(`&= ${joinPlus(Iq, irrLogAtanLatex(q, sq, irrShift(q)))}+C`);
+  return `\\begin{aligned}${irrProblemLatex(q)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+function irrIntegrandFn(q) {
+  const ka = q.ka ?? q.k;
+  return (x) => {
+    const t = x + q.p;
+    return polyEval(q.Q, x) + (2 * q.c * t) / (t * t + q.k * q.k) + (q.d * ka) / (t * t + ka * ka);
+  };
+}
+
+// No poles: sample on both sides of the vertex and around it.
+const irrSampleZones = ({ p }) => [[-p - 6, -p - 2], [-p - 2, -p + 2], [-p + 2, -p + 6]];
+
+function irrNearMissVariants(q) {
+  const variants = [];
+  if (q.c) variants.push({ kind: "lnHalf", problem: { ...q, c: 2 * q.c } }); // no ½ before the ln
+  if (q.d && q.k !== 1) {
+    variants.push({ kind: "atanCoef", problem: { ...q, d: q.d * q.k } }); // no 1/k before the arctan
+    variants.push({ kind: "atanArg", problem: { ...q, ka: 1 } }); // arctan(t) instead of arctan(t/k)
+  }
+  if (q.c) variants.push({ kind: "sign", problem: { ...q, c: -q.c } });
+  if (q.d) variants.push({ kind: "sign", problem: { ...q, d: -q.d } });
+  if (q.p) variants.push({ kind: "squareSign", problem: { ...q, p: -q.p } });
+  if (q.Q.length) variants.push({ kind: "quotient", problem: { ...q, Q: [] } });
+  return variants;
+}
+
+// ---------------------------------------------------------------------------
 // Checking: differentiate the student's answer numerically and compare it
 // with the integrand on every interval between the poles.
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "irr") return irrIntegrandFn(p);
   if (p.kind === "rep") return repIntegrandFn(p);
   return (x) => polyEval(p.Q, x) + p.terms.reduce((s, t) => s + (t.A * t.m) / (t.m * x - t.n), 0);
 }
 
 function sampleZones(p) {
+  if (p.kind === "irr") return irrSampleZones(p);
   const poles = p.kind === "rep" ? [p.a] : p.terms.map((t) => t.n / t.m).sort((a, b) => a - b);
   const zones = [[poles[0] - 6, poles[0] - 1], [poles[poles.length - 1] + 1, poles[poles.length - 1] + 6]];
   for (let i = 0; i + 1 < poles.length; i++) {
@@ -613,6 +749,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "irr") return irrNearMissVariants(p);
   if (p.kind === "rep") return repNearMissVariants(p);
   const variants = [];
   const replace = (i, t) => ({ ...p, terms: p.terms.map((u, j) => (j === i ? t : u)) });
@@ -638,7 +775,9 @@ function nearMissVariants(p) {
 // -> { status: "unreadable" } | { status: "correct" } | { status: "wrong", nearMiss? }
 function checkAnswer(p, latex) {
   // Still in the substitution variable: a reminder, not a mistake.
-  if (/t/.test(latex.replace(/\\[a-zA-Z]+/g, ""))) return { status: "unreadable", reason: "t" };
+  if (/t/.test(latex.replace(/\\[a-zA-Z]+/g, "").replace(/arctan|tan|sqrt/g, ""))) {
+    return { status: "unreadable", reason: "t" };
+  }
   let F;
   try {
     F = buildEvaluator(latex);
@@ -698,6 +837,10 @@ const NEAR_MISS_TEXT = {
   repSign: `כמעט! בדקו את הסימן של האיבר עם ${ltr("1/t")}: ${ltr("∫t⁻² dt = −1/t")}.`,
   subSign: `כמעט! בדקו את הסימן בהצבה: האם ${ltr("t = x+a")} או ${ltr("t = x−a")}?`,
   repConst: `כמעט! חסר החלק הפולינומי - המנה (${ltr("quotient")}) מהחילוק.`,
+  lnHalf: `כמעט! חסר חצי לפני ה-${ltr("ln")}: ${ltr("∫ t/(t²+k²) dt = ½·ln(t²+k²)")}.`,
+  atanCoef: `כמעט! בדקו את המקדם לפני ה-${ltr("arctan")}: ${ltr("∫ dt/(t²+k²) = (1/k)·arctan(t/k)")}.`,
+  atanArg: `כמעט! בדקו את מה שבתוך ה-${ltr("arctan")}: צריך ${ltr("arctan(t/k)")} ולא ${ltr("arctan(t)")}.`,
+  squareSign: `כמעט! בדקו את הסימן בהשלמה לריבוע - ${ltr("(x+p)²")} או ${ltr("(x−p)²")}?`,
 };
 
 // ---------------------------------------------------------------------------
@@ -742,6 +885,19 @@ const ROOMS = [
       { gen: "pfExpanded", title: "מכנה לפירוק" },
       { gen: "pfDivide", title: "קודם חילוק: מונה ממעלה 2" },
       { gen: "pfBoss", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
+    ],
+  },
+  {
+    id: "irreducible",
+    kind: "core",
+    title: "מכנה שלא מתפרק",
+    en: "Irreducible quadratic",
+    tag: "ליבה · השלמה לריבוע",
+    blurb: 'מכנה כמו <bdi dir="ltr">x²+6x+13</bdi> שאין לו שורשים. משלימים לריבוע, מציבים <bdi dir="ltr">t = x+3</bdi>, ומשתמשים בנוסחאות של <bdi dir="ltr">ln</bdi> ושל <bdi dir="ltr">arctan</bdi>.',
+    nodes: [
+      { gen: "irrPlain", title: "השלמה לריבוע, בלי חילוק" },
+      { gen: "irrDegree2", title: "קודם חילוק: מונה ממעלה 2" },
+      { gen: "irrBoss", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
     ],
   },
   {
@@ -805,6 +961,7 @@ function isLocked(room) {
 function recommendedRoomId() {
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
+  if (!isConquered("irreducible")) return "irreducible";
   if (!isConquered("nonmonic")) return "nonmonic";
   return null;
 }
@@ -894,12 +1051,14 @@ function roomCardHtml(room) {
 }
 
 function renderMap() {
-  const [prep, rep, core, ext] = ["division", "repeated", "pf1", "nonmonic"].map((id) => ROOM_BY_ID[id]);
+  const [prep, rep, core, irr, ext] = ["division", "repeated", "pf1", "irreducible", "nonmonic"].map((id) => ROOM_BY_ID[id]);
   towerEl.innerHTML = `
     <div class="tower-crown" aria-hidden="true"></div>
     <div class="tower-body">
-      <div class="floor-label">קומה 1 · שברים חלקיים <span dir="ltr">(partial fractions)</span></div>
+      <div class="floor-label">קומה 1 · פונקציות רציונליות <span dir="ltr">(rational functions)</span></div>
       <div class="floor-rooms">
+        <div class="area-irr">${roomCardHtml(irr)}</div>
+        <div class="conn area-conn0" aria-hidden="true"></div>
         <div class="branch area-ext">
           ${roomCardHtml(ext)}
           <div class="conn dashed branch-conn" aria-hidden="true"></div>
@@ -1363,8 +1522,9 @@ function showConquest(room, { score, prevBest, wins }) {
   const next = {
     division: "הבא: שורש כפול",
     repeated: "הבא: שברים חלקיים I",
-    pf1: "הבא: ◆ לא מתוקן (הרחבה, אופציונלי)",
-    nonmonic: "סיימת את כל קומה 1!",
+    pf1: "הבא: מכנה שלא מתפרק · או ◆ לא מתוקן (הרחבה)",
+    irreducible: "הבא: ◆ לא מתוקן (הרחבה, אופציונלי)",
+    nonmonic: "כבשת את ההרחבה!",
   }[room.id];
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;

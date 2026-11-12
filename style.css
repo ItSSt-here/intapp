@@ -892,6 +892,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     grid-template-areas:
+      "irr ."
+      "conn0 ."
       "core ext"
       "conn ."
       "rep ."
@@ -901,6 +903,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     align-items: center;
   }
 
+  .area-irr { grid-area: irr; }
+  .area-conn0 { grid-area: conn0; }
   .area-core { grid-area: core; }
   .area-conn { grid-area: conn; }
   .area-rep { grid-area: rep; }
