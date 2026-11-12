@@ -1873,6 +1873,48 @@ function enterRoom(id) {
   showProblem({ animate: false });
 }
 
+// A correct answer: one small gold spark rises from the answer card to this
+// exercise's node on the path, and the node fills in as it lands.
+function sparkToNode(i) {
+  const node = pathEl.querySelectorAll(".pnode")[i];
+  if (!node) return Promise.resolve();
+  const land = () => {
+    node.classList.remove("current");
+    node.classList.add("done", "just-done");
+    node.querySelector("span").textContent = "✓";
+  };
+  if (reducedMotion()) {
+    land();
+    return Promise.resolve();
+  }
+  const a = $("answerCard").getBoundingClientRect();
+  const b = node.getBoundingClientRect();
+  const x0 = a.left + a.width / 2;
+  const y0 = a.top + 14;
+  const x1 = b.left + b.width / 2;
+  const y1 = b.top + b.height / 2;
+  const spark = document.createElement("div");
+  spark.className = "spark";
+  document.body.appendChild(spark);
+  const at = (x, y, s = 1) => `translate(${x}px, ${y}px) scale(${s})`;
+  // A gentle arc: out sideways a little on the way up.
+  const mx = (x0 + x1) / 2 + (x1 > x0 ? -40 : 40);
+  const my = (y0 + y1) / 2;
+  const anim = spark.animate(
+    [
+      { transform: at(x0, y0, 0.4), opacity: 0 },
+      { transform: at(x0, y0 - 8, 1), opacity: 1, offset: 0.12 },
+      { transform: at(mx, my, 1), offset: 0.55 },
+      { transform: at(x1, y1, 0.7), opacity: 1 },
+    ],
+    { duration: 560, easing: "cubic-bezier(0.4, 0, 0.3, 1)" }
+  );
+  return anim.finished.catch(() => {}).then(() => {
+    spark.remove();
+    land();
+  });
+}
+
 // "Room cleared": the last step is solved. The path lights up gold node by
 // node, the boss last and biggest, before the victory screen comes in.
 // Returns how long to hold the room on screen.
@@ -2114,12 +2156,16 @@ checkBtn.addEventListener("click", () => {
     rec.wins += 1;
     rec.run = null;
     saveStore();
-    view.node = nextNode;
-    updatePath(true);
-    const wait = celebratePath();
-    setTimeout(() => showConquest(view.room, { score, prevBest, wins: rec.wins, before }), wait);
+    const room = view.room;
+    sparkToNode(view.node).then(() => {
+      view.node = nextNode;
+      updatePath(true);
+      const wait = celebratePath();
+      setTimeout(() => showConquest(room, { score, prevBest, wins: rec.wins, before }), wait);
+    });
     return;
   }
+  sparkToNode(view.node);
   rec.run.node = nextNode;
   rec.run.problem = makeProblem(view.room, nextNode, rec.run);
   saveStore();
