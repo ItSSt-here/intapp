@@ -763,7 +763,7 @@ function irrNearMissVariants(q) {
 }
 
 // ---------------------------------------------------------------------------
-// Non-monic repeated root and irreducible quadratic (the ◆ extension room)
+// Non-monic repeated root and irreducible quadratic (the extension room)
 //
 // One idea in both: substitute t = m x + n, so dx = dt/m. The leading
 // coefficient is a perfect square (4x^2, 9x^2), so the factor or the
@@ -1031,11 +1031,11 @@ const ROOMS = [
     kind: "prep",
     title: "חילוק פולינומים",
     en: "Polynomial division",
-    tag: "הכנה · אופציונלי",
-    blurb: "כאן נלמד לחשב אינטגרל על ידי חילוק פולינומים: מונה ממעלה 2 או 3 חלקי מכנה לינארי. יודעים לחלק פולינומים? אפשר לדלג.",
+    tag: "לא חובה",
+    blurb: "חישוב אינטגרל על ידי חילוק פולינומים. יודעים לחלק פולינומים? אפשר לדלג.",
     nodes: [
-      { gen: "div1", title: "מונה ממעלה 2" },
-      { gen: "div3", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
+      { gen: "div1" },
+      { gen: "div3", boss: true },
     ],
   },
   {
@@ -1044,27 +1044,25 @@ const ROOMS = [
     num: 1,
     title: "שורש כפול",
     en: "Repeated root",
-    tag: "ליבה · הצבה",
-    blurb: 'מכנה כמו <bdi dir="ltr">(x+3)²</bdi>. מציבים <bdi dir="ltr">t = x+3</bdi>, והאינטגרל מתפרק לאינטגרלים של <bdi dir="ltr">1/t</bdi> ושל <bdi dir="ltr">1/t²</bdi>. כשהמונה ממעלה 2 - קודם חילוק פולינומים.',
+    tag: "שיטה: הצבה",
     nodes: [
-      { gen: "repFactored", title: "מכנה מפורק" },
-      { gen: "repExpanded", title: "מכנה לפירוק (ריבוע שלם)" },
-      { gen: "repDegree2", title: "קודם חילוק: מונה ממעלה 2" },
+      { gen: "repFactored" },
+      { gen: "repExpanded" },
+      { gen: "repDegree2" },
     ],
   },
   {
     id: "pf1",
     kind: "core",
     num: 2,
-    title: "שברים חלקיים I",
-    en: "Partial fractions I",
-    tag: "ליבה",
-    blurb: "מכנה ריבועי עם שני שורשים שלמים - מפרקים לשני שברים פשוטים.",
+    title: "שני שורשים שונים",
+    en: "Partial fractions: distinct roots",
+    tag: "שיטה: שברים חלקיים",
     nodes: [
-      { gen: "pfFactored", title: "מכנה מפורק" },
-      { gen: "pfExpanded", title: "מכנה לפירוק" },
-      { gen: "pfDivide", title: "קודם חילוק: מונה ממעלה 2" },
-      { gen: "pfBoss", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
+      { gen: "pfFactored" },
+      { gen: "pfExpanded" },
+      { gen: "pfDivide" },
+      { gen: "pfBoss", boss: true },
     ],
   },
   {
@@ -1073,41 +1071,38 @@ const ROOMS = [
     num: 3,
     title: "מכנה שלא מתפרק",
     en: "Irreducible quadratic",
-    tag: "ליבה · השלמה לריבוע",
-    blurb: 'מכנה כמו <bdi dir="ltr">x²+6x+13</bdi> שאין לו שורשים. משלימים לריבוע, מציבים <bdi dir="ltr">t = x+3</bdi>, ומשתמשים בנוסחאות של <bdi dir="ltr">ln</bdi> ושל <bdi dir="ltr">arctan</bdi>.',
+    tag: "שיטה: השלמה לריבוע",
     nodes: [
-      { gen: "irrPlain", title: "השלמה לריבוע, בלי חילוק" },
-      { gen: "irrDegree2", title: "קודם חילוק: מונה ממעלה 2" },
-      { gen: "irrBoss", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
+      { gen: "irrPlain" },
+      { gen: "irrDegree2" },
+      { gen: "irrBoss", boss: true },
     ],
   },
   {
     id: "review",
     kind: "review",
-    title: "חזרה",
-    en: "Review",
-    tag: "חזרה · אופציונלי",
+    title: "תרגילים מעורבבים",
+    en: "Mixed review",
+    tag: "לא חובה · מסגרת זהב למדליה",
     requires: ["repeated", "pf1", "irreducible"],
-    blurb: "שלושה תרגילים מעורבבים מכל הסוגים - שורשים שונים, שורש כפול ומכנה שלא מתפרק. הסוג לא כתוב: צריך לזהות לבד איך לפתור.",
     nodes: [
-      { gen: "review", title: "זהו את הסוג ופתרו" },
-      { gen: "review", title: "זהו את הסוג ופתרו" },
-      { gen: "review", title: "זהו את הסוג ופתרו" },
+      { gen: "review" },
+      { gen: "review" },
+      { gen: "review" },
     ],
   },
   {
     id: "nonmonic",
     kind: "ext",
-    title: "◆ מקדם ל-x",
+    title: "מכנה עם מקדם מוביל",
     en: "Non-monic",
-    tag: "הרחבה",
+    tag: "הרחבה · כוכב למדליה",
     stars: 2,
     requires: ["repeated", "pf1", "irreducible"],
-    blurb: 'כשיש מקדם ל-x בגורם, כמו <bdi dir="ltr">(2x+1)</bdi>: מציבים <bdi dir="ltr">t = 2x+1</bdi>, ואז <bdi dir="ltr">dx = dt/2</bdi>. תרגיל אחד מכל סוג: שורשים שונים, שורש כפול, מכנה שלא מתפרק.',
     nodes: [
-      { gen: "nmExpanded", title: "שורשים שונים" },
-      { gen: "nmRepeated", title: "שורש כפול" },
-      { gen: "nmIrreducible", title: "מכנה שלא מתפרק" },
+      { gen: "nmExpanded" },
+      { gen: "nmRepeated" },
+      { gen: "nmIrreducible" },
     ],
   },
 ];
@@ -1197,8 +1192,6 @@ function showView(view) {
 
 let justConquered = null; // room id whose card flips on the next map render
 
-const LOCK_SVG =
-  '<svg class="lock-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/></svg>';
 
 // A gold victory banner hanging on a completed room.
 const PENNANT_SVG =
@@ -1231,25 +1224,23 @@ function roomCardHtml(room) {
   if (justConquered === room.id) classes.push("just-conquered");
 
   let side = "";
-  if (rec.run) {
-    side = `<span class="score-chip small tier-${scoreTier(rec.run.score)}" title="הניקוד בחדר עכשיו">${rec.run.score}</span>`;
-  } else if (conquered) {
+  if (conquered) {
     side = `<span class="wins" title="מספר הניצחונות בחדר">×${rec.wins}</span>` +
       `<span class="score-chip small tier-${scoreTier(rec.best)}" title="הציון הטוב ביותר">${rec.best}</span>`;
   }
 
-  const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`, `<div>${room.blurb}</div>`];
+  const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`];
+  if (room.blurb) info.push(`<div>${room.blurb}</div>`);
   if (locked) info.push(`<div class="info-note">נפתח אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
-  if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length}.</div>`);
+  if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length} · ניקוד כרגע: ${rec.run.score}</div>`);
   if (conquered) info.push(`<div class="info-note">ניצחתם בחדר ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
 
   const done = rec.run ? rec.run.node : conquered ? room.nodes.length : 0;
-  const stars = room.stars ? `<span class="stars">${"★".repeat(room.stars)}</span>` : "";
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
       <div class="room-head">
-        ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}${locked ? LOCK_SVG : ""}<span class="room-title">${room.title}</span>${stars}
+        ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
           <button type="button" class="info-btn" data-info aria-label="מידע על החדר" aria-expanded="false">i</button>
           <span class="room-info" role="tooltip">${info.join("")}</span>
@@ -1356,7 +1347,7 @@ function trophyHtml() {
   const caption = m.earned
     ? `<div class="medal-title">מדליית הנושא</div>
        <div class="medal-line">ממוצע חדרים <bdi dir="ltr">1, 2, 3</bdi>: <b>${m.avg}</b></div>
-       ${perk(m.gold, "חזרה: מסגרת זהב")}${perk(m.star, "◆: כוכב")}`
+       ${perk(m.gold, "מעורבבים: מסגרת זהב")}${perk(m.star, "מקדם מוביל: כוכב")}`
     : `<div class="medal-title">מדליית הנושא</div>
        <div class="medal-line">מחכה לכם אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>`;
   return `
@@ -1646,9 +1637,11 @@ const lockDialog = $("lockDialog");
 function openGateDialog() {
   const missing = CORE_IDS.filter((id) => !isConquered(id));
   const rec = ROOM_BY_ID[missing[0]]; // the first core room that's still open
-  $("lockDialogText").textContent =
-    `האגף העליון (חזרה, ◆ מקדם ל-x ומדליית הנושא) בנוי על שלושת החדרים במסדרון. ` +
-    `מומלץ לעבור קודם את ${quotedTitles(missing)} - אבל אפשר לפתוח אותו כבר עכשיו.`;
+  // Room numbers, not names; only the rooms still to do.
+  const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
+  $("lockDialogText").innerHTML =
+    `האגף העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
+    `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`;
   $("lockBackBtn").textContent = `ל"${rec.title}" (מומלץ)`;
   $("lockBackBtn").dataset.room = rec.id;
   lockDialog.hidden = false;
@@ -1751,6 +1744,7 @@ function buildPath(room) {
 }
 
 function updatePath(animate) {
+  syncRestart();
   const nodes = pathEl.querySelectorAll(".pnode");
   const conns = pathEl.querySelectorAll(".pconn");
   nodes.forEach((el, i) => {
@@ -1762,7 +1756,7 @@ function updatePath(animate) {
   placePawn(animate);
   const node = view.room.nodes[view.node];
   $("nodeCaption").textContent = node
-    ? `תרגיל ${view.node + 1} מתוך ${view.room.nodes.length} · ${node.title}`
+    ? `תרגיל ${view.node + 1} מתוך ${view.room.nodes.length}${node.boss ? " · בוס" : ""}`
     : "ניצחון! עברתם את החדר";
   roomView.classList.toggle("boss-node", !!(node && node.boss));
 }
@@ -1781,7 +1775,39 @@ window.addEventListener("resize", () => {
   if (!roomView.hidden) placePawn(false);
 });
 
+// "↺ מחדש": start the room over with a full score. Shown once the student
+// has moved on or lost points; asks once more before throwing the run away.
+const restartBtn = $("restartBtn");
+let restartTimer = null;
+
+function syncRestart() {
+  const rec = view.room && roomRecord(view.room.id);
+  restartBtn.hidden = !(rec && rec.run && (rec.run.node > 0 || rec.run.score < START_SCORE));
+  resetRestartBtn();
+}
+
+function resetRestartBtn() {
+  clearTimeout(restartTimer);
+  restartBtn.classList.remove("confirming");
+  restartBtn.textContent = "↺ מחדש";
+}
+
+restartBtn.addEventListener("click", () => {
+  if (!restartBtn.classList.contains("confirming")) {
+    restartBtn.classList.add("confirming");
+    restartBtn.textContent = "להתחיל מחדש? לחצו שוב";
+    restartTimer = setTimeout(resetRestartBtn, 4000);
+    return;
+  }
+  resetRestartBtn();
+  const rec = roomRecord(view.room.id);
+  rec.run = null; // the best score and the victories stay
+  saveStore();
+  enterRoom(view.room.id);
+});
+
 function renderScore(score, delta) {
+  syncRestart();
   scoreChipEl.textContent = score;
   scoreChipEl.className = `score-chip tier-${scoreTier(score)}`;
   if (delta) {
@@ -2057,7 +2083,7 @@ function showConquest(room, { score, prevBest, wins }) {
   let next;
   if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (CORE_IDS.includes(room.id)) next = "עברתם את שלושת החדרים! המנעולים נפתחו - מדליית הנושא מחכה באגף העליון";
-  else if (room.id === "review") next = "עברתם את החזרה - המדליה קיבלה מסגרת זהב! · אפשר גם ◆ מקדם ל-x (הרחבה)";
+  else if (room.id === "review") next = "עברתם את התרגילים המעורבבים - המדליה קיבלה מסגרת זהב! · אפשר גם \"מכנה עם מקדם מוביל\" (הרחבה)";
   else if (room.id === "nonmonic") next = "עברתם את ההרחבה - המדליה קיבלה כוכב!";
   else next = "";
 
