@@ -502,12 +502,10 @@ button:disabled {
 
 .room-ext { --kind: var(--ext-border); --room-floor: #e6efe9; }
 
-/* Review: the gold capstone of the floor. */
+/* Review: a warm room, but its dots stay teal like every room - gold on the
+   map is kept for achievements (completed rooms, medals). */
 .room-review { --kind: var(--gold); --room-floor: #f5edd3; }
 .room-review .room-title { color: #7a5a00; }
-.room-review .mini-node:not(.boss) { border-color: var(--gold); }
-.room-review .mini-node:not(.boss).done { background: var(--gold); }
-.room-review .mini-node.current { box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.25); }
 .room-ext .room-title { color: var(--ext); }
 
 /* The suggested next room: a torch glow that breathes. */
@@ -1277,3 +1275,6 @@ body { overflow-x: clip; }
 
 /* "חזרה": a calmer label than the technique one - nothing new here. */
 .room-review .room-label { color: #2f5d8a; background: #e1edf8; border-color: #9cc0e2; }
+
+/* "מבוא": a quiet neutral label - the optional warm-up room. */
+.room-prep .room-label { color: #55606b; background: #eef0f2; border-color: #c4cad0; }

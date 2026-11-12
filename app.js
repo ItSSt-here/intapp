@@ -1032,6 +1032,7 @@ const ROOMS = [
     title: "חילוק פולינומים",
     en: "Polynomial division",
     tag: "לא חובה",
+    label: "מבוא",
     blurb: "חישוב אינטגרל על ידי חילוק פולינומים. יודעים לחלק פולינומים? אפשר לדלג.",
     nodes: [
       { gen: "div1" },
