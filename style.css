@@ -1701,3 +1701,44 @@ body { overflow-x: clip; }
   .medal-hall { height: 360px; }
   .medal-hall .torch { display: none; }
 }
+
+/* ---------------------------------------------------------------------- */
+/* Map: torches on the bare rock, and a little texture in the rock itself */
+/* ---------------------------------------------------------------------- */
+
+/* Faint cracks and darker / lighter patches, so the rock reads as stone. */
+.floor-map {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cg fill='none' stroke-linecap='round'%3E%3Cpath d='M18 40l22 14 9 26 24 8M150 20l-8 30 16 22-6 24M210 150l-26 12-10 28 14 30M60 190l20-8 12 18 26-4M120 120l14 10' stroke='%23000' stroke-opacity='.35' stroke-width='1.6'/%3E%3Cpath d='M19 42l22 14 9 26 24 8M151 22l-8 30 16 22-6 24M211 152l-26 12-10 28 14 30M61 192l20-8 12 18 26-4' stroke='%23fff' stroke-opacity='.05' stroke-width='1'/%3E%3C/g%3E%3Cg fill='%23000' fill-opacity='.14'%3E%3Cellipse cx='200' cy='60' rx='38' ry='22'/%3E%3Cellipse cx='40' cy='130' rx='30' ry='40'/%3E%3Cellipse cx='150' cy='230' rx='46' ry='18'/%3E%3C/g%3E%3Cg fill='%23fff' fill-opacity='.025'%3E%3Cellipse cx='100' cy='60' rx='34' ry='26'/%3E%3Cellipse cx='230' cy='200' rx='26' ry='34'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(60% 40% at 30% 20%, rgba(255, 255, 255, 0.04), transparent),
+    radial-gradient(50% 40% at 80% 75%, rgba(0, 0, 0, 0.25), transparent),
+    var(--rock);
+}
+
+/* A torch in an empty cell, in a pool of warm light on the rock. */
+.map-torch { display: none; }
+@media (min-width: 760px) {
+  .map-torch {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .map-torch::before {
+    content: "";
+    position: absolute;
+    inset: -30px -20px;
+    background: radial-gradient(closest-side, rgba(255, 160, 60, 0.22), rgba(255, 140, 40, 0.08) 55%, transparent);
+    animation: halo-breathe 3s ease-in-out infinite;
+  }
+  .map-torch .torch { position: relative; }
+}
+
+/* A smaller pair either side of the entrance door. */
+.entrance { position: relative; }
+.entrance .torch { top: -8px; transform: scale(0.62); transform-origin: top center; }
+.entrance .torch-l { left: calc(50% - 82px); }
+.entrance .torch-r { right: calc(50% - 82px); }
+@media (max-width: 759px) {
+  .entrance .torch { display: none; }
+}

@@ -1317,6 +1317,11 @@ const DOOR_SVG = `
     <circle class="door-ring" cx="37" cy="36" r="2.6"/>
   </svg>`;
 
+// A torch on the bare rock of an empty map cell, with a pool of warm light
+// around it (laptops and tablets only - the phone layout has no empty cells).
+const mapTorch = (col, row) =>
+  `<div class="cell map-torch" style="grid-column:${col};grid-row:${row}" aria-hidden="true">${torchHtml(col < 3 ? "l" : "r")}</div>`;
+
 // A doorway through the wall between two areas of the map.
 const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
 
@@ -1506,6 +1511,7 @@ function renderMap() {
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
         </div>`}
       <div class="floor-grid">
+        ${mapTorch(1, 9)}${mapTorch(3, 9)}${mapTorch(4, 1)}
         <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
         <div class="cell wing${wingCls}" style="grid-column:2;grid-row:1">${roomCardHtml(ext)}</div>
         <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${trophyHtml()}</div>
@@ -1530,7 +1536,7 @@ function renderMap() {
         <div class="cell" style="grid-column:2;grid-row:9">${roomCardHtml(prep)}</div>
         ${doorway(2, 10)}
         <div class="cell entrance" style="grid-column:2;grid-row:11" data-node="entrance">
-          ${DOOR_SVG}<span class="door-label">כניסה</span>
+          ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
         </div>
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
