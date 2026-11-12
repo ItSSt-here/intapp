@@ -423,6 +423,7 @@ button:disabled {
 /* The entrance: a wooden door in the outer wall. */
 .entrance { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .map-door { width: 70px; height: 64px; display: block; }
+.map-door.stairs-down { width: 76px; height: 70px; }
 .door-frame { fill: var(--jamb); }
 .door-wood { fill: #8a5a2b; }
 .door-planks { stroke: #6e4520; stroke-width: 1.5; fill: none; }
@@ -1832,8 +1833,9 @@ body { overflow-x: clip; }
 .stairs-label { font-size: 0.85rem; font-weight: 600; color: #6b5a3c; }
 .stairs-soon { font-size: 0.75rem; color: var(--muted); }
 
-/* Floor 1 is a line of rooms along one corridor: a padlock on a room that
+/* Floor 1 is a line of rooms: halls between them, a padlock on a room that
    isn't open yet, and the stairs at the far end. */
+.hall { display: none; }
 .card-lock { position: absolute; top: -12px; left: -10px; z-index: 3; }
 .card-lock .padlock { width: 22px; height: 28px; }
 .floor-basic .room-card.locked { filter: saturate(0.35); opacity: 0.7; }
@@ -1846,10 +1848,24 @@ body { overflow-x: clip; }
 
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px;
-    grid-template-rows: auto 16px auto 16px auto;
-    gap: 0 28px;
+    grid-template-columns: 104px 76px minmax(0, 1fr) 76px minmax(0, 1fr) 76px 130px;
+    grid-template-rows: auto;
+    gap: 0;
   }
+  .hall {
+    display: block;
+    align-self: center;
+    height: 50px;
+    margin-inline: -4px; /* into the rooms' walls: the hall runs to the door */
+    background: var(--tiles), #e2d9c6;
+    border-block: 3px solid var(--jamb);
+  }
+  /* The marker walks through a room, under its card. */
+  .floor-basic > .cell { z-index: 6; }
+  .floor-basic > .cell:has(.info-wrap.open, .info-wrap:hover) { z-index: 8; }
+  .floor-basic .entrance { align-self: center; padding-top: 18px; }
+  .floor-basic .entrance .torch-l { left: -2px; }
+  .floor-basic .entrance .torch-r { right: -2px; }
 }
 .stairs-floor { font-size: 0.72rem; color: var(--muted); text-align: center; }
 .stairs:not(.locked):hover { box-shadow: inset 0 0 0 2px #e0cf9e; }
