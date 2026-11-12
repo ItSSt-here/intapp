@@ -2259,28 +2259,58 @@ function renderMap() {
   else renderRationalFloor();
 }
 
-// Stone steps rising away from the corridor: the way up to the next floor.
-const STAIRS_SVG = `
-  <svg class="stairs-steps" viewBox="0 0 80 96" aria-hidden="true">
-    ${[0, 1, 2, 3, 4, 5]
-      .map((i) => {
-        const w = 76 - i * 8;
-        return `<rect x="${(80 - w) / 2}" y="${82 - i * 15}" width="${w}" height="13" rx="1.5"/>`;
-      })
-      .join("")}
+// The way up: stone steps climbing into a dark arched stairwell, lit from
+// the corridor and fading into the dark. Locked, an iron grille closes it.
+function stairsSvg(locked) {
+  const steps = [];
+  let y = 118;
+  for (let i = 0; i < 8; i++) {
+    const k = 1 - i * 0.075; // farther steps are smaller
+    const w = 60 * k;
+    const x = 50 - w / 2;
+    const riser = 5 * k;
+    const tread = 7 * k;
+    const light = 1 - i / 9;
+    const mix = (a, b) => Math.round(b + (a - b) * light);
+    const tc = `rgb(${mix(222, 70)},${mix(208, 58)},${mix(178, 44)})`;
+    const rc = `rgb(${mix(150, 48)},${mix(134, 40)},${mix(108, 30)})`;
+    steps.push(`<rect x="${x}" y="${y - riser}" width="${w}" height="${riser}" fill="${rc}"/>`);
+    steps.push(`<rect x="${x}" y="${y - riser - tread}" width="${w}" height="${tread}" fill="${tc}"/>`);
+    y -= riser + tread;
+  }
+  const bars = locked
+    ? [30, 40, 50, 60, 70].map((x) => `<line x1="${x}" y1="${x === 50 ? 17 : 22}" x2="${x}" y2="118"/>`).join("") +
+      '<line x1="18" y1="60" x2="82" y2="60"/><line x1="18" y1="92" x2="82" y2="92"/>'
+    : "";
+  return `
+  <svg class="stairs-steps" viewBox="0 0 100 120" aria-hidden="true">
+    <defs>
+      <linearGradient id="stairs-dark" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#140f0a"/><stop offset="1" stop-color="#3d3226"/>
+      </linearGradient>
+    </defs>
+    <path d="M6 120 V46 A44 44 0 0 1 94 46 V120 Z" fill="#8d806a" stroke="#5e5446" stroke-width="2"/>
+    <path d="M18 120 V48 A32 32 0 0 1 82 48 V120 Z" fill="url(#stairs-dark)"/>
+    <g>${steps.join("")}</g>
+    <path d="M18 120 V48 A32 32 0 0 1 82 48 V120" fill="none" stroke="#3e352a" stroke-width="2"/>
+    <path d="M6 72 H18 M6 98 H18 M82 72 H94 M82 98 H94 M9 34 L20 40 M91 34 L80 40 M50 2 V16" stroke="#6f6452" stroke-width="1.5"/>
+    ${bars ? `<g class="stairs-bars">${bars}</g>` : ""}
   </svg>`;
+}
 
 // Top-down plan of floor 1 (basic integrals): one room after the other.
 // Grid columns run right to left (RTL):
-//   row 1  room 1 · hall · room 2 · hall · the stairs up
-//   row 3  the entrance, under room 1
+//   row 1  room 1 · room 2 · the stairs up
+//   row 3  the corridor along them
+//   row 5  the entrance, under room 1
+// Even rows are the walls, with doorways through them.
 function renderBasicFloor() {
   const up = stairsOpen();
   const stairs = `
-    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:5;grid-row:1" data-node="stairs"
+    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:3;grid-row:1" data-node="stairs"
          role="button" tabindex="0" aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
       ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
-      ${STAIRS_SVG}
+      ${stairsSvg(!up)}
       <span class="stairs-label">לקומה 2</span>
       <span class="stairs-floor">פונקציות רציונליות</span>
       ${up ? "" : '<button type="button" class="open-anyway stairs-anyway" data-open-stairs>לפתוח בכל זאת</button>'}
@@ -2294,14 +2324,14 @@ function renderBasicFloor() {
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
         </div>`}
       <div class="floor-grid floor-basic">
-        ${mapTorch(3, 3)}
-        ${stairs}
-        <div class="hall" style="grid-column:4;grid-row:1" aria-hidden="true"></div>
-        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
-        <div class="hall" style="grid-column:2;grid-row:1" aria-hidden="true"></div>
+        ${mapTorch(2, 5)}
         <div class="cell" style="grid-column:1;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
-        ${doorway(1, 2)}
-        <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
+        <div class="cell" style="grid-column:2;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
+        ${stairs}
+        ${doorway(1, 2)}${doorway(2, 2)}${doorway(3, 2)}
+        <div class="cell corridor main" style="grid-column:1 / 4;grid-row:3"><div class="corridor-label">מסדרון</div></div>
+        ${doorway(1, 4)}
+        <div class="cell entrance" style="grid-column:1;grid-row:5" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
         </div>
         <div class="map-marker" aria-hidden="true">
@@ -2403,10 +2433,6 @@ const BASIC_FLOOR_NODES = {
   stairs: { area: "lower", at: "bottom", nav: { right: "linear" } },
 };
 
-// Floor 1's places in walking order: the marker passes through each one
-// between where it is and where it goes.
-const BASIC_FLOOR_PATH = ["entrance", "basic", "linear", "stairs"];
-
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
   division: { area: "lower", at: "top", nav: { up: "pf1", down: "entrance" } },
@@ -2449,12 +2475,6 @@ function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
-  if (currentFloor() === 1) {
-    const i = BASIC_FLOOR_PATH.indexOf(from);
-    const j = BASIC_FLOOR_PATH.indexOf(to);
-    const ids = i <= j ? BASIC_FLOOR_PATH.slice(i, j + 1) : BASIC_FLOOR_PATH.slice(j, i + 1).reverse();
-    return ids.map(nodePoint);
-  }
   const fa = mapNodes()[from].area;
   const ta = mapNodes()[to].area;
   const lowY = corridorY("main");
@@ -2552,12 +2572,32 @@ function stepMarker(dir) {
   const here = markerNode();
   const to = mapNodes()[here].nav[dir];
   if (!to) return;
+  if (currentFloor() === 1 && placeLocked(to)) {
+    // Past a locked place to an open one further along (the stairs opened
+    // before room 2): walk on. Otherwise stop and say it's locked.
+    let past = to;
+    while (past && placeLocked(past)) past = mapNodes()[past].nav[dir];
+    if (past) walkTo(past);
+    else openLockFor(to);
+    return;
+  }
   if (mapNodes()[to].area === "upper" && !wingOpen()) {
     if (here === "gate") openGateDialog();
     else walkTo("gate");
     return;
   }
   walkTo(to);
+}
+
+// Floor 1: a room or the stairs that aren't open yet.
+function placeLocked(id) {
+  if (id === "stairs") return !stairsOpen();
+  return !!ROOM_BY_ID[id] && isLocked(ROOM_BY_ID[id]);
+}
+
+function openLockFor(id) {
+  if (id === "stairs") openStairsDialog();
+  else openLockedRoomDialog(ROOM_BY_ID[id]);
 }
 
 // Enter: go into the room the marker stands at (or try the gate).
@@ -2648,10 +2688,8 @@ towerEl.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest('[data-node="stairs"]')) {
-    walkTo("stairs").then(() => {
-      if (stairsOpen()) goUpstairs();
-      else openStairsDialog();
-    });
+    if (stairsOpen()) walkTo("stairs").then(goUpstairs);
+    else openStairsDialog();
     return;
   }
   const gate = e.target.closest('[data-node="gate"]');

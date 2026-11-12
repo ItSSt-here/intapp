@@ -1827,19 +1827,18 @@ body { overflow-x: clip; }
   border: 4px solid var(--wall);
   border-radius: 4px;
 }
-.stairs-steps { width: 64px; height: auto; }
-.stairs-steps rect { fill: #cfc3a8; stroke: #5e5446; stroke-width: 1.5; }
+.stairs-steps { width: 84px; height: auto; display: block; }
+.stairs-bars line { stroke: #2b2722; stroke-width: 3; stroke-linecap: round; }
 .stairs-label { font-size: 0.85rem; font-weight: 600; color: #6b5a3c; }
 .stairs-soon { font-size: 0.75rem; color: var(--muted); }
 
-/* Floor 1 is a line of rooms: halls between them, a padlock on a room that
+/* Floor 1 is a line of rooms along one corridor: a padlock on a room that
    isn't open yet, and the stairs at the far end. */
-.hall { display: none; }
 .card-lock { position: absolute; top: -12px; left: -10px; z-index: 3; }
 .card-lock .padlock { width: 22px; height: 28px; }
 .floor-basic .room-card.locked { filter: saturate(0.35); opacity: 0.7; }
 .stairs { position: relative; cursor: pointer; }
-.stairs.locked .stairs-steps { opacity: 0.55; }
+.stairs.locked .stairs-steps { filter: saturate(0.5) brightness(0.92); }
 .stairs-lock { position: absolute; top: 6px; left: 6px; }
 .stairs-lock .padlock { width: 22px; height: 28px; }
 .stairs-anyway { font-size: 0.75rem; color: #5b4a2c; padding: 0; white-space: nowrap; }
@@ -1847,17 +1846,9 @@ body { overflow-x: clip; }
 
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
-    grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr) 56px 130px;
-    grid-template-rows: auto 16px auto;
-    gap: 0;
-  }
-  .hall {
-    display: block;
-    align-self: end;
-    height: 46px;
-    margin-bottom: 14px;
-    background: var(--tiles), #e2d9c6;
-    border-block: 3px solid var(--jamb);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 140px;
+    grid-template-rows: auto 16px auto 16px auto;
+    gap: 0 28px;
   }
 }
 .stairs-floor { font-size: 0.72rem; color: var(--muted); text-align: center; }
