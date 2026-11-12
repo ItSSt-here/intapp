@@ -293,6 +293,13 @@ button:disabled {
 .room-prep .room-title { color: #8a5a1e; }
 
 .room-ext { border-color: var(--ext-border); border-style: dashed; background: var(--ext-tint); }
+
+/* Review: the gold capstone of the floor. */
+.room-review { border-color: var(--gold); border-width: 2.5px; background: linear-gradient(135deg, #fffdf5, var(--gold-bg)); }
+.room-review .room-title { color: #7a5a00; }
+.room-review .mini-node:not(.boss) { border-color: var(--gold); }
+.room-review .mini-node:not(.boss).done { background: var(--gold); }
+.room-review .mini-node.current { box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.25); }
 .room-ext .room-title { color: var(--ext); }
 
 .room-card.recommended { box-shadow: 0 0 0 4px rgba(13, 125, 114, 0.18), 0 3px 10px rgba(20, 22, 30, 0.08); }
@@ -881,7 +888,7 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 /* ---------------------------------------------------------------------- */
 
 @media (min-width: 760px) {
-  body { padding: 40px 24px; }
+  body { padding: 28px 24px; }
   .container { max-width: 820px; }
   .map-header { text-align: center; }
   .tower { max-width: 780px; }
@@ -892,6 +899,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     grid-template-areas:
+      "review ."
+      "connR ."
       "irr ."
       "conn0 ."
       "core ext"
@@ -903,6 +912,9 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     align-items: center;
   }
 
+  .floor-rooms .conn { height: 14px; } /* six rooms high: keep it on one tablet screen */
+  .area-review { grid-area: review; }
+  .area-connR { grid-area: connR; }
   .area-irr { grid-area: irr; }
   .area-conn0 { grid-area: conn0; }
   .area-core { grid-area: core; }

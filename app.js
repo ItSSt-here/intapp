@@ -387,9 +387,9 @@ const GENERATORS = {
   nmExpanded: () => ({ Q: [], terms: nonMonicTerms(), display: "expanded" }),
   nmDivide: () => ({ Q: [nonZero(-3, 3)], terms: nonMonicTerms(), display: "expanded" }),
   // repeated root (x - a)^2, solved by substitution
-  repFactored: () => ({ ...generateRepeated(false), display: "factored" }),
-  repExpanded: () => ({ ...generateRepeated(false), display: "expanded" }),
-  repDegree2: () => ({ ...generateRepeated(true), display: "expanded" }),
+  repFactored: () => ({ ...generateRepeated([]), display: "factored" }),
+  repExpanded: () => ({ ...generateRepeated([]), display: "expanded" }),
+  repDegree2: () => ({ ...generateRepeated([nonZero(-3, 3)]), display: "expanded" }),
   // irreducible quadratic (x+p)^2 + k^2: complete the square, ln and arctan
   irrPlain: () => generateIrreducible([]),
   irrDegree2: () => generateIrreducible([nonZero(-3, 3)]),
@@ -502,25 +502,29 @@ function solutionLatex(p) {
 // = q + A/t + B/t^2, so the answer is q x + A ln|x - a| - B/(x - a) + C.
 // A degree-2 numerator could go straight into the substitution, but the
 // worked solution divides first - the order students are taught.
-// Problem: { kind: "rep", a, q, A, B, display }
+// Problem: { kind: "rep", a, Q, A, B, display }
 // ---------------------------------------------------------------------------
 
-function generateRepeated(withQ) {
+function generateRepeated(Q) {
   return {
     kind: "rep",
     a: nonZero(-5, 5), // a root at 0 would make t = x: nothing to substitute
-    q: withQ ? nonZero(-3, 3) : 0,
-    A: chance(0.2) ? 0 : nonZero(-6, 6), // A = 0: constant numerator, no ln at all
+    Q, // quotient of the division ([] when the numerator has degree < 2)
+    A: chance(0.2) ? 0 : nonZero(-6, 6), // A = 0: constant remainder, no ln at all
     B: nonZero(-9, 9),
   };
 }
 
-// N(x) = q (x - a)^2 + A (x - a) + B
-function repNumeratorPoly({ a, q, A, B }) {
-  return trimPoly([q * a * a - A * a + B, A - 2 * q * a, q]);
+// The quotient (older saved runs stored a constant one as q).
+const repQ = (p) => p.Q ?? (p.q ? [p.q] : []);
+
+// N(x) = Q(x) (x - a)^2 + A (x - a) + B
+function repNumeratorPoly(p) {
+  const { a, A, B } = p;
+  return polyAdd(polyMul(repQ(p), [a * a, -2 * a, 1]), trimPoly([B - A * a, A]));
 }
 
-const repTPoly = (p) => [p.B, p.A, p.q]; // the numerator in t: q t^2 + A t + B
+const repTPoly = (p) => [p.B, p.A]; // the remainder in t: A t + B
 const repFactorLatex = (p) => mxLatex(1, p.a); // "x - a"
 const repDenLatex = (p) =>
   p.display === "expanded" ? polyLatex([p.a * p.a, -2 * p.a, 1]) : `(${repFactorLatex(p)})^2`;
@@ -541,56 +545,58 @@ function polyInLatex(poly, base) {
   return out || "0";
 }
 
-// q + A/t + B/t^2
+// A/t + B/t^2
 function repSplitLatex(p) {
-  let out = p.q ? polyLatex([p.q]) : "";
-  if (p.A) out += `${signLatex(p.A, out === "")}\\frac{${Math.abs(p.A)}}{t}`;
+  let out = "";
+  if (p.A) out += `${signLatex(p.A, true)}\\frac{${Math.abs(p.A)}}{t}`;
   return out + `${signLatex(p.B, out === "")}\\frac{${Math.abs(p.B)}}{t^2}`;
 }
 
-// q·lin + A ln|u| - B/u + C, where u is "t" or "x - a" and lin is what q
-// multiplies ("t", "(x - a)" when substituting back, or plain "x").
-function repIntegratedLatex(p, u, lin) {
+// A ln|u| - B/u + C, where u is "t" or "x - a".
+function repIntegratedLatex(p, u) {
   let out = "";
-  if (p.q) out += signLatex(p.q, true) + (Math.abs(p.q) === 1 ? "" : Math.abs(p.q)) + lin;
-  if (p.A) out += signLatex(p.A, out === "") + (Math.abs(p.A) === 1 ? "" : Math.abs(p.A)) + `\\ln|${u}|`;
+  if (p.A) out += signLatex(p.A, true) + (Math.abs(p.A) === 1 ? "" : Math.abs(p.A)) + `\\ln|${u}|`;
   return out + `${signLatex(-p.B, out === "")}\\frac{${Math.abs(p.B)}}{${u}}+C`;
 }
 
-const repAntiderivativeLatex = (p) => repIntegratedLatex(p, repFactorLatex(p), "x");
+const repAntiderivativeLatex = (p) =>
+  joinPlus(integratedQLatex(repQ(p)), repIntegratedLatex(p, repFactorLatex(p)));
 
-// Worked solution by substitution. A degree-2 numerator is divided first
-// (N/(x-a)^2 = q + R/(x-a)^2), so the substitution only meets the
-// remainder R(x) = A(x - a) + B; then factor, substitute, split, integrate
-// and substitute back.
+// Worked solution by substitution. A numerator of degree 2 or more is
+// divided first (N/(x-a)^2 = Q + R/(x-a)^2), so the substitution only meets
+// the remainder R(x) = A(x - a) + B; then factor, substitute, split,
+// integrate and substitute back.
 function repSolutionLatex(p) {
   const factor = repFactorLatex(p);
   const rows = [];
-  const plus = (a, b) => (a && !b.startsWith("-") ? `${a}+${b}` : `${a}${b}`);
-  const rest = { ...p, q: 0 }; // what is left for the substitution
+  const Q = repQ(p);
+  const rest = { ...p, Q: [], q: 0 }; // what is left for the substitution
   const R = repNumeratorPoly(rest);
-  const qx = p.q ? fracMonomialLatex(p.q, 1, 1, true) : ""; // ∫q dx = q x
+  const Iq = integratedQLatex(Q); // ∫Q dx
   const intR = (den) => `\\int \\frac{${polyLatex(R)}}{${den}}\\,dx`;
 
-  if (p.q) {
-    rows.push(`&= \\int\\left(${polyLatex([p.q])}${fracTermLatex(R, repDenLatex(p))}\\right)dx`);
-    if (p.display === "expanded") rows.push(`&= \\int\\left(${polyLatex([p.q])}${fracTermLatex(R, `(${factor})^2`)}\\right)dx`);
-    rows.push(`&= ${plus(qx, intR(`(${factor})^2`))}`);
+  if (Q.length) {
+    rows.push(`&= \\int\\left(${polyLatex(Q)}${fracTermLatex(R, repDenLatex(p))}\\right)dx`);
+    if (p.display === "expanded") rows.push(`&= \\int\\left(${polyLatex(Q)}${fracTermLatex(R, `(${factor})^2`)}\\right)dx`);
+    rows.push(`&= ${joinPlus(Iq, intR(`(${factor})^2`))}`);
   } else if (p.display === "expanded") {
     rows.push(`&= ${intR(`(${factor})^2`)}`);
   }
   rows.push(`&\\qquad \\left[\\,t=${factor},\\ \\ x=t${fmtSigned(p.a, false)},\\ \\ dx=dt\\,\\right]`);
   const substituted = polyInLatex(R, `(t${fmtSigned(p.a, false)})`);
   const inT = polyLatex(repTPoly(rest), "t");
-  rows.push(`&= ${plus(qx, `\\int \\frac{${substituted}}{t^2}\\,dt`)}`);
-  if (inT !== substituted) rows.push(`&= ${plus(qx, `\\int \\frac{${inT}}{t^2}\\,dt`)}`);
-  rows.push(`&= ${plus(qx, `\\int\\left(${repSplitLatex(rest)}\\right)dt`)}`);
-  rows.push(`&= ${plus(qx, repIntegratedLatex(rest, "t", "t"))}`);
+  rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${substituted}}{t^2}\\,dt`)}`);
+  if (inT !== substituted) rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${inT}}{t^2}\\,dt`)}`);
+  rows.push(`&= ${joinPlus(Iq, `\\int\\left(${repSplitLatex(rest)}\\right)dt`)}`);
+  rows.push(`&= ${joinPlus(Iq, repIntegratedLatex(rest, "t"))}`);
   rows.push(`&= ${repAntiderivativeLatex(p)}`);
   return `\\begin{aligned}${repProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
 }
 
-const repIntegrandFn = ({ a, q, A, B }) => (x) => q + A / (x - a) + B / ((x - a) * (x - a));
+const repIntegrandFn = (p) => {
+  const Q = repQ(p);
+  return (x) => polyEval(Q, x) + p.A / (x - p.a) + p.B / ((x - p.a) * (x - p.a));
+};
 
 function repNearMissVariants(p) {
   const variants = [
@@ -599,8 +605,39 @@ function repNearMissVariants(p) {
   ];
   if (p.A) variants.push({ kind: "sign", problem: { ...p, A: -p.A } });
   variants.push({ kind: "subSign", problem: { ...p, a: -p.a } }); // t = x + a instead of x - a
-  if (p.q) variants.push({ kind: "repConst", problem: { ...p, q: 0 } });
+  if (repQ(p).length) variants.push({ kind: "repConst", problem: { ...p, Q: [], q: 0 } });
   return variants;
+}
+
+// ---------------------------------------------------------------------------
+// Review: a mix of the three core types, with the type left for the student
+// to recognize. Each run draws a plan of types up front (40% distinct roots,
+// 40% irreducible, 20% repeated root; never all three the same), and each
+// exercise always has its denominator to factor or complete, with a division
+// (degree-2 or degree-3 numerator) 70% of the time.
+// ---------------------------------------------------------------------------
+
+function drawReviewType() {
+  const r = Math.random();
+  return r < 0.4 ? "distinct" : r < 0.8 ? "irreducible" : "repeated";
+}
+
+function drawReviewPlan(length) {
+  const plan = [];
+  while (plan.length < length) {
+    const type = drawReviewType();
+    const allSame = plan.length === length - 1 && plan.length > 1 && plan.every((t) => t === type);
+    if (!allSame) plan.push(type);
+  }
+  return plan;
+}
+
+function generateReviewExercise(type) {
+  const degree = chance(0.7) ? (chance(0.5) ? 2 : 3) : 1; // numerator degree
+  const Q = degree === 1 ? [] : degree === 2 ? [nonZero(-3, 3)] : [randInt(-4, 4), nonZero(-3, 3)];
+  if (type === "repeated") return { ...generateRepeated(Q), display: "expanded" };
+  if (type === "irreducible") return generateIrreducible(Q);
+  return { Q, terms: monicTerms({ coef: 6, root: 5 }), display: "expanded" };
 }
 
 // ---------------------------------------------------------------------------
@@ -901,6 +938,20 @@ const ROOMS = [
     ],
   },
   {
+    id: "review",
+    kind: "review",
+    title: "חזרה",
+    en: "Review",
+    tag: "חזרה · אופציונלי",
+    requires: ["repeated", "pf1", "irreducible"],
+    blurb: "שלושה תרגילים מעורבבים מכל הסוגים - שורשים שונים, שורש כפול ומכנה שלא מתפרק. הסוג לא כתוב: צריך לזהות לבד איך לפתור.",
+    nodes: [
+      { gen: "review", title: "זהו את הסוג ופתרו" },
+      { gen: "review", title: "זהו את הסוג ופתרו" },
+      { gen: "review", title: "זהו את הסוג ופתרו" },
+    ],
+  },
+  {
     id: "nonmonic",
     kind: "ext",
     title: "◆ לא מתוקן",
@@ -953,15 +1004,23 @@ function roomRecord(id) {
 
 const isConquered = (id) => roomRecord(id).wins > 0;
 
+// The rooms this one builds on that aren't conquered yet.
+function missingRequirements(room) {
+  return [].concat(room.requires || []).filter((id) => !isConquered(id));
+}
+
+const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(", ");
+
 function isLocked(room) {
   const rec = roomRecord(room.id);
-  return !!room.requires && !isConquered(room.requires) && !rec.run && rec.wins === 0;
+  return missingRequirements(room).length > 0 && !rec.run && rec.wins === 0;
 }
 
 function recommendedRoomId() {
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
+  if (!isConquered("review")) return "review";
   if (!isConquered("nonmonic")) return "nonmonic";
   return null;
 }
@@ -1027,7 +1086,7 @@ function roomCardHtml(room) {
   }
 
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`, `<div>${room.blurb}</div>`];
-  if (locked) info.push(`<div class="info-note">מומלץ אחרי "${ROOM_BY_ID[room.requires].title}".</div>`);
+  if (locked) info.push(`<div class="info-note">מומלץ אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
   if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length}.</div>`);
   if (conquered) info.push(`<div class="info-note">נכבש ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
 
@@ -1051,12 +1110,14 @@ function roomCardHtml(room) {
 }
 
 function renderMap() {
-  const [prep, rep, core, irr, ext] = ["division", "repeated", "pf1", "irreducible", "nonmonic"].map((id) => ROOM_BY_ID[id]);
+  const [prep, rep, core, irr, review, ext] = ["division", "repeated", "pf1", "irreducible", "review", "nonmonic"].map((id) => ROOM_BY_ID[id]);
   towerEl.innerHTML = `
     <div class="tower-crown" aria-hidden="true"></div>
     <div class="tower-body">
       <div class="floor-label">קומה 1 · פונקציות רציונליות <span dir="ltr">(rational functions)</span></div>
       <div class="floor-rooms">
+        <div class="area-review">${roomCardHtml(review)}</div>
+        <div class="conn area-connR" aria-hidden="true"></div>
         <div class="area-irr">${roomCardHtml(irr)}</div>
         <div class="conn area-conn0" aria-hidden="true"></div>
         <div class="branch area-ext">
@@ -1126,10 +1187,11 @@ let lockDialogRoom = null;
 function openLockDialog(roomId) {
   lockDialogRoom = roomId;
   const room = ROOM_BY_ID[roomId];
-  const rec = ROOM_BY_ID[room.requires]; // the room this one builds on
+  const missing = missingRequirements(room);
+  const rec = ROOM_BY_ID[missing[0]]; // the first room this one builds on that's still open
   $("lockDialogText").textContent =
-    `החדר "${room.title}" בנוי על "${ROOM_BY_ID[room.requires].title}". ` +
-    `מומלץ לכבוש קודם את "${rec.title}" - אבל אפשר גם לנסות כבר עכשיו.`;
+    `החדר "${room.title}" בנוי על ${quotedTitles([].concat(room.requires))}. ` +
+    `מומלץ לכבוש קודם את ${quotedTitles(missing)} - אבל אפשר גם לנסות כבר עכשיו.`;
   $("lockBackBtn").textContent = `ל"${rec.title}" (מומלץ)`;
   $("lockBackBtn").dataset.room = rec.id;
   lockDialog.hidden = false;
@@ -1178,6 +1240,14 @@ const scoreChipEl = $("scoreChip");
 // a reload can't be used to re-roll a hard one for free.
 const view = { room: null, problem: null, node: 0, resolved: false, pending: null };
 
+// A fresh exercise for node i of a room. Review nodes take their type from
+// the run's plan, so a new exercise after "Show solution" keeps the type.
+function makeProblem(room, i, run) {
+  const node = room.nodes[i];
+  if (node.gen === "review") return generateReviewExercise(run.plan[i]);
+  return GENERATORS[node.gen]();
+}
+
 function goToRoom(id) {
   location.hash = `#/room/${id}`;
 }
@@ -1191,7 +1261,9 @@ function enterRoom(id) {
   const room = ROOM_BY_ID[id];
   const rec = roomRecord(id);
   if (!rec.run) {
-    rec.run = { node: 0, score: START_SCORE, problem: GENERATORS[room.nodes[0].gen]() };
+    rec.run = { node: 0, score: START_SCORE };
+    if (room.kind === "review") rec.run.plan = drawReviewPlan(room.nodes.length);
+    rec.run.problem = makeProblem(room, 0, rec.run);
     saveStore();
   }
   view.room = room;
@@ -1409,7 +1481,7 @@ checkBtn.addEventListener("click", () => {
     return;
   }
   rec.run.node = nextNode;
-  rec.run.problem = GENERATORS[view.room.nodes[nextNode].gen]();
+  rec.run.problem = makeProblem(view.room, nextNode, rec.run);
   saveStore();
   view.pending = { node: nextNode, problem: rec.run.problem, advance: true };
   nextBtn.textContent = view.room.nodes[nextNode].boss ? "לבוס ←" : "המשך ←";
@@ -1423,7 +1495,7 @@ solutionBtn.addEventListener("click", () => {
   const rec = roomRecord(view.room.id);
   view.resolved = true;
   rec.run.score = Math.max(0, rec.run.score - SOLUTION_COST);
-  rec.run.problem = GENERATORS[view.room.nodes[view.node].gen](); // same node, fresh exercise
+  rec.run.problem = makeProblem(view.room, view.node, rec.run); // same node, fresh exercise
   saveStore();
   renderScore(rec.run.score, SOLUTION_COST);
   view.pending = { node: view.node, problem: rec.run.problem, advance: false };
@@ -1523,7 +1595,8 @@ function showConquest(room, { score, prevBest, wins }) {
     division: "הבא: שורש כפול",
     repeated: "הבא: שברים חלקיים I",
     pf1: "הבא: מכנה שלא מתפרק · או ◆ לא מתוקן (הרחבה)",
-    irreducible: "הבא: ◆ לא מתוקן (הרחבה, אופציונלי)",
+    irreducible: "הבא: חזרה (אופציונלי) · או ◆ לא מתוקן (הרחבה)",
+    review: "כבשת את קומה 1!",
     nonmonic: "כבשת את ההרחבה!",
   }[room.id];
 
@@ -1569,6 +1642,8 @@ if (new URLSearchParams(location.search).has("debug")) {
     solution: () => solutionLatex(view.problem),
     check: (p, latex) => checkAnswer(p, latex),
     generators: GENERATORS,
+    reviewExercise: generateReviewExercise,
+    reviewPlan: drawReviewPlan,
     antiderivativeLatex,
     problemLatex,
     store: () => store,
