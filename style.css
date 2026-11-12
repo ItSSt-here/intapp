@@ -25,6 +25,8 @@
   --ext-tint: #f0eefc;
   --ext-border: #b9b0ec;
   --stone: #efeae0;
+  --q: #d9a400;
+  --q-bg: #fff8db;
 }
 
 [hidden] { display: none !important; }
@@ -659,6 +661,14 @@ math-field.solution-field {
   animation: answer-shake 0.4s ease;
 }
 
+/* Unreadable: yellow with a "?" - a nudge to rewrite, not a mistake. */
+.answer-card.unreadable {
+  border-color: var(--q);
+  background: var(--q-bg);
+  box-shadow: 0 0 0 4px rgba(217, 164, 0, 0.2);
+  animation: answer-shake 0.4s ease;
+}
+
 @keyframes answer-shake {
   10%, 90% { transform: translateX(-1px); }
   20%, 80% { transform: translateX(2px); }
@@ -689,6 +699,7 @@ math-field.solution-field {
 .answer-badge.show { opacity: 1; transform: scale(1); }
 .answer-badge.correct { background: var(--good); }
 .answer-badge.incorrect { background: var(--bad); }
+.answer-badge.unreadable { background: var(--q); }
 
 .answer-status-text {
   position: absolute;
@@ -704,6 +715,7 @@ math-field.solution-field {
 .answer-status-text.show { opacity: 1; }
 .answer-status-text.correct { color: var(--good); }
 .answer-status-text.incorrect { color: var(--bad); }
+.answer-status-text.unreadable { color: #8a6a00; }
 
 math-field.input-field {
   display: block;
@@ -786,6 +798,7 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 .feedback.wrong { background: var(--bad-bg); color: var(--bad); }
 .feedback.near { background: var(--warn-bg); color: #8a5a1e; border: 1px solid var(--warn-border); }
 .feedback.info { background: #f1efe9; color: #5c564d; }
+.feedback.unreadable { background: var(--q-bg); color: #6f5500; border: 1px solid #ecd27a; }
 
 /* ---------------------------------------------------------------------- */
 /* Conquest                                                               */

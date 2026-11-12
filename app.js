@@ -14,16 +14,52 @@ MathfieldElement.soundsDirectory = null;
 // implicit multiplication) into a closure (x) => number.
 // ---------------------------------------------------------------------------
 
+// LaTeX (and MathLive) allow a one-character argument without braces:
+// \frac12 is 1/2, \frac1x is 1/x, \frac{3}2 is 3/2. Brace every \frac
+// argument so the parser only ever sees \frac{..}{..}.
+function braceFracArgs(s) {
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    if (!s.startsWith("\\frac", i)) {
+      out += s[i++];
+      continue;
+    }
+    out += "\\frac";
+    i += 5;
+    for (let arg = 0; arg < 2 && i < s.length; arg++) {
+      if (s[i] === "{") {
+        let depth = 0;
+        let j = i;
+        do {
+          if (s[j] === "{") depth++;
+          else if (s[j] === "}") depth--;
+          j++;
+        } while (j < s.length && depth > 0);
+        out += braceFracArgs(s.slice(i, j)); // nested fractions inside
+        i = j;
+      } else {
+        out += `{${s[i]}}`;
+        i++;
+      }
+    }
+  }
+  return out;
+}
+
 function tokenize(latex) {
   let s = latex;
 
   // Strip sizing commands that don't affect meaning.
-  s = s.replace(/\\left|\\right/g, "");
+  s = s.replace(/\\left|\\right|\\mleft|\\mright|\\bigl|\\bigr|\\Bigl|\\Bigr|\\big|\\Big/g, "");
   s = s.replace(/\\cdot|\\times/g, "*");
-  s = s.replace(/\\lvert|\\rvert/g, "|");
+  s = s.replace(/\\lvert|\\rvert|\\vert|\\mid/g, "|");
+  s = s.replace(/\\operatorname\{(ln|log)\}/g, "\\$1");
+  s = s.replace(/\\dfrac|\\tfrac/g, "\\frac");
   s = s.replace(/\\,|\\!|\\;|\\:|\\ /g, "");
   s = s.replace(/\\mathrm\{d\}x|dx/g, ""); // drop trailing "dx" if present
   s = s.replace(/\s+/g, "");
+  s = braceFracArgs(s);
 
   const tokens = [];
   let i = 0;
@@ -928,25 +964,32 @@ function renderScore(score, delta) {
 }
 
 // Marks the answer card as null (neutral, while working), "correct",
-// "incorrect" or "solution". Called fresh on every grade so a second wrong
-// attempt gets its own clear signal.
+// "incorrect", "unreadable" (amber "?", no penalty) or "solution". Called
+// fresh on every grade so a repeated attempt gets its own clear signal.
+const ANSWER_STATES = {
+  correct: { badge: "✓", label: "נכון" },
+  incorrect: { badge: "✗", label: "לא נכון" },
+  unreadable: { badge: "?", label: "לא הצלחנו לקרוא" },
+};
+
 function setAnswerState(state) {
-  answerCardEl.classList.remove("correct", "incorrect", "solution");
-  answerBadgeEl.classList.remove("show", "correct", "incorrect");
+  const all = Object.keys(ANSWER_STATES);
+  answerCardEl.classList.remove("solution", ...all);
+  answerBadgeEl.classList.remove("show", ...all);
   answerBadgeEl.textContent = "";
-  answerStatusEl.classList.remove("show", "correct", "incorrect");
+  answerStatusEl.classList.remove("show", ...all);
   answerStatusEl.textContent = "";
   if (!state) return;
   if (state === "solution") {
     answerCardEl.classList.add("solution");
     return;
   }
-  void answerCardEl.offsetWidth; // restart the shake if "incorrect" is set twice in a row
+  void answerCardEl.offsetWidth; // restart the shake if the same state is set twice in a row
   answerCardEl.classList.add(state);
   answerBadgeEl.classList.add("show", state);
-  answerBadgeEl.textContent = state === "correct" ? "✓" : "✗";
+  answerBadgeEl.textContent = ANSWER_STATES[state].badge;
   answerStatusEl.classList.add("show", state);
-  answerStatusEl.textContent = state === "correct" ? "נכון" : "לא נכון";
+  answerStatusEl.textContent = ANSWER_STATES[state].label;
 }
 
 // `html` is always one of this file's own strings, never user input.
@@ -1031,8 +1074,8 @@ checkBtn.addEventListener("click", () => {
   gradedValue = answerField.value;
 
   if (result.status === "unreadable") {
-    setAnswerState(null);
-    setFeedback("לא הצלחנו לקרוא את התשובה - זה לא נחשב טעות. נסו לכתוב אותה בצורה פשוטה יותר.", "info");
+    setAnswerState("unreadable");
+    setFeedback("לא הצלחנו לקרוא את התשובה - זה לא נחשב טעות, לא ירדו נקודות. נסו לכתוב אותה בצורה פשוטה יותר.", "unreadable");
     return;
   }
 
