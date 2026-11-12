@@ -1040,6 +1040,7 @@ const ROOMS = [
   {
     id: "repeated",
     kind: "core",
+    num: 1,
     title: "שורש כפול",
     en: "Repeated root",
     tag: "ליבה · הצבה",
@@ -1053,6 +1054,7 @@ const ROOMS = [
   {
     id: "pf1",
     kind: "core",
+    num: 2,
     title: "שברים חלקיים I",
     en: "Partial fractions I",
     tag: "ליבה",
@@ -1067,6 +1069,7 @@ const ROOMS = [
   {
     id: "irreducible",
     kind: "core",
+    num: 3,
     title: "מכנה שלא מתפרק",
     en: "Irreducible quadratic",
     tag: "ליבה · השלמה לריבוע",
@@ -1151,9 +1154,16 @@ function missingRequirements(room) {
 
 const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(", ");
 
+// The upper wing (review, non-monic, stairs up) opens once the three core
+// rooms are conquered - or earlier, if the student opens its gate anyway.
+const CORE_IDS = ["repeated", "pf1", "irreducible"];
+const coreDone = () => CORE_IDS.every(isConquered);
+const wingOpen = () => coreDone() || !!store.wingOpen;
+
 function isLocked(room) {
+  if (!room.requires) return false;
   const rec = roomRecord(room.id);
-  return missingRequirements(room).length > 0 && !rec.run && rec.wins === 0;
+  return !wingOpen() && !rec.run && rec.wins === 0;
 }
 
 function recommendedRoomId() {
@@ -1225,12 +1235,10 @@ function roomCardHtml(room) {
   } else if (conquered) {
     side = `<span class="wins" title="מספר הפעמים שהחדר נכבש">×${rec.wins}</span>` +
       `<span class="score-chip small tier-${scoreTier(rec.best)}" title="הציון הטוב ביותר">${rec.best}</span>`;
-  } else if (locked) {
-    side = `<button type="button" class="open-anyway" data-open-anyway="${room.id}">לפתוח בכל זאת</button>`;
   }
 
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`, `<div>${room.blurb}</div>`];
-  if (locked) info.push(`<div class="info-note">מומלץ אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
+  if (locked) info.push(`<div class="info-note">נפתח אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
   if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length}.</div>`);
   if (conquered) info.push(`<div class="info-note">נכבש ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
 
@@ -1239,8 +1247,9 @@ function roomCardHtml(room) {
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
+      ${hereId() === room.id ? YOU_ARE_HERE : ""}
       <div class="room-head">
-        ${locked ? LOCK_SVG : ""}<span class="room-title">${room.title}</span>${stars}
+        ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}${locked ? LOCK_SVG : ""}<span class="room-title">${room.title}</span>${stars}
         <span class="info-wrap">
           <button type="button" class="info-btn" data-info aria-label="מידע על החדר" aria-expanded="false">i</button>
           <span class="room-info" role="tooltip">${info.join("")}</span>
@@ -1253,22 +1262,9 @@ function roomCardHtml(room) {
     </div>`;
 }
 
-// The flag on the roof: rolled down the pole until the three core rooms are
-// conquered, then raised (with a gold star once the review is conquered too).
-const FLAG_SVG = `
-  <svg class="roof-flag" viewBox="0 0 70 64" aria-hidden="true">
-    <rect class="pole" x="9" y="2" width="3" height="62" rx="1.5"/>
-    <circle class="pole-cap" cx="10.5" cy="3" r="3"/>
-    <g class="flag-cloth">
-      <path d="M12 8 C26 4 36 13 50 8 L54 8 C48 15 50 22 54 28 C40 33 28 24 12 28 Z"/>
-      <text x="31" y="23" text-anchor="middle">1</text>
-      <path class="flag-star" d="M44 13l1.5 3.1 3.4.5-2.5 2.4.6 3.4-3-1.6-3 1.6.6-3.4-2.5-2.4 3.4-.5z"/>
-    </g>
-  </svg>`;
-
-// Arched wooden door at the foot of the tower.
+// Arched wooden door in the outer wall: the way into the floor.
 const DOOR_SVG = `
-  <svg class="tower-door" viewBox="0 0 60 56" aria-hidden="true">
+  <svg class="map-door" viewBox="0 0 60 56" aria-hidden="true">
     <path class="door-frame" d="M2 56V26a28 26 0 0 1 56 0v30z"/>
     <path class="door-wood" d="M8 56V27a22 21 0 0 1 44 0v29z"/>
     <path class="door-planks" d="M19 56V10M30 56V6M41 56V10"/>
@@ -1276,48 +1272,72 @@ const DOOR_SVG = `
     <circle class="door-ring" cx="37" cy="36" r="2.6"/>
   </svg>`;
 
-// Stairs between two rooms; lit once the student has climbed them.
-function stairsHtml(area, lower, upper) {
-  const climbed = isConquered(lower.id) || isConquered(upper.id) || !!roomRecord(upper.id).run;
-  return `<div class="stairs ${area}${climbed ? " climbed" : ""}" aria-hidden="true"><span></span><span></span><span></span><span></span></div>`;
-}
+// "You are here": the room the student was in last (the entrance at first).
+const YOU_ARE_HERE = '<span class="you-are-here" title="אתם כאן" aria-label="אתם כאן"></span>';
+const hereId = () => (store.lastRoom && ROOM_BY_ID[store.lastRoom] ? store.lastRoom : "entrance");
 
+// A doorway through the wall between two areas of the map.
+const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
+
+// Top-down plan of floor 1. Grid columns run right to left (RTL): rooms 1-3,
+// then a narrow passage up to the upper wing.
+//   row 1  upper wing: review · non-monic · stairs to floor 2
+//   row 3  upper corridor (fogged until the wing opens)
+//   row 5  core rooms 1 · 2 · 3, and the gated passage
+//   row 7  main corridor
+//   row 9  polynomial division (walk through it - or solve it)
+//   row 11 entrance
+// Even rows are the walls, with doorways through them.
 function renderMap() {
   const [prep, rep, core, irr, review, ext] = ["division", "repeated", "pf1", "irreducible", "review", "nonmonic"].map((id) => ROOM_BY_ID[id]);
-  const floorDone = [rep, core, irr].every((r) => isConquered(r.id));
-  const classes = ["tower-scene"];
-  if (floorDone) classes.push("floor-done");
-  if (isConquered(review.id)) classes.push("review-done");
+  const open = wingOpen();
+  const reveal = open && !store.wingRevealed;
+  if (reveal) {
+    store.wingRevealed = true;
+    saveStore();
+  }
+  const wingCls = open ? (reveal ? " wing-reveal" : "") : " fogged";
+  const done = coreDone();
+
+  const stairs = `
+    <div class="stairs-room${done ? " floor-done" : ""}">
+      <div class="stairs-steps" aria-hidden="true"></div>
+      <div class="stairs-text">
+        <div class="room-title">מדרגות לקומה 2</div>
+        ${done ? '<div class="stairs-note done-note">סיימתם את קומה 1</div>' : ""}<div class="stairs-note">קומה 2 · בקרוב</div>
+      </div>
+    </div>`;
+
+  const upperCorridor = open
+    ? `<div class="corridor-label">אגף עליון</div>`
+    : `<div class="corridor-label">אגף עליון · נפתח אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>
+       <button type="button" class="open-anyway" data-open-wing>לפתוח בכל זאת</button>`;
+
   towerEl.innerHTML = `
-    <div class="${classes.join(" ")}">
-      <div class="tower-wrap">
-        <div class="tower-main">
-          <div class="tower-roof">${FLAG_SVG}<div class="tower-crown" aria-hidden="true"></div></div>
-          <div class="tower-body">
-            <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
-            <div class="floor-rooms">
-              <div class="area-review">${roomCardHtml(review)}</div>
-              ${stairsHtml("area-connR", irr, review)}
-              <div class="area-irr">${roomCardHtml(irr)}</div>
-              ${stairsHtml("area-conn0", core, irr)}
-              <div class="area-core">${roomCardHtml(core)}</div>
-              ${stairsHtml("area-conn", rep, core)}
-              <div class="area-rep">${roomCardHtml(rep)}</div>
-              ${stairsHtml("area-conn2", prep, rep)}
-              <div class="area-prep">${roomCardHtml(prep)}</div>
-            </div>
-          </div>
-          <div class="tower-base">${DOOR_SVG}<span class="door-label">כניסה</span></div>
+    <div class="floor-map${done ? " floor-done" : ""}">
+      <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
+      <div class="floor-grid">
+        <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
+        <div class="cell wing${wingCls}" style="grid-column:2;grid-row:1">${roomCardHtml(ext)}</div>
+        <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${stairs}</div>
+        ${doorway(1, 2)}${doorway(2, 2)}${doorway(3, 2)}
+        <div class="cell corridor upper wing${wingCls}" style="grid-column:1 / 5;grid-row:3">${upperCorridor}</div>
+        ${doorway(4, 4)}
+        <div class="cell" style="grid-column:1;grid-row:5">${roomCardHtml(rep)}</div>
+        <div class="cell" style="grid-column:2;grid-row:5">${roomCardHtml(core)}</div>
+        <div class="cell" style="grid-column:3;grid-row:5">${roomCardHtml(irr)}</div>
+        <div class="cell passage${open ? " open" : ""}" style="grid-column:4;grid-row:5"${open ? "" : ' data-open-wing role="button" tabindex="0" aria-label="שער לאגף העליון"'}>
+          <div class="portcullis" aria-hidden="true"></div>
         </div>
-        <div class="turret-col">
-          <div class="turret">
-            <div class="turret-crown" aria-hidden="true"></div>
-            <div class="turret-body"><div class="bridge" aria-hidden="true"></div>${roomCardHtml(ext)}</div>
-            <div class="turret-corbel" aria-hidden="true"></div>
-          </div>
+        ${doorway(1, 6)}${doorway(2, 6)}${doorway(3, 6)}${doorway(4, 6)}
+        <div class="cell corridor" style="grid-column:1 / 5;grid-row:7"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
+        ${doorway(2, 8)}
+        <div class="cell" style="grid-column:2;grid-row:9">${roomCardHtml(prep)}</div>
+        ${doorway(2, 10)}
+        <div class="cell entrance" style="grid-column:2;grid-row:11">
+          ${hereId() === "entrance" ? YOU_ARE_HERE : ""}${DOOR_SVG}<span class="door-label">כניסה</span>
         </div>
       </div>
-      <div class="ground" aria-hidden="true"></div>
     </div>`;
   justConquered = null;
 }
@@ -1346,21 +1366,20 @@ towerEl.addEventListener("click", (e) => {
     }
     return;
   }
-  const anyway = e.target.closest("[data-open-anyway]");
-  if (anyway) {
+  if (e.target.closest("[data-open-wing]")) {
     e.stopPropagation();
-    openLockDialog(anyway.dataset.openAnyway);
+    openGateDialog();
     return;
   }
   const card = e.target.closest("[data-room]");
   if (!card) return;
   const room = ROOM_BY_ID[card.dataset.room];
-  if (isLocked(room)) openLockDialog(room.id);
+  if (isLocked(room)) openGateDialog();
   else goToRoom(room.id);
 });
 
 towerEl.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-room]")) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-room], .passage[data-open-wing]")) {
     e.preventDefault();
     e.target.click();
   }
@@ -1368,17 +1387,15 @@ towerEl.addEventListener("keydown", (e) => {
 
 // --- "open anyway" dialog ---------------------------------------------------
 
+// One gate for the whole upper wing, not one per room.
 const lockDialog = $("lockDialog");
-let lockDialogRoom = null;
 
-function openLockDialog(roomId) {
-  lockDialogRoom = roomId;
-  const room = ROOM_BY_ID[roomId];
-  const missing = missingRequirements(room);
-  const rec = ROOM_BY_ID[missing[0]]; // the first room this one builds on that's still open
+function openGateDialog() {
+  const missing = CORE_IDS.filter((id) => !isConquered(id));
+  const rec = ROOM_BY_ID[missing[0]]; // the first core room that's still open
   $("lockDialogText").textContent =
-    `החדר "${room.title}" בנוי על ${quotedTitles([].concat(room.requires))}. ` +
-    `מומלץ לכבוש קודם את ${quotedTitles(missing)} - אבל אפשר גם לנסות כבר עכשיו.`;
+    `האגף העליון (חזרה, ◆ מקדם ל-x ומדרגות לקומה 2) בנוי על שלושת החדרים במסדרון. ` +
+    `מומלץ לכבוש קודם את ${quotedTitles(missing)} - אבל אפשר לפתוח אותו כבר עכשיו.`;
   $("lockBackBtn").textContent = `ל"${rec.title}" (מומלץ)`;
   $("lockBackBtn").dataset.room = rec.id;
   lockDialog.hidden = false;
@@ -1395,7 +1412,9 @@ $("lockBackBtn").addEventListener("click", (e) => {
 });
 $("lockAnywayBtn").addEventListener("click", () => {
   closeLockDialog();
-  goToRoom(lockDialogRoom);
+  store.wingOpen = true;
+  saveStore();
+  renderMap(); // the fog lifts
 });
 lockDialog.addEventListener("click", (e) => {
   if (e.target === lockDialog) closeLockDialog();
@@ -1447,6 +1466,8 @@ function goToMap() {
 function enterRoom(id) {
   const room = ROOM_BY_ID[id];
   const rec = roomRecord(id);
+  store.lastRoom = id;
+  saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
     if (room.kind === "review") rec.run.plan = drawReviewPlan(room.nodes.length);
@@ -1778,14 +1799,14 @@ function showConquest(room, { score, prevBest, wins }) {
   else if (score > prevBest) bestLine = `שיא חדש! <b>${score}</b> <span class="muted">(קודם: ${prevBest})</span>`;
   else bestLine = `הציון הפעם: <b>${score}</b> · השיא שלך: <b>${prevBest}</b>`;
 
-  const next = {
-    division: "הבא: שורש כפול",
-    repeated: "הבא: שברים חלקיים I",
-    pf1: "הבא: מכנה שלא מתפרק",
-    irreducible: "הבא: חזרה (אופציונלי) · או ◆ מקדם ל-x (הרחבה)",
-    review: "כבשת את קומה 1! · אפשר גם ◆ מקדם ל-x (הרחבה)",
-    nonmonic: "כבשת את ההרחבה!",
-  }[room.id];
+  // What is left on the floor, now that this room is conquered.
+  const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
+  let next;
+  if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
+  else if (CORE_IDS.includes(room.id)) next = "כבשת את שלושת החדרים! האגף העליון נפתח: חזרה, ◆ מקדם ל-x ומדרגות לקומה 2";
+  else if (room.id === "review") next = "כבשת את החזרה! · אפשר גם ◆ מקדם ל-x (הרחבה)";
+  else if (room.id === "nonmonic") next = "כבשת את ההרחבה!";
+  else next = "";
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;
   $("conquest").innerHTML = `
@@ -1798,7 +1819,7 @@ function showConquest(room, { score, prevBest, wins }) {
     ${score === 10 ? '<div class="perfect">★ מושלם - בלי אף טעות</div>' : ""}
     <div class="conquest-best">${bestLine}</div>
     <div class="conquest-wins">נכבש ×${wins}</div>
-    <button type="button" id="toTowerBtn" class="primary-btn">חזרה למגדל</button>
+    <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
     <div class="conquest-next">${next}</div>`;
   $("toTowerBtn").addEventListener("click", goToMap);
   // The run is over; drop the room from history so Back/reload lands on the map.

@@ -144,96 +144,28 @@ button:disabled {
 /* Tower map                                                              */
 /* ---------------------------------------------------------------------- */
 
+/* Floor 1 seen from above, like an old dungeon map: lit stone floors (rooms,
+   corridors) separated by dark walls, with doorways cut through them. */
 .tower {
   margin: 0 auto;
-  max-width: 520px;
-  --mortar: #cbbfa8;
-  --stone-dark: #a8987c;
-  --stone-edge: #8e8068;
-  --bricks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='40'%3E%3Crect width='64' height='40' fill='%23cdc1aa'/%3E%3Crect x='1' y='1' width='30' height='18' rx='2' fill='%23e9e3d6'/%3E%3Crect x='33' y='1' width='30' height='18' rx='2' fill='%23e2dbcb'/%3E%3Crect x='-15' y='21' width='30' height='18' rx='2' fill='%23e5ded0'/%3E%3Crect x='17' y='21' width='30' height='18' rx='2' fill='%23ddd5c4'/%3E%3Crect x='49' y='21' width='30' height='18' rx='2' fill='%23e5ded0'/%3E%3C/svg%3E");
+  max-width: 560px;
+  --rock: #2c2721;
+  --wall: #5a4f40;
+  --jamb: #8a7a5e;
+  --floor: #ebe4d5;
+  --tiles: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34'%3E%3Cpath d='M0 .5H34M.5 0V34' stroke='%23503c1e' stroke-opacity='.11' fill='none'/%3E%3Cpath d='M17 .5V17M0 17.5H17' stroke='%23503c1e' stroke-opacity='.05' fill='none'/%3E%3C/svg%3E");
 }
 
-/* Sky behind the tower, grass in front of it. */
-.tower-scene {
+.floor-map {
   position: relative;
-  padding: 70px 14px 0;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #dcebf0 0%, #e9f1ef 55%, #f3f2ea 100%);
-}
-
-.ground {
-  height: 20px;
-  margin: 0 -14px;
-  border-radius: 0 0 18px 18px;
-  background: linear-gradient(180deg, #b7d39f, #9fc283);
-}
-
-.tower-wrap { display: flex; flex-direction: column; }
-.tower-main { position: relative; }
-
-/* Roof: stone battlements with the floor's flag above them. */
-.tower-roof { position: relative; }
-
-.tower-crown, .turret-crown {
-  height: 24px;
-  margin: 0 -8px;
+  padding: 14px 14px 18px;
+  border-radius: 16px;
   background:
-    linear-gradient(90deg, #d8cdb8 0 55%, transparent 0) 0 0 / 40px 14px repeat-x,
-    linear-gradient(var(--stone-dark), var(--stone-dark)) 0 14px / 100% 10px no-repeat;
-  filter: drop-shadow(0 -1px 0 var(--stone-edge));
+    radial-gradient(60% 40% at 30% 20%, rgba(255, 255, 255, 0.04), transparent),
+    radial-gradient(50% 40% at 80% 75%, rgba(0, 0, 0, 0.25), transparent),
+    var(--rock);
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.55);
 }
-
-.roof-flag {
-  position: absolute;
-  bottom: 100%;
-  left: calc(50% - 10px);
-  width: 70px;
-  height: 64px;
-  overflow: visible;
-}
-
-.roof-flag .pole { fill: #6e5a3a; }
-.roof-flag .pole-cap { fill: var(--gold); }
-.roof-flag .flag-cloth { transform: translateY(32px); transition: transform 1.2s ease; }
-.roof-flag .flag-cloth path:first-child { fill: #b3a995; }
-.roof-flag text { font: 700 13px "Segoe UI", Arial, sans-serif; fill: white; opacity: 0.6; }
-.roof-flag .flag-star { fill: #ffd34d; display: none; }
-
-.floor-done .roof-flag .flag-cloth { transform: none; animation: flag-wave 3s ease-in-out infinite; transform-origin: 12px 18px; }
-.floor-done .roof-flag .flag-cloth path:first-child { fill: var(--accent); }
-.floor-done .roof-flag text { opacity: 1; }
-.review-done .roof-flag .flag-star { display: inline; }
-
-@keyframes flag-wave {
-  0%, 100% { transform: skewY(0deg) scaleX(1); }
-  50% { transform: skewY(-3deg) scaleX(0.95); }
-}
-
-/* The walls: bricks, shaded at the edges, with arrow slits. */
-.tower-body, .turret-body, .tower-base, .turret-corbel {
-  background: var(--bricks), var(--mortar);
-}
-
-.tower-body {
-  position: relative;
-  padding: 14px 18px 20px;
-  border-inline: 3px solid var(--stone-edge);
-  box-shadow: inset 14px 0 16px -12px rgba(60, 45, 20, 0.35), inset -14px 0 16px -12px rgba(60, 45, 20, 0.35);
-}
-
-.tower-body::before, .tower-body::after {
-  content: "";
-  position: absolute;
-  top: 70px;
-  bottom: 30px;
-  width: 6px;
-  border-radius: 3px;
-  background: repeating-linear-gradient(180deg, transparent 0 60px, #4a4337 60px 94px, transparent 94px 160px);
-  opacity: 0.8;
-}
-
-.tower-body::before { left: 5px; }
-.tower-body::after { right: 5px; }
 
 /* The floor's name on a carved plaque. */
 .floor-label {
@@ -246,102 +178,187 @@ button:disabled {
   font-weight: 700;
   font-size: 0.95rem;
   color: #4b3f2b;
-  background: linear-gradient(180deg, #f5efe2, #e8dec9);
-  border: 2px solid var(--stone-edge);
+  background: linear-gradient(180deg, #f5efe2, #e3d8c1);
+  border: 2px solid var(--jamb);
   border-radius: 6px;
-  box-shadow: 0 2px 0 var(--stone-dark);
 }
 
-.floor-rooms { display: flex; flex-direction: column; position: relative; z-index: 1; }
+/* Phones: one column, top (upper wing) to bottom (entrance). */
+.floor-grid { display: flex; flex-direction: column; gap: 14px; }
+.doorway, .passage { display: none; }
+.cell { position: relative; min-width: 0; }
 
-/* Stone stairs between two rooms; teal once climbed. */
-.stairs {
+/* Corridors: long strips of floor with their name on the flagstones. */
+.corridor {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
-  gap: 1px;
-  height: 22px;
-  margin: 9px auto 7px;
+  gap: 14px;
+  min-height: 44px;
+  padding: 6px 12px;
+  background: var(--tiles), #e2d9c6;
+  border: 4px solid var(--wall);
+  border-radius: 4px;
 }
 
-.stairs span {
-  width: 11px;
-  background: #b9ab90;
-  border-top: 2px solid #d6cab3;
-  border-radius: 2px 2px 0 0;
+.corridor-label { font-size: 0.85rem; font-weight: 600; color: #6b5a3c; letter-spacing: 0.3px; }
+.corridor .open-anyway { position: relative; z-index: 3; color: #f3ead6; }
+.corridor .open-anyway:hover { color: white; }
+
+/* Doorways through the walls, between a room and its corridor. */
+.doorway {
+  justify-self: center;
+  width: 46px;
+  background: var(--tiles), #e2d9c6;
+  border-inline: 3px solid var(--jamb);
 }
 
-.stairs span:nth-child(1) { height: 25%; }
-.stairs span:nth-child(2) { height: 50%; }
-.stairs span:nth-child(3) { height: 75%; }
-.stairs span:nth-child(4) { height: 100%; }
-.stairs.climbed span { background: var(--accent); border-top-color: #4fb3a7; }
-
-/* Foot of the tower: a wooden door. */
-.tower-base {
-  position: relative;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  height: 84px;
-  margin: 0 -8px;
-  border-top: 6px solid var(--stone-dark);
-  border-inline: 3px solid var(--stone-edge);
+/* The narrow passage up to the wing, closed by a portcullis until it opens. */
+.passage {
+  background: var(--tiles), #e2d9c6;
+  border: 4px solid var(--wall);
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.tower-door { width: 84px; height: 76px; display: block; }
-.door-frame { fill: var(--stone-edge); }
+.portcullis {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 7px, #3b342a 7px 10px),
+    repeating-linear-gradient(0deg, transparent 0 14px, #3b342a 14px 17px);
+  transition: transform 0.9s ease;
+}
+
+.passage.open { cursor: default; }
+.passage.open .portcullis { transform: scaleY(0.12); transform-origin: top; }
+.passage:not(.open):hover .portcullis { filter: brightness(1.4); }
+.passage:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* The entrance: a wooden door in the outer wall. */
+.entrance { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.map-door { width: 70px; height: 64px; display: block; }
+.door-frame { fill: var(--jamb); }
 .door-wood { fill: #8a5a2b; }
 .door-planks { stroke: #6e4520; stroke-width: 1.5; fill: none; }
 .door-band { stroke: #3f3125; stroke-width: 3; fill: none; }
 .door-ring { fill: none; stroke: #e2c27a; stroke-width: 1.6; }
+.door-label { font-size: 0.8rem; font-weight: 700; color: #e9dfc8; }
 
-.door-label {
+/* Stairs up to floor 2 (not built yet). Seen from above: a flight of steps. */
+.stairs-room {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+  min-height: 74px;
+  padding: 10px 14px;
+  background: var(--tiles), var(--floor);
+  border: 4px solid var(--wall);
+  border-radius: 4px;
+}
+
+.stairs-steps {
+  flex: none;
+  width: 40px;
+  height: 46px;
+  border: 2px solid #7b6b50;
+  background: repeating-linear-gradient(180deg, #d4c8b0 0 7px, #9c8b6c 7px 9px);
+  box-shadow: inset 0 -14px 10px -6px rgba(30, 20, 10, 0.45);
+}
+
+.stairs-room .room-title { color: #5b4a2c; font-size: 1.05rem; }
+.stairs-note { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+.stairs-room.floor-done {
+  background: var(--tiles), radial-gradient(130% 150% at 50% 0%, #fffbef 0%, #fff0c4 60%, #ffe39b 100%);
+  box-shadow: inset 0 0 18px rgba(255, 186, 60, 0.4);
+}
+.stairs-room .done-note { color: var(--good-hover); font-weight: 700; }
+
+/* Fog of war over the upper wing until it opens. */
+.wing.fogged > * { filter: saturate(0.3); }
+.wing.fogged::after {
+  content: "";
   position: absolute;
-  bottom: 4px;
+  inset: -2px;
+  border-radius: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 90% at 30% 40%, rgba(44, 39, 33, 0.75), transparent 75%),
+    radial-gradient(70% 90% at 75% 60%, rgba(44, 39, 33, 0.7), transparent 75%),
+    rgba(44, 39, 33, 0.62);
+  z-index: 2;
+}
+
+.wing.fogged .room-card { cursor: pointer; }
+.corridor.upper.fogged .corridor-label { position: relative; z-index: 3; color: #e9dfc8; }
+.wing.wing-reveal::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  pointer-events: none;
+  background: rgba(44, 39, 33, 0.7);
+  animation: fog-lift 1.4s ease forwards;
+  z-index: 2;
+}
+
+@keyframes fog-lift { to { opacity: 0; } }
+
+/* "You are here": a pulsing marker on the last room visited. */
+.you-are-here {
+  position: absolute;
+  top: -11px;
   left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.72rem;
+  z-index: 4;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  border-radius: 50%;
+  background: #e2533a;
+  border: 3px solid white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+  animation: here-pulse 1.8s ease-in-out infinite;
+}
+
+.entrance .you-are-here { top: -14px; }
+
+@keyframes here-pulse {
+  0%, 100% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 0 rgba(226, 83, 58, 0.55); }
+  50% { box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45), 0 0 0 8px rgba(226, 83, 58, 0); }
+}
+
+/* Door plates: the suggested order of the three core rooms. */
+.room-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: #fff3dc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  color: white;
+  background: var(--accent);
 }
 
-/* The extension: a small turret off the side of the tower, over a bridge. */
-.turret-col { margin-bottom: 76px; order: -1; }
-.turret { width: 88%; margin-inline-start: auto; }
-.turret-crown { height: 20px; margin: 0 -6px; background-size: 30px 12px, 100% 8px; background-position: 0 0, 0 12px; }
-
-.turret-body {
-  position: relative;
-  padding: 12px;
-  border-inline: 3px solid var(--stone-edge);
-  box-shadow: inset 10px 0 12px -10px rgba(60, 45, 20, 0.35), inset -10px 0 12px -10px rgba(60, 45, 20, 0.35);
-}
-
-.turret-corbel {
-  height: 34px;
-  clip-path: polygon(0 0, 100% 0, 62% 100%, 38% 100%);
-  border-top: 5px solid var(--stone-dark);
-}
-
-.bridge { display: none; }
-
-/* Each room is a chamber in the wall: an arched opening in a stone frame,
-   resting on a sill. */
+/* Each room is a patch of stone floor inside its walls; a thin inner line in
+   the room's colour tells the kinds apart. */
 .room-card {
-  --frame: 0 0 0 4px #d9cdb6, 0 0 0 5px var(--stone-edge, #8e8068), 0 6px 0 5px #9d8e72, 0 10px 16px rgba(50, 35, 10, 0.18);
+  --kind: var(--accent-tint-border);
+  --room-floor: var(--floor, #ebe4d5);
+  --frame: inset 0 0 0 2px var(--kind);
   position: relative;
-  background: var(--card-bg);
-  border: 2px solid var(--accent-tint-border);
-  border-radius: 24px 24px 8px 8px;
-  padding: 12px 16px;
+  background: var(--tiles), var(--room-floor);
+  border: 4px solid var(--wall, #5a4f40);
+  border-radius: 4px;
+  padding: 12px 14px;
   cursor: pointer;
   box-shadow: var(--frame);
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: filter 0.12s ease;
 }
 
-.room-card:hover { transform: translateY(-2px); }
+.room-card:hover { filter: brightness(1.05); }
 .room-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* A card with its popover open sits above its neighbours. */
@@ -407,39 +424,38 @@ button:disabled {
 .info-tag { font-weight: 600; }
 .info-note { color: var(--accent-hover); font-weight: 600; }
 
-.room-core { border-color: var(--accent); border-width: 2.5px; background: linear-gradient(135deg, #fff, var(--accent-tint)); }
+.room-core { --kind: var(--accent); --room-floor: #e6efe9; }
 .room-core .room-title { color: var(--accent-hover); }
 
-.room-prep { border-color: var(--warn-border); background: var(--warn-bg); }
+.room-prep { --kind: var(--warn-border); --room-floor: #f6ebd8; }
 .room-prep .room-title { color: #8a5a1e; }
 
-.room-ext { border-color: var(--ext-border); border-style: dashed; background: var(--ext-tint); }
+.room-ext { --kind: var(--ext-border); --room-floor: #ebe8f6; }
 
 /* Review: the gold capstone of the floor. */
-.room-review { border-color: var(--gold); border-width: 2.5px; background: linear-gradient(135deg, #fffdf5, var(--gold-bg)); }
+.room-review { --kind: var(--gold); --room-floor: #f5edd3; }
 .room-review .room-title { color: #7a5a00; }
 .room-review .mini-node:not(.boss) { border-color: var(--gold); }
 .room-review .mini-node:not(.boss).done { background: var(--gold); }
 .room-review .mini-node.current { box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.25); }
 .room-ext .room-title { color: var(--ext); }
 
-/* The next room to climb to: a torch glow that breathes. */
+/* The suggested next room: a torch glow that breathes. */
 .room-card.recommended { animation: torch 2.6s ease-in-out infinite; }
 
 @keyframes torch {
-  0%, 100% { box-shadow: var(--frame), 0 0 10px 8px rgba(13, 125, 114, 0.18); }
-  50% { box-shadow: var(--frame), 0 0 20px 12px rgba(13, 125, 114, 0.32); }
+  0%, 100% { box-shadow: var(--frame), 0 0 8px 4px rgba(93, 202, 165, 0.25); }
+  50% { box-shadow: var(--frame), 0 0 18px 9px rgba(93, 202, 165, 0.5); }
 }
 
 /* Half lit while the student is inside; fully lit, warm, once conquered. */
-.room-card.in-progress { background: linear-gradient(0deg, #fff1c9 0%, #fbf8f0 75%); }
+.room-card.in-progress { background: var(--tiles), linear-gradient(0deg, #fff1c9 0%, var(--room-floor) 75%); }
 .room-card.conquered {
-  border-style: solid;
-  background: radial-gradient(130% 150% at 50% 0%, #fffbef 0%, #fff0c4 60%, #ffe39b 100%);
+  background: var(--tiles), radial-gradient(130% 150% at 50% 0%, #fffbef 0%, #fff0c4 60%, #ffe39b 100%);
   box-shadow: var(--frame), inset 0 0 18px rgba(255, 186, 60, 0.35);
 }
 
-/* A banner hanging from the arch of a conquered chamber. */
+/* A banner hanging on the wall of a conquered room. */
 .conquered-flag {
   position: absolute;
   top: -9px;
@@ -453,23 +469,8 @@ button:disabled {
 .conquered-flag .cloth { fill: var(--good); }
 .conquered-flag .tick { fill: none; stroke: white; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Locked: greyed out (without a filter, so the popover keeps its colours). */
-/* Locked: a dark chamber behind bars. The popover keeps its own colours. */
-.room-card.locked {
-  background:
-    repeating-linear-gradient(90deg, transparent 0 24px, rgba(18, 16, 12, 0.55) 24px 28px),
-    radial-gradient(130% 150% at 50% 0%, #5c574c, #38352f);
-  border-color: #2e2b26;
-  border-style: solid;
-}
-.room-card.locked:hover { transform: none; }
-.room-card.locked .room-title, .room-card.locked .stars { color: #d3cbbb; }
-.room-card.locked .lock-icon { fill: #d3cbbb; stroke: #d3cbbb; }
-.room-card.locked .info-btn { color: #d3cbbb; }
-.room-card.locked .open-anyway { color: #e6dfd0; }
-.room-card.locked .open-anyway:hover { color: white; }
-.room-card.locked .mini-node { border-color: #9a9283; background: transparent; }
-.room-card.locked .mini-conn { background: #6b655a; }
+/* Locked rooms sit in the fog of the upper wing (see .wing.fogged). */
+.room-card.locked:hover { filter: none; }
 
 .lock-icon { width: 15px; height: 15px; fill: #9a948a; stroke: #9a948a; stroke-width: 1.6; flex: none; }
 .lock-icon path { fill: none; }
@@ -1037,36 +1038,19 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   .map-header { text-align: center; }
   .tower { max-width: 780px; --bridge-gap: 46px; }
 
-  /* The main tower and, beside it, the extension's turret joined by a bridge. */
-  .tower-wrap {
+  /* The floor plan proper: three room columns and the passage to the wing. */
+  .tower { max-width: 780px; }
+  .floor-map { padding: 18px 22px 22px; }
+  .floor-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) min(270px, 38%);
-    column-gap: var(--bridge-gap);
-    align-items: start;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 44px;
+    grid-template-rows: auto 16px auto 16px auto 16px auto 16px auto 16px auto;
+    column-gap: 16px;
+    gap: 0 16px;
   }
-
-  .tower-scene { padding: 76px 24px 0; }
-  .ground { margin: 0 -24px; }
-  .tower-body { padding: 16px 24px 22px; }
-  .tower-body::before { left: 7px; }
-  .tower-body::after { right: 7px; }
-  .turret-col { order: 0; margin: 59px 0 0; }
-  .turret { width: 100%; }
-
-  .bridge {
-    display: block;
-    position: absolute;
-    top: 50%;
-    inset-inline-start: calc(-3px - var(--bridge-gap));
-    width: calc(3px + var(--bridge-gap));
-    height: 12px;
-    margin-top: -6px;
-    background: repeating-linear-gradient(90deg, #9a6a3a 0 7px, #6e4520 7px 9px);
-    border-block: 2px solid #4e3219;
-    box-shadow: 0 3px 4px rgba(60, 40, 10, 0.25);
-  }
-
-  .floor-label { font-size: 0.92rem; margin-bottom: 18px; white-space: nowrap; }
+  .doorway, .passage { display: block; }
+  .cell > .room-card { height: 100%; }
+  .floor-label { font-size: 1rem; margin-bottom: 18px; }
 
   /* Room: a little wider, larger math and path. */
   #roomView, #conquestView { max-width: 760px; margin: 0 auto; }
@@ -1096,8 +1080,17 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-/* Narrow tablets: room for the turret beside the tower. */
+
+/* On the floor map, room names sit on one line where they can. */
+.floor-map .room-title { font-size: 1.02rem; }
+.floor-map .room-card { padding: 10px 12px; }
+.floor-map .room-head { gap: 5px; }
+
+/* Narrow tablets: tighter columns so the room names still fit. */
 @media (min-width: 760px) and (max-width: 940px) {
-  .tower { --bridge-gap: 30px; }
+  .floor-map { padding: 16px 14px 20px; }
+  .floor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) 34px; column-gap: 12px; }
+  .floor-map .room-title { font-size: 0.95rem; }
+  .floor-map .room-card { padding: 9px 10px; }
   .floor-en { display: none; }
 }
