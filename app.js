@@ -386,6 +386,8 @@ const GENERATORS = {
   nmFactored: () => ({ Q: [], terms: nonMonicTerms(), display: "factored" }),
   nmExpanded: () => ({ Q: [], terms: nonMonicTerms(), display: "expanded" }),
   nmDivide: () => ({ Q: [nonZero(-3, 3)], terms: nonMonicTerms(), display: "expanded" }),
+  nmRepeated: () => generateNonMonicRepeated(),
+  nmIrreducible: () => generateNonMonicIrreducible(),
   // repeated root (x - a)^2, solved by substitution
   repFactored: () => ({ ...generateRepeated([]), display: "factored" }),
   repExpanded: () => ({ ...generateRepeated([]), display: "expanded" }),
@@ -446,6 +448,8 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "nmr") return nmrProblemLatex(p);
+  if (p.kind === "nmi") return nmiProblemLatex(p);
   if (p.kind === "irr") return irrProblemLatex(p);
   if (p.kind === "rep") return repProblemLatex(p);
   return `\\int \\frac{${polyLatex(numeratorPoly(p))}}{${shownDenLatex(p)}}\\,dx`;
@@ -465,6 +469,8 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "nmr") return nmrAntiderivativeLatex(p);
+  if (p.kind === "nmi") return nmiAntiderivativeLatex(p);
   if (p.kind === "irr") return irrAntiderivativeLatex(p);
   if (p.kind === "rep") return repAntiderivativeLatex(p);
   let out = "";
@@ -478,6 +484,8 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "nmr") return nmrSolutionLatex(p);
+  if (p.kind === "nmi") return nmiSolutionLatex(p);
   if (p.kind === "irr") return irrSolutionLatex(p);
   if (p.kind === "rep") return repSolutionLatex(p);
   const lines = [problemLatex(p)];
@@ -754,17 +762,146 @@ function irrNearMissVariants(q) {
 }
 
 // ---------------------------------------------------------------------------
+// Non-monic repeated root and irreducible quadratic (the ◆ extension room)
+//
+// One idea in both: substitute t = m x + n, so dx = dt/m. The leading
+// coefficient is a perfect square (4x^2, 9x^2), so the factor or the
+// completed square is (m x + n) with m = 2 or 3 and whole numbers only.
+// ---------------------------------------------------------------------------
+
+// Repeated: (m x - n)^2. Answer first: integrand A m/(m x - n) + B m/(m x - n)^2,
+// answer A ln|m x - n| - B/(m x - n) + C; after t = m x - n the numerator is
+// A m t + B m, and the 1/m from dx cancels the m.
+// Problem: { kind: "nmr", m, n, A, B }
+function generateNonMonicRepeated() {
+  let m, n;
+  do {
+    m = randInt(2, 3);
+    n = nonZero(-5, 5);
+  } while (gcd(m, n) !== 1);
+  return { kind: "nmr", m, n, A: chance(0.2) ? 0 : nonZero(-5, 5), B: nonZero(-6, 6) };
+}
+
+const nmrFactorLatex = (p) => mxLatex(p.m, p.n); // "m x - n"
+const nmrNumeratorPoly = ({ m, n, A, B }) => trimPoly([B * m - A * m * n, A * m * m]);
+const nmrDenPoly = ({ m, n }) => [n * n, -2 * m * n, m * m];
+
+function nmrProblemLatex(p) {
+  return `\\int \\frac{${polyLatex(nmrNumeratorPoly(p))}}{${polyLatex(nmrDenPoly(p))}}\\,dx`;
+}
+
+const nmrAntiderivativeLatex = (p) => repIntegratedLatex(p, nmrFactorLatex(p));
+
+function nmrSolutionLatex(p) {
+  const factor = nmrFactorLatex(p);
+  const rows = [
+    `&= \\int \\frac{${polyLatex(nmrNumeratorPoly(p))}}{(${factor})^2}\\,dx`,
+    `&\\qquad \\left[\\,t=${factor},\\ \\ dx=\\frac{dt}{${p.m}}\\,\\right]`,
+    `&= \\int \\frac{${polyLatex(trimPoly([p.B * p.m, p.A * p.m]), "t")}}{t^2}\\cdot\\frac{dt}{${p.m}}`,
+    `&= \\int \\frac{${polyLatex(trimPoly([p.B, p.A]), "t")}}{t^2}\\,dt`,
+    `&= \\int\\left(${repSplitLatex(p)}\\right)dt`,
+    `&= ${repIntegratedLatex(p, "t")}`,
+    `&= ${nmrAntiderivativeLatex(p)}`,
+  ];
+  return `\\begin{aligned}${nmrProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+const nmrIntegrandFn = ({ m, n, A, B }) => (x) => {
+  const u = m * x - n;
+  return (A * m) / u + (B * m) / (u * u);
+};
+
+function nmrNearMissVariants(p) {
+  const variants = [
+    { kind: "subFactor", problem: { ...p, A: p.A * p.m, B: p.B * p.m } }, // dx = dt/m forgotten
+    { kind: "repLn", problem: { ...p, A: p.A + p.B, B: 0 } },
+    { kind: "repSign", problem: { ...p, B: -p.B } },
+  ];
+  if (p.A) variants.push({ kind: "sign", problem: { ...p, A: -p.A } });
+  return variants;
+}
+
+// Irreducible: (m x + p)^2 + k^2. Answer first: c ln((m x + p)^2 + k^2) +
+// d arctan((m x + p)/k) + C; after t = m x + p the integrand is
+// (2c m t + d k m)/(t^2 + k^2), and dx = dt/m leaves (2c t + d k)/(t^2 + k^2).
+// Problem: { kind: "nmi", m, p, k, c, d }  (+ ka in near-miss variants)
+function generateNonMonicIrreducible() {
+  let m, p, c, d;
+  do {
+    m = randInt(2, 3);
+    p = nonZero(-5, 5);
+  } while (gcd(m, p) !== 1); // otherwise the whole denominator has a common factor
+  do {
+    c = chance(0.2) ? 0 : nonZero(-3, 3);
+    d = chance(0.2) ? 0 : nonZero(-3, 3);
+  } while (c === 0 && d === 0);
+  return { kind: "nmi", m, p, k: randInt(1, 3), c, d };
+}
+
+const nmiShift = (q) => mxLatex(q.m, -q.p); // "m x + p"
+const nmiDenPoly = ({ m, p, k }) => [p * p + k * k, 2 * m * p, m * m];
+const nmiNumeratorPoly = ({ m, p, k, c, d }) => trimPoly([2 * c * m * p + d * k * m, 2 * c * m * m]);
+const nmiSquareLatex = (q) => `(${nmiShift(q)})^2+${q.k * q.k}`;
+
+function nmiProblemLatex(q) {
+  return `\\int \\frac{${polyLatex(nmiNumeratorPoly(q))}}{${polyLatex(nmiDenPoly(q))}}\\,dx`;
+}
+
+const nmiAntiderivativeLatex = (q) => irrLogAtanLatex(q, polyLatex(nmiDenPoly(q)), nmiShift(q)) + "+C";
+
+function nmiSolutionLatex(q) {
+  const tDen = `t^2+${q.k * q.k}`;
+  const rows = [
+    `&= \\int \\frac{${polyLatex(nmiNumeratorPoly(q))}}{${nmiSquareLatex(q)}}\\,dx`,
+    `&\\qquad \\left[\\,t=${nmiShift(q)},\\ \\ dx=\\frac{dt}{${q.m}}\\,\\right]`,
+    `&= \\int \\frac{${polyLatex(trimPoly([q.d * q.k * q.m, 2 * q.c * q.m]), "t")}}{${tDen}}\\cdot\\frac{dt}{${q.m}}`,
+    `&= \\int \\frac{${polyLatex(trimPoly([q.d * q.k, 2 * q.c]), "t")}}{${tDen}}\\,dt`,
+  ];
+  if (q.c && q.d) {
+    rows.push(`&= \\int\\left(${signLatex(q.c, true)}\\frac{${Math.abs(2 * q.c)}t}{${tDen}}${signLatex(q.d, false)}\\frac{${Math.abs(q.d * q.k)}}{${tDen}}\\right)dt`);
+  }
+  rows.push(`&= ${irrLogAtanLatex(q, tDen, "t")}+C`);
+  rows.push(`&= ${irrLogAtanLatex(q, nmiSquareLatex(q), nmiShift(q))}+C`);
+  return `\\begin{aligned}${nmiProblemLatex(q)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+function nmiIntegrandFn(q) {
+  const ka = q.ka ?? q.k;
+  return (x) => {
+    const t = q.m * x + q.p;
+    return (2 * q.c * q.m * t) / (t * t + q.k * q.k) + (q.d * q.m * ka) / (t * t + ka * ka);
+  };
+}
+
+function nmiNearMissVariants(q) {
+  const variants = [{ kind: "subFactor", problem: { ...q, c: q.c * q.m, d: q.d * q.m } }]; // dx = dt/m forgotten
+  if (q.c) variants.push({ kind: "lnHalf", problem: { ...q, c: 2 * q.c } });
+  if (q.d && q.k !== 1) {
+    variants.push({ kind: "atanCoef", problem: { ...q, d: q.d * q.k } });
+    variants.push({ kind: "atanArg", problem: { ...q, ka: 1 } });
+  }
+  if (q.c) variants.push({ kind: "sign", problem: { ...q, c: -q.c } });
+  if (q.d) variants.push({ kind: "sign", problem: { ...q, d: -q.d } });
+  variants.push({ kind: "squareSign", problem: { ...q, p: -q.p } });
+  return variants;
+}
+
+// ---------------------------------------------------------------------------
 // Checking: differentiate the student's answer numerically and compare it
 // with the integrand on every interval between the poles.
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "nmr") return nmrIntegrandFn(p);
+  if (p.kind === "nmi") return nmiIntegrandFn(p);
   if (p.kind === "irr") return irrIntegrandFn(p);
   if (p.kind === "rep") return repIntegrandFn(p);
   return (x) => polyEval(p.Q, x) + p.terms.reduce((s, t) => s + (t.A * t.m) / (t.m * x - t.n), 0);
 }
 
 function sampleZones(p) {
+  if (p.kind === "nmr") return sampleZones({ kind: "rep", a: p.n / p.m });
+  if (p.kind === "nmi") return irrSampleZones({ p: p.p / p.m });
   if (p.kind === "irr") return irrSampleZones(p);
   const poles = p.kind === "rep" ? [p.a] : p.terms.map((t) => t.n / t.m).sort((a, b) => a - b);
   const zones = [[poles[0] - 6, poles[0] - 1], [poles[poles.length - 1] + 1, poles[poles.length - 1] + 6]];
@@ -786,6 +923,8 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "nmr") return nmrNearMissVariants(p);
+  if (p.kind === "nmi") return nmiNearMissVariants(p);
   if (p.kind === "irr") return irrNearMissVariants(p);
   if (p.kind === "rep") return repNearMissVariants(p);
   const variants = [];
@@ -877,6 +1016,7 @@ const NEAR_MISS_TEXT = {
   lnHalf: `כמעט! חסר חצי לפני ה-${ltr("ln")}: ${ltr("∫ t/(t²+k²) dt = ½·ln(t²+k²)")}.`,
   atanCoef: `כמעט! בדקו את המקדם לפני ה-${ltr("arctan")}: ${ltr("∫ dt/(t²+k²) = (1/k)·arctan(t/k)")}.`,
   atanArg: `כמעט! בדקו את מה שבתוך ה-${ltr("arctan")}: צריך ${ltr("arctan(t/k)")} ולא ${ltr("arctan(t)")}.`,
+  subFactor: `כמעט! לא לשכוח: ${ltr("t = mx+n")} ולכן ${ltr("dx = dt/m")} - חסר המקדם ${ltr("1/m")}.`,
   squareSign: `כמעט! בדקו את הסימן בהשלמה לריבוע - ${ltr("(x+p)²")} או ${ltr("(x−p)²")}?`,
 };
 
@@ -954,16 +1094,16 @@ const ROOMS = [
   {
     id: "nonmonic",
     kind: "ext",
-    title: "◆ לא מתוקן",
+    title: "◆ מקדם ל-x",
     en: "Non-monic",
     tag: "הרחבה",
     stars: 2,
-    requires: "pf1",
-    blurb: 'חדש כאן: מכנה כמו <bdi dir="ltr">(2x−1)(x+3)</bdi>, והמקדם שלפני ה-<bdi dir="ltr">ln</bdi>.',
+    requires: ["repeated", "pf1", "irreducible"],
+    blurb: 'כשיש מקדם ל-x בגורם, כמו <bdi dir="ltr">(2x+1)</bdi>: מציבים <bdi dir="ltr">t = 2x+1</bdi>, ואז <bdi dir="ltr">dx = dt/2</bdi>. תרגיל אחד מכל סוג: שורשים שונים, שורש כפול, מכנה שלא מתפרק.',
     nodes: [
-      { gen: "nmFactored", title: "לא מתוקן, מכנה מפורק" },
-      { gen: "nmExpanded", title: "לא מתוקן, מכנה לפירוק" },
-      { gen: "nmDivide", title: "לא מתוקן, פירוק + חילוק" },
+      { gen: "nmExpanded", title: "שורשים שונים" },
+      { gen: "nmRepeated", title: "שורש כפול" },
+      { gen: "nmIrreducible", title: "מכנה שלא מתפרק" },
     ],
   },
 ];
@@ -1116,14 +1256,14 @@ function renderMap() {
     <div class="tower-body">
       <div class="floor-label">קומה 1 · פונקציות רציונליות <span dir="ltr">(rational functions)</span></div>
       <div class="floor-rooms">
-        <div class="area-review">${roomCardHtml(review)}</div>
-        <div class="conn area-connR" aria-hidden="true"></div>
-        <div class="area-irr">${roomCardHtml(irr)}</div>
-        <div class="conn area-conn0" aria-hidden="true"></div>
         <div class="branch area-ext">
           ${roomCardHtml(ext)}
           <div class="conn dashed branch-conn" aria-hidden="true"></div>
         </div>
+        <div class="area-review">${roomCardHtml(review)}</div>
+        <div class="conn area-connR" aria-hidden="true"></div>
+        <div class="area-irr">${roomCardHtml(irr)}</div>
+        <div class="conn area-conn0" aria-hidden="true"></div>
         <div class="area-core">${roomCardHtml(core)}</div>
         <div class="conn area-conn" aria-hidden="true"></div>
         <div class="area-rep">${roomCardHtml(rep)}</div>
@@ -1594,9 +1734,9 @@ function showConquest(room, { score, prevBest, wins }) {
   const next = {
     division: "הבא: שורש כפול",
     repeated: "הבא: שברים חלקיים I",
-    pf1: "הבא: מכנה שלא מתפרק · או ◆ לא מתוקן (הרחבה)",
-    irreducible: "הבא: חזרה (אופציונלי) · או ◆ לא מתוקן (הרחבה)",
-    review: "כבשת את קומה 1!",
+    pf1: "הבא: מכנה שלא מתפרק",
+    irreducible: "הבא: חזרה (אופציונלי) · או ◆ מקדם ל-x (הרחבה)",
+    review: "כבשת את קומה 1! · אפשר גם ◆ מקדם ל-x (הרחבה)",
     nonmonic: "כבשת את ההרחבה!",
   }[room.id];
 

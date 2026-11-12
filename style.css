@@ -899,11 +899,11 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
     grid-template-areas:
-      "review ."
+      "review ext"
       "connR ."
       "irr ."
       "conn0 ."
-      "core ext"
+      "core ."
       "conn ."
       "rep ."
       "conn2 ."
