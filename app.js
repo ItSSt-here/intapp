@@ -372,6 +372,10 @@ const GENERATORS = {
   nmFactored: () => ({ Q: [], terms: nonMonicTerms(), display: "factored" }),
   nmExpanded: () => ({ Q: [], terms: nonMonicTerms(), display: "expanded" }),
   nmDivide: () => ({ Q: [nonZero(-3, 3)], terms: nonMonicTerms(), display: "expanded" }),
+  // repeated root (x - a)^2, solved by substitution
+  repFactored: () => ({ ...generateRepeated(false), display: "factored" }),
+  repExpanded: () => ({ ...generateRepeated(false), display: "expanded" }),
+  repDegree2: () => ({ ...generateRepeated(true), display: "expanded" }),
 };
 
 // --- LaTeX ------------------------------------------------------------------
@@ -382,20 +386,20 @@ function fmtSigned(n, isFirst) {
 }
 
 const signLatex = (c, isFirst) => (c < 0 ? "-" : isFirst ? "" : "+");
-const xPower = (k) => (k === 0 ? "" : k === 1 ? "x" : `x^${k}`);
+const xPower = (k, v = "x") => (k === 0 ? "" : k === 1 ? v : `${v}^${k}`);
 
 // "m x - n" (m = 1 and n = 0 are dropped).
 function mxLatex(m, n) {
   return `${m === 1 ? "" : m}x${n === 0 ? "" : fmtSigned(-n, false)}`;
 }
 
-function polyLatex(p) {
+function polyLatex(p, v = "x") {
   let out = "";
   for (let k = p.length - 1; k >= 0; k--) {
     const c = p[k];
     if (c === 0) continue;
     const abs = Math.abs(c);
-    out += signLatex(c, out === "") + (k > 0 && abs === 1 ? "" : abs) + xPower(k);
+    out += signLatex(c, out === "") + (k > 0 && abs === 1 ? "" : abs) + xPower(k, v);
   }
   return out || "0";
 }
@@ -424,6 +428,7 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "rep") return repProblemLatex(p);
   return `\\int \\frac{${polyLatex(numeratorPoly(p))}}{${shownDenLatex(p)}}\\,dx`;
 }
 
@@ -441,6 +446,7 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "rep") return repAntiderivativeLatex(p);
   let out = "";
   for (let k = p.Q.length - 1; k >= 0; k--) out += fracMonomialLatex(p.Q[k], k + 1, k + 1, out === "");
   for (const t of p.terms) {
@@ -452,6 +458,7 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "rep") return repSolutionLatex(p);
   const lines = [problemLatex(p)];
   const q = p.Q.length ? polyLatex(p.Q) : "";
   const R = remainderPoly(p);
@@ -468,16 +475,125 @@ function solutionLatex(p) {
 }
 
 // ---------------------------------------------------------------------------
+// Repeated root: denominator (x - a)^2, solved by substituting t = x - a
+//
+// Answer first: after t = x - a the integrand is (q t^2 + A t + B) / t^2
+// = q + A/t + B/t^2, so the answer is q x + A ln|x - a| - B/(x - a) + C.
+// A degree-2 numerator could go straight into the substitution, but the
+// worked solution divides first - the order students are taught.
+// Problem: { kind: "rep", a, q, A, B, display }
+// ---------------------------------------------------------------------------
+
+function generateRepeated(withQ) {
+  return {
+    kind: "rep",
+    a: nonZero(-5, 5), // a root at 0 would make t = x: nothing to substitute
+    q: withQ ? nonZero(-3, 3) : 0,
+    A: chance(0.2) ? 0 : nonZero(-6, 6), // A = 0: constant numerator, no ln at all
+    B: nonZero(-9, 9),
+  };
+}
+
+// N(x) = q (x - a)^2 + A (x - a) + B
+function repNumeratorPoly({ a, q, A, B }) {
+  return trimPoly([q * a * a - A * a + B, A - 2 * q * a, q]);
+}
+
+const repTPoly = (p) => [p.B, p.A, p.q]; // the numerator in t: q t^2 + A t + B
+const repFactorLatex = (p) => mxLatex(1, p.a); // "x - a"
+const repDenLatex = (p) =>
+  p.display === "expanded" ? polyLatex([p.a * p.a, -2 * p.a, 1]) : `(${repFactorLatex(p)})^2`;
+
+function repProblemLatex(p) {
+  return `\\int \\frac{${polyLatex(repNumeratorPoly(p))}}{${repDenLatex(p)}}\\,dx`;
+}
+
+// poly(x) with every x replaced by (base) - the substitution written out.
+function polyInLatex(poly, base) {
+  let out = "";
+  for (let k = poly.length - 1; k >= 0; k--) {
+    const c = poly[k];
+    if (c === 0) continue;
+    const abs = Math.abs(c);
+    out += signLatex(c, out === "") + (k > 0 && abs === 1 ? "" : abs) + (k === 0 ? "" : k === 1 ? base : `${base}^${k}`);
+  }
+  return out || "0";
+}
+
+// q + A/t + B/t^2
+function repSplitLatex(p) {
+  let out = p.q ? polyLatex([p.q]) : "";
+  if (p.A) out += `${signLatex(p.A, out === "")}\\frac{${Math.abs(p.A)}}{t}`;
+  return out + `${signLatex(p.B, out === "")}\\frac{${Math.abs(p.B)}}{t^2}`;
+}
+
+// q·lin + A ln|u| - B/u + C, where u is "t" or "x - a" and lin is what q
+// multiplies ("t", "(x - a)" when substituting back, or plain "x").
+function repIntegratedLatex(p, u, lin) {
+  let out = "";
+  if (p.q) out += signLatex(p.q, true) + (Math.abs(p.q) === 1 ? "" : Math.abs(p.q)) + lin;
+  if (p.A) out += signLatex(p.A, out === "") + (Math.abs(p.A) === 1 ? "" : Math.abs(p.A)) + `\\ln|${u}|`;
+  return out + `${signLatex(-p.B, out === "")}\\frac{${Math.abs(p.B)}}{${u}}+C`;
+}
+
+const repAntiderivativeLatex = (p) => repIntegratedLatex(p, repFactorLatex(p), "x");
+
+// Worked solution by substitution. A degree-2 numerator is divided first
+// (N/(x-a)^2 = q + R/(x-a)^2), so the substitution only meets the
+// remainder R(x) = A(x - a) + B; then factor, substitute, split, integrate
+// and substitute back.
+function repSolutionLatex(p) {
+  const factor = repFactorLatex(p);
+  const rows = [];
+  const plus = (a, b) => (a && !b.startsWith("-") ? `${a}+${b}` : `${a}${b}`);
+  const rest = { ...p, q: 0 }; // what is left for the substitution
+  const R = repNumeratorPoly(rest);
+  const qx = p.q ? fracMonomialLatex(p.q, 1, 1, true) : ""; // ∫q dx = q x
+  const intR = (den) => `\\int \\frac{${polyLatex(R)}}{${den}}\\,dx`;
+
+  if (p.q) {
+    rows.push(`&= \\int\\left(${polyLatex([p.q])}${fracTermLatex(R, repDenLatex(p))}\\right)dx`);
+    if (p.display === "expanded") rows.push(`&= \\int\\left(${polyLatex([p.q])}${fracTermLatex(R, `(${factor})^2`)}\\right)dx`);
+    rows.push(`&= ${plus(qx, intR(`(${factor})^2`))}`);
+  } else if (p.display === "expanded") {
+    rows.push(`&= ${intR(`(${factor})^2`)}`);
+  }
+  rows.push(`&\\qquad \\left[\\,t=${factor},\\ \\ x=t${fmtSigned(p.a, false)},\\ \\ dx=dt\\,\\right]`);
+  const substituted = polyInLatex(R, `(t${fmtSigned(p.a, false)})`);
+  const inT = polyLatex(repTPoly(rest), "t");
+  rows.push(`&= ${plus(qx, `\\int \\frac{${substituted}}{t^2}\\,dt`)}`);
+  if (inT !== substituted) rows.push(`&= ${plus(qx, `\\int \\frac{${inT}}{t^2}\\,dt`)}`);
+  rows.push(`&= ${plus(qx, `\\int\\left(${repSplitLatex(rest)}\\right)dt`)}`);
+  rows.push(`&= ${plus(qx, repIntegratedLatex(rest, "t", "t"))}`);
+  rows.push(`&= ${repAntiderivativeLatex(p)}`);
+  return `\\begin{aligned}${repProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+const repIntegrandFn = ({ a, q, A, B }) => (x) => q + A / (x - a) + B / ((x - a) * (x - a));
+
+function repNearMissVariants(p) {
+  const variants = [
+    { kind: "repLn", problem: { ...p, A: p.A + p.B, B: 0 } }, // B/t^2 integrated as B ln|t|
+    { kind: "repSign", problem: { ...p, B: -p.B } }, // +B/t instead of -B/t
+  ];
+  if (p.A) variants.push({ kind: "sign", problem: { ...p, A: -p.A } });
+  variants.push({ kind: "subSign", problem: { ...p, a: -p.a } }); // t = x + a instead of x - a
+  if (p.q) variants.push({ kind: "repConst", problem: { ...p, q: 0 } });
+  return variants;
+}
+
+// ---------------------------------------------------------------------------
 // Checking: differentiate the student's answer numerically and compare it
 // with the integrand on every interval between the poles.
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "rep") return repIntegrandFn(p);
   return (x) => polyEval(p.Q, x) + p.terms.reduce((s, t) => s + (t.A * t.m) / (t.m * x - t.n), 0);
 }
 
 function sampleZones(p) {
-  const poles = p.terms.map((t) => t.n / t.m).sort((a, b) => a - b);
+  const poles = p.kind === "rep" ? [p.a] : p.terms.map((t) => t.n / t.m).sort((a, b) => a - b);
   const zones = [[poles[0] - 6, poles[0] - 1], [poles[poles.length - 1] + 1, poles[poles.length - 1] + 6]];
   for (let i = 0; i + 1 < poles.length; i++) {
     const gap = poles[i + 1] - poles[i];
@@ -497,6 +613,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "rep") return repNearMissVariants(p);
   const variants = [];
   const replace = (i, t) => ({ ...p, terms: p.terms.map((u, j) => (j === i ? t : u)) });
   if (p.terms.length === 2 && p.terms[0].A !== p.terms[1].A) {
@@ -520,6 +637,8 @@ function nearMissVariants(p) {
 
 // -> { status: "unreadable" } | { status: "correct" } | { status: "wrong", nearMiss? }
 function checkAnswer(p, latex) {
+  // Still in the substitution variable: a reminder, not a mistake.
+  if (/t/.test(latex.replace(/\\[a-zA-Z]+/g, ""))) return { status: "unreadable", reason: "t" };
   let F;
   try {
     F = buildEvaluator(latex);
@@ -575,6 +694,10 @@ const NEAR_MISS_TEXT = {
   lnSign: `כמעט! יש טעות סימן בתוך אחד ה-${ltr("ln")} - בדקו את השורש של הגורם.`,
   lnFactor: `כמעט! בדקו את המקדם שלפני ה-${ltr("ln")}: הנגזרת של ${ltr("ln|mx−n|")} היא ${ltr("m/(mx−n)")}.`,
   quotient: `כמעט! חסר החלק הפולינומי - המנה (${ltr("quotient")}) מהחילוק.`,
+  repLn: `כמעט! האינטגרל של ${ltr("1/t²")} הוא לא ${ltr("ln")}: ${ltr("∫t⁻² dt = −t⁻¹ = −1/t")}.`,
+  repSign: `כמעט! בדקו את הסימן של האיבר עם ${ltr("1/t")}: ${ltr("∫t⁻² dt = −1/t")}.`,
+  subSign: `כמעט! בדקו את הסימן בהצבה: האם ${ltr("t = x+a")} או ${ltr("t = x−a")}?`,
+  repConst: `כמעט! חסר החלק הפולינומי - המנה (${ltr("quotient")}) מהחילוק.`,
 };
 
 // ---------------------------------------------------------------------------
@@ -592,6 +715,19 @@ const ROOMS = [
     nodes: [
       { gen: "div1", title: "חילוק במכנה לינארי" },
       { gen: "div2", title: "חילוק במכנה לינארי - עוד אחד" },
+    ],
+  },
+  {
+    id: "repeated",
+    kind: "core",
+    title: "שורש כפול",
+    en: "Repeated root",
+    tag: "ליבה · הצבה",
+    blurb: 'מכנה כמו <bdi dir="ltr">(x+3)²</bdi>. מציבים <bdi dir="ltr">t = x+3</bdi>, והאינטגרל מתפרק לאינטגרלים של <bdi dir="ltr">1/t</bdi> ושל <bdi dir="ltr">1/t²</bdi>. כשהמונה ממעלה 2 - קודם חילוק פולינומים.',
+    nodes: [
+      { gen: "repFactored", title: "מכנה מפורק" },
+      { gen: "repExpanded", title: "מכנה לפירוק (ריבוע שלם)" },
+      { gen: "repDegree2", title: "קודם חילוק: מונה ממעלה 2" },
     ],
   },
   {
@@ -667,6 +803,7 @@ function isLocked(room) {
 }
 
 function recommendedRoomId() {
+  if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("nonmonic")) return "nonmonic";
   return null;
@@ -757,7 +894,7 @@ function roomCardHtml(room) {
 }
 
 function renderMap() {
-  const [prep, core, ext] = ["division", "pf1", "nonmonic"].map((id) => ROOM_BY_ID[id]);
+  const [prep, rep, core, ext] = ["division", "repeated", "pf1", "nonmonic"].map((id) => ROOM_BY_ID[id]);
   towerEl.innerHTML = `
     <div class="tower-crown" aria-hidden="true"></div>
     <div class="tower-body">
@@ -769,6 +906,8 @@ function renderMap() {
         </div>
         <div class="area-core">${roomCardHtml(core)}</div>
         <div class="conn area-conn" aria-hidden="true"></div>
+        <div class="area-rep">${roomCardHtml(rep)}</div>
+        <div class="conn area-conn2" aria-hidden="true"></div>
         <div class="area-prep">${roomCardHtml(prep)}</div>
       </div>
     </div>
@@ -828,7 +967,7 @@ let lockDialogRoom = null;
 function openLockDialog(roomId) {
   lockDialogRoom = roomId;
   const room = ROOM_BY_ID[roomId];
-  const rec = ROOM_BY_ID[recommendedRoomId()] || ROOM_BY_ID[room.requires];
+  const rec = ROOM_BY_ID[room.requires]; // the room this one builds on
   $("lockDialogText").textContent =
     `החדר "${room.title}" בנוי על "${ROOM_BY_ID[room.requires].title}". ` +
     `מומלץ לכבוש קודם את "${rec.title}" - אבל אפשר גם לנסות כבר עכשיו.`;
@@ -1075,7 +1214,9 @@ checkBtn.addEventListener("click", () => {
 
   if (result.status === "unreadable") {
     setAnswerState("unreadable");
-    setFeedback("לא הצלחנו לקרוא את התשובה - זה לא נחשב טעות, לא ירדו נקודות. נסו לכתוב אותה בצורה פשוטה יותר.", "unreadable");
+    setFeedback(result.reason === "t"
+      ? "נראה שהתשובה עדיין במשתנה t - צריך להחזיר את t ל-x בסוף. (לא ירדו נקודות.)"
+      : "לא הצלחנו לקרוא את התשובה - זה לא נחשב טעות, לא ירדו נקודות. נסו לכתוב אותה בצורה פשוטה יותר.", "unreadable");
     return;
   }
 
@@ -1220,7 +1361,8 @@ function showConquest(room, { score, prevBest, wins }) {
   else bestLine = `הציון הפעם: <b>${score}</b> · השיא שלך: <b>${prevBest}</b>`;
 
   const next = {
-    division: "הבא: שברים חלקיים I",
+    division: "הבא: שורש כפול",
+    repeated: "הבא: שברים חלקיים I",
     pf1: "הבא: ◆ לא מתוקן (הרחבה, אופציונלי)",
     nonmonic: "סיימת את כל קומה 1!",
   }[room.id];

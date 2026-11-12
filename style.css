@@ -894,6 +894,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
     grid-template-areas:
       "core ext"
       "conn ."
+      "rep ."
+      "conn2 ."
       "prep .";
     column-gap: 48px;
     align-items: center;
@@ -901,6 +903,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 
   .area-core { grid-area: core; }
   .area-conn { grid-area: conn; }
+  .area-rep { grid-area: rep; }
+  .area-conn2 { grid-area: conn2; }
   .area-prep { grid-area: prep; }
 
   .branch {
