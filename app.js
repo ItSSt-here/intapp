@@ -1860,6 +1860,10 @@ function enterRoom(id) {
   view.pending = null;
   $("roomName").textContent = room.title;
   $("roomEn").textContent = room.en;
+  $("roomLabel").textContent = room.label || "";
+  $("roomLabel").hidden = !room.label;
+  // The header is a patch of this room's floor, framed like its card on the map.
+  $("roomHeader").className = `room-header room-${room.kind}`;
   roomView.classList.toggle("in-ext-room", room.kind === "ext");
   buildPath(room);
   showView(roomView);

@@ -20,11 +20,13 @@
 
     <!-- Room -->
     <section id="roomView" class="view" hidden>
+      <div class="room-header" id="roomHeader">
       <div class="room-bar">
         <button type="button" id="backBtn" class="link-btn">→ למפה</button>
         <div class="room-name-wrap">
-          <div class="room-name" id="roomName"></div>
+          <div class="room-name room-title" id="roomName"></div>
           <div class="room-name-en" id="roomEn" dir="ltr"></div>
+          <div class="room-label" id="roomLabel" hidden></div>
         </div>
         <div class="score-wrap" id="scoreWrap">
           <span class="score-label">ניקוד</span>
@@ -35,6 +37,7 @@
 
       <div class="path" id="path"></div>
       <div class="node-caption" id="nodeCaption"></div>
+      </div>
 
       <div id="problemCardSlot">
         <div class="card problem-card" id="problemCard">

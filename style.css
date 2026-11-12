@@ -680,6 +680,61 @@ button:disabled {
 /* Room: top bar and node path                                            */
 /* ---------------------------------------------------------------------- */
 
+/* The top of a room: a patch of the room's own floor inside thick stone
+   walls, framed in the room's colour like its card on the map, with a torch
+   on each side wall. The exercise below stays on plain light paper. */
+.room-header {
+  --kind: var(--accent-tint-border);
+  --room-floor: #ebe4d5;
+  --tiles: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34'%3E%3Cpath d='M0 .5H34M.5 0V34' stroke='%23503c1e' stroke-opacity='.11' fill='none'/%3E%3Cpath d='M17 .5V17M0 17.5H17' stroke='%23503c1e' stroke-opacity='.05' fill='none'/%3E%3C/svg%3E");
+  position: relative;
+  margin-bottom: 18px;
+  padding: 10px 16px 4px;
+  background: var(--tiles), var(--room-floor);
+  border: 6px solid #5a4f40;
+  border-radius: 6px;
+  box-shadow:
+    inset 0 0 0 2px var(--kind),
+    inset 0 0 26px rgba(80, 60, 30, 0.14),
+    0 4px 0 #2c2721,
+    0 8px 16px rgba(44, 39, 33, 0.22);
+  transition: border-color 0.6s ease, box-shadow 0.6s ease;
+}
+
+.room-header::before,
+.room-header::after {
+  content: "";
+  position: absolute;
+  top: 38%;
+  width: 9px;
+  height: 14px;
+  border-radius: 50% 50% 45% 45%;
+  background: radial-gradient(circle at 50% 70%, #fff3c4, #ffb23f 55%, #e0631c);
+  box-shadow: 0 0 12px 6px rgba(255, 160, 50, 0.4);
+  animation: torch-flicker 1.8s ease-in-out infinite;
+}
+.room-header::before { left: -8px; }
+.room-header::after { right: -8px; animation-delay: -0.9s; }
+
+.room-header .room-label { margin-top: 3px; }
+.room-header .room-name-en,
+.room-header .score-label,
+.room-header .node-caption { color: #6b5a3c; }
+.room-header .link-btn { color: #5b4a2c; }
+.room-header .link-btn:hover { color: var(--text); }
+.room-header .path { padding-top: 18px; }
+.room-header .node-caption { margin: 6px 0 6px; }
+
+/* Room cleared: the walls turn gold, like the room's card on the map. */
+#roomView.room-cleared .room-header {
+  border-color: #c9971c;
+  box-shadow:
+    inset 0 0 0 2px #f2c94c,
+    inset 0 0 22px rgba(255, 186, 60, 0.4),
+    0 4px 0 #8a6a12,
+    0 0 22px 4px rgba(240, 180, 40, 0.45);
+}
+
 .room-bar {
   display: flex;
   align-items: center;
