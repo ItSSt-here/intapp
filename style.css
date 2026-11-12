@@ -1849,7 +1849,7 @@ body { overflow-x: clip; }
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
     grid-template-columns: 104px 76px minmax(0, 1fr) 76px minmax(0, 1fr) 76px 130px;
-    grid-template-rows: auto;
+    grid-template-rows: auto 34px auto;
     gap: 0;
   }
   .hall {
@@ -1864,6 +1864,22 @@ body { overflow-x: clip; }
   .floor-basic > .cell { z-index: 6; }
   .floor-basic > .cell:has(.info-wrap.open, .info-wrap:hover) { z-index: 8; }
   .floor-basic .entrance { align-self: center; padding-top: 18px; }
+  /* The extension room, above the last hall, wider than the hall's column. */
+  .floor-basic .ext-cell { justify-self: center; width: 230px; }
+  /* The last hall and the side hall up to the extension room: the hall sits
+     level with the line (row 3), the side hall rises from it. */
+  .hall-branch { display: grid; grid-template-rows: 34px 1fr 50px 1fr; }
+  .hall-branch .hall { grid-row: 3; height: auto; align-self: stretch; }
+  .hall-branch .hall-v {
+    grid-row: 1 / 3;
+    position: relative;
+    z-index: 1;
+    justify-self: center;
+    width: 46px;
+    margin: -4px 0 -3px;
+    border-block: none;
+    border-inline: 3px solid var(--jamb);
+  }
   .floor-basic .entrance .torch-l { left: -2px; }
   .floor-basic .entrance .torch-r { right: -2px; }
 }

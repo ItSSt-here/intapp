@@ -60,6 +60,7 @@ function nthRoot(v, n) {
 // which MathLive leaves when it doesn't expand a typed name.
 const FUNCTIONS = [
   ["arcsin", Math.asin],
+  ["arccos", Math.acos],
   ["arctan", Math.atan],
   ["arctg", Math.atan],
   ["sin", Math.sin],
@@ -83,7 +84,7 @@ function tokenize(latex) {
   s = s.replace(/\\exponentialE|\\mathrm\{e\}/g, "e");
   s = s.replace(/\\mathrm\{d\}x|dx/g, ""); // drop trailing "dx" if present
   s = s.replace(/\\operatorname\{([a-z]+)\}|\\mathrm\{([a-z]+)\}/g, (m, a, b) => `\\${a || b}`);
-  s = s.replace(/\\(tan|sin)\^\{-1\}|\\(tan|sin)\^-1/g, (m, a, b) => `\\arc${a || b}`);
+  s = s.replace(/\\(tan|sin|cos)\^\{-1\}|\\(tan|sin|cos)\^-1/g, (m, a, b) => `\\arc${a || b}`);
   s = s.replace(/\\dfrac|\\tfrac/g, "\\frac");
   s = s.replace(/\\,|\\!|\\;|\\:|\\ /g, "");
   s = s.replace(/\s+/g, "");
@@ -264,8 +265,18 @@ function buildEvaluator(latex) {
     }
     if (tok.t === "FN") {
       next();
+      // "\tan^3x" is (tan x)^3: the power comes before the argument.
+      let power = null;
+      if (peek() && peek().t === "^") {
+        next();
+        if (peek() && peek().t === "LBRACE") {
+          next();
+          power = parseExpr();
+          expect("RBRACE");
+        } else power = parsePrimary();
+      }
       const arg = parseFuncArg();
-      return (x) => tok.fn(arg(x));
+      return power ? (x) => Math.pow(tok.fn(arg(x)), power(x)) : (x) => tok.fn(arg(x));
     }
     if (tok.t === "SQRT") {
       next();
@@ -1084,6 +1095,11 @@ const NEAR_MISS_TEXT = {
 //   { t: "sin", c } / { t: "cos", c }
 //   { t: "sec2", c }        c / cos^2 x
 //   { t: "atan", c }        c / (1 + x^2)
+// The extension room adds:
+//   { t: "axp", c, b }      c b^x  (b = 2, 3, 5, 10)
+//   { t: "csc2", c }        c / sin^2 x
+//   { t: "asin", c }        c / sqrt(1 - x^2)
+// and slips may use { t: "custom", c, f } (c f(x)).
 // Only the near-miss variants use { t: "lnq", c } (2c x/(1+x^2), the
 // derivative of c ln(1+x^2)) and a whole-integrand override `fn`.
 // Room 2 gives a term an argument u = a x + b in place of x:
@@ -1128,6 +1144,10 @@ function basicTermValue(term, x) {
     case "sec2": return c / Math.cos(v) ** 2;
     case "atan": return c / (1 + v * v);
     case "lnq": return (2 * c * v) / (1 + v * v); // (c/a) ln(1+u^2), differentiated
+    case "axp": return c * term.b ** v;
+    case "csc2": return c / Math.sin(v) ** 2;
+    case "asin": return c / Math.sqrt(1 - v * v);
+    case "custom": return c * term.f(v);
   }
   return NaN;
 }
@@ -1148,6 +1168,9 @@ function linTermAllows(t, v) {
     case "exp": return a <= 3;
     case "sec2":
     case "atan": return a <= 1.3;
+    case "axp": return a <= 2;
+    case "csc2": return a >= 0.35 && a <= 1.3;
+    case "asin": return a <= 0.9;
   }
   return a <= 6;
 }
@@ -1212,8 +1235,10 @@ function linSampleZones(p) {
 // shows near 0, a wrong x^5 only further out - so both bands are sampled.
 // Roots: x > 0 only. 1/cos^2 x, and 1/(1+x^2) (whose slip is tan x):
 // inside (-pi/2, pi/2).
+const EXTRA_TYPES = ["axp", "csc2", "asin"];
+
 function basicSampleZones(p) {
-  if (p.terms.some((t) => t.u)) return linSampleZones(p);
+  if (p.terms.some((t) => t.u || EXTRA_TYPES.includes(t.t))) return linSampleZones(p);
   if (p.terms.some((t) => t.t === "pow" && t.q > 1)) return [[0.2, 0.5], [0.6, 1], [1.2, 2.5]];
   const trig = p.terms.some((t) => t.t === "sec2" || t.t === "atan");
   const pole = p.terms.some((t) => t.t === "pow" && t.p < 0);
@@ -1281,6 +1306,12 @@ function shownTermLatex(term, isFirst) {
       const a2 = linA(term) ** 2; // 1/(1+(ax)^2), b = 0
       return `${sign}\\frac{${abs}}{1+${a2 === 1 ? "" : a2}x^2}`;
     }
+    case "axp": return `${sign}${abs === 1 ? "" : `${abs}\\cdot `}${term.b}^{${argLatex(term)}}`;
+    case "csc2": return `${sign}\\frac{${abs}}{\\sin^2${f}}`;
+    case "asin": {
+      const a2 = linA(term) ** 2; // 1/sqrt(1-(ax)^2), b = 0
+      return `${sign}\\frac{${abs}}{\\sqrt{1-${a2 === 1 ? "" : a2}x^2}}`;
+    }
   }
   return "";
 }
@@ -1317,6 +1348,9 @@ function tableIntegralLatex(t) {
     case "cos": return `\\sin${f}`;
     case "sec2": return `\\tan${f}`;
     case "atan": return t.u ? `\\arctan\\left(${argLatex(t)}\\right)` : "\\arctan x";
+    case "csc2": return `\\cot${f}`; // with a minus
+    case "asin": return t.u ? `\\arcsin\\left(${argLatex(t)}\\right)` : "\\arcsin x";
+    case "axp": return `\\frac{${t.b}^{${argLatex(t)}}}{\\ln ${t.b}}`;
   }
   return "";
 }
@@ -1335,7 +1369,13 @@ function integratedTermLatex(term, isFirst) {
     const [num, den] = ratio(c * q * ad, (p + q) * an); // c divided by it and by a
     return powerAnswerLatex(num, den, P, Q, isFirst, term);
   }
-  const [num, den] = ratio((term.t === "sin" ? -c : c) * ad, an);
+  const minus = term.t === "sin" || term.t === "csc2";
+  const [num, den] = ratio((minus ? -c : c) * ad, an);
+  if (term.t === "axp") {
+    // (num/den) b^u / ln b, as one fraction
+    const top = `${Math.abs(num) === 1 ? "" : `${Math.abs(num)}\\cdot `}${term.b}^{${argLatex(term)}}`;
+    return `${signLatex(num, isFirst)}\\frac{${top}}{${den === 1 ? "" : den}\\ln ${term.b}}`;
+  }
   return coefLatex(num, den, tableIntegralLatex(term), isFirst);
 }
 
@@ -1355,7 +1395,7 @@ function formulaTermLatex(term, isFirst) {
       F = `\\frac{${powerLatex(P, Q, term)}}{${E}}`;
     }
   } else {
-    F = term.t === "sin" ? `\\left(-${tableIntegralLatex(term)}\\right)` : tableIntegralLatex(term);
+    F = term.t === "sin" || term.t === "csc2" ? `\\left(-${tableIntegralLatex(term)}\\right)` : tableIntegralLatex(term);
   }
   return `${lead}${overA}\\cdot ${F}`;
 }
@@ -1599,6 +1639,115 @@ function genLinBoss() {
   });
 }
 
+// --- extension room: a^x, 1/sin^2, arcsin -------------------------------------
+
+const AXP_BASES = [2, 3, 5, 10];
+const axp = (c, b) => ({ t: "axp", c, b });
+
+// 1. e^x next to a^x (sometimes two bases).
+function genExtAx() {
+  return linProblem(() => {
+    const [b1, b2] = shuffled(AXP_BASES);
+    const terms = [{ t: "exp", c: nonZero(-6, 6) }, axp(nonZero(-6, 6), b1)];
+    if (chance(0.4)) terms.push(axp(nonZero(-6, 6), b2));
+    return shuffled(terms);
+  });
+}
+
+// 2. 1/sin^2 next to 1/cos^2 (sometimes with sin or cos).
+function genExtCot() {
+  return linProblem(() => {
+    const terms = [{ t: "csc2", c: nonZero(-6, 6) }, { t: "sec2", c: nonZero(-6, 6) }];
+    if (chance(0.4)) terms.push({ t: pick(["sin", "cos"]), c: nonZero(-6, 6) });
+    return shuffled(terms);
+  });
+}
+
+// 3. 1/sqrt(1-x^2) next to 1/(1+x^2): arcsin or arctan.
+function genExtAsin() {
+  return linProblem(() => shuffled([{ t: "asin", c: nonZero(-6, 6) }, { t: "atan", c: nonZero(-6, 6) }]));
+}
+
+// 4. Linear change on the new functions: two of b^(ax+c), 1/sin^2(ax),
+// 1/sqrt(1-(ax)^2) - only the (ax) form, as in room 2.
+function genExtLin() {
+  return linProblem(() => {
+    const makers = shuffled([
+      () => { const u = chance(0.5) ? posArg() : negArg(); return withArg(axp(linCoef(u[0]), pick([2, 3, 5])), u); },
+      () => { const u = chance(0.7) ? scaledArg(3) : fracArg(); return withArg({ t: "csc2", c: linCoef(u[0]) }, u); },
+      () => { const u = scaledArg(3); return withArg({ t: "asin", c: linCoef(u[0]) }, u); },
+    ]).slice(0, 2);
+    return makers.map((f) => f());
+  });
+}
+
+// 5. Boss: simplify first - a trig identity, or a quotient of powers.
+function genExtBoss() {
+  return pick([extBossTan, extBossCot, extBossSinCos, extBossRatio])();
+}
+
+const coefTimes = (c, body) => `${c < 0 ? "-" : ""}${Math.abs(c) === 1 ? "" : Math.abs(c)}${body}`;
+
+// c tan^2 x = c (1/cos^2 x - 1)
+function extBossTan() {
+  const c = nonZero(-5, 5);
+  return {
+    kind: "basic",
+    shown: coefTimes(c, "\\tan^2x"),
+    terms: [{ t: "sec2", c }, pow(-c, 0)],
+    steps: [coefTimes(c, "\\left(\\frac{1}{\\cos^2 x}-1\\right)")],
+    boss: { type: "tan2", c },
+  };
+}
+
+// c cot^2 x = c (1/sin^2 x - 1)
+function extBossCot() {
+  const c = nonZero(-5, 5);
+  return {
+    kind: "basic",
+    shown: coefTimes(c, "\\cot^2x"),
+    terms: [{ t: "csc2", c }, pow(-c, 0)],
+    steps: [coefTimes(c, "\\left(\\frac{1}{\\sin^2 x}-1\\right)")],
+    boss: { type: "cot2", c },
+  };
+}
+
+// c / (sin^2 x cos^2 x) = c (sin^2 x + cos^2 x) / (sin^2 x cos^2 x)
+//                       = c / cos^2 x + c / sin^2 x
+function extBossSinCos() {
+  const c = nonZero(-5, 5);
+  const sign = c < 0 ? "-" : "";
+  const k = Math.abs(c) === 1 ? "" : Math.abs(c);
+  return {
+    kind: "basic",
+    shown: `${sign}\\frac{${Math.abs(c)}}{\\sin^2x\\cos^2x}`,
+    terms: [{ t: "sec2", c }, { t: "csc2", c }],
+    steps: [`${sign}${k ? `${k}\\cdot` : ""}\\frac{\\sin^2x+\\cos^2x}{\\sin^2x\\cos^2x}`],
+    boss: { type: "sincos", c },
+  };
+}
+
+// ((k d)^x + m d^x) / d^x = k^x + m
+function extBossRatio() {
+  for (;;) {
+    const d = pick([2, 3, 5]);
+    const k = pick([2, 3, 5].filter((v) => v * d <= 15));
+    const m = nonZero(-6, 6);
+    const terms = [axp(1, k), pow(m, 0)];
+    const p = {
+      kind: "basic",
+      shown: `\\frac{${k * d}^x${signLatex(m, false)}${Math.abs(m) === 1 ? "" : `${Math.abs(m)}\\cdot `}${d}^x}{${d}^x}`,
+      terms,
+      steps: [
+        `\\left(\\frac{${k * d}^x}{${d}^x}${signLatex(m, false)}\\frac{${Math.abs(m) === 1 ? "" : `${Math.abs(m)}\\cdot `}${d}^x}{${d}^x}\\right)`,
+        `\\left(\\left(\\frac{${k * d}}{${d}}\\right)^x${fmtSigned(m, false)}\\right)`,
+      ],
+      boss: { type: "ratio", k, d, m },
+    };
+    if (linFits(p)) return p;
+  }
+}
+
 // --- common slips -------------------------------------------------------------
 
 const numDeriv = (F) => (x) => (F(x + 1e-5) - F(x - 1e-5)) / 2e-5;
@@ -1623,6 +1772,13 @@ function basicNearMissVariants(p) {
       (x * x / 2 + (4 * b / 3) * x ** 1.5 + b * b * x) / (overRoot ? (2 / 3) * x ** 1.5 : (x * x) / 2);
     variants.push({ kind: "split", problem: { ...p, fn: numDeriv(F) } });
     variants.push({ kind: "squareExpand", problem: replace(1, null) }); // (sqrt x + b)^2 as x + b^2
+  }
+  // Extension boss: the power rule on tan^2 / cot^2, or the identity's sign.
+  if (boss && (boss.type === "tan2" || boss.type === "cot2")) {
+    const c = boss.c;
+    const tr = boss.type === "tan2" ? Math.tan : (x) => 1 / Math.tan(x);
+    variants.push({ kind: "trigPow", problem: { ...p, fn: numDeriv((x) => (c * tr(x) ** 3) / 3) } });
+    variants.push({ kind: "trigIdentity", problem: replace(1, pow(c, 0)) });
   }
   if (boss && boss.type === "product") {
     const { a, m1, n1, m2, n2 } = boss;
@@ -1678,14 +1834,41 @@ function basicNearMissVariants(p) {
     if (t.t === "atan") {
       variants.push({ kind: "atanLn", problem: replace(i, { ...t, t: "lnq" }) });
       variants.push({ kind: "tanAtan", problem: replace(i, { ...t, t: "sec2" }) });
+      variants.push({ kind: "asinAtan", problem: replace(i, { ...t, t: "asin" }) });
+    }
+    if (t.t === "asin") {
+      variants.push({ kind: "asinAtan", problem: replace(i, { ...t, t: "atan" }) });
+      if (t.u) {
+        // 1/sqrt(1-4x^2) taken as 1/sqrt(1-x^2): c arcsin x, or (c/a) arcsin x
+        const { u, ...plain } = t;
+        variants.push({ kind: "asinArg", problem: replace(i, plain) });
+        variants.push({ kind: "asinArg", problem: replace(i, { ...plain, c: t.c / linA(t) }) });
+      }
+    }
+    if (t.t === "csc2") {
+      variants.push({ kind: "cotSign", problem: replace(i, { ...t, c: -t.c }) });
+      variants.push({ kind: "cotTan", problem: replace(i, { ...t, t: "sec2" }) });
+      variants.push({ kind: "cotTan", problem: replace(i, { ...t, t: "sec2", c: -t.c }) });
+    }
+    if (t.t === "axp") {
+      const L = Math.log(t.b);
+      variants.push({ kind: "expLn", problem: replace(i, { ...t, c: t.c * L }) }); // without ln b
+      variants.push({ kind: "expLn", problem: replace(i, { ...t, c: t.c * L * L }) }); // times ln b
+      // the power rule: b^(u+1)/(u+1), differentiated in u
+      const f = (v) => (t.b ** (v + 1) * (L * (v + 1) - 1)) / (v + 1) ** 2;
+      variants.push({ kind: "expPow", problem: replace(i, { t: "custom", c: t.c, f, u: t.u }) });
     }
   });
   // Both sin and cos with the wrong sign.
   if (p.terms.filter((t) => t.t === "sin" || t.t === "cos").length > 1) {
     variants.push({ kind: "trigSign", problem: { ...p, terms: p.terms.map((t) => (t.t === "sin" || t.t === "cos" ? { ...t, c: -t.c } : t)) } });
   }
+  // ln b left out of every b^x.
+  if (p.terms.filter((t) => t.t === "axp").length > 1) {
+    variants.push({ kind: "expLn", problem: { ...p, terms: p.terms.map((t) => (t.t === "axp" ? { ...t, c: t.c * Math.log(t.b) } : t)) } });
+  }
   p.terms.forEach((t, i) => {
-    if (t.t !== "sin" && t.t !== "cos" && t.t !== "sec2") variants.push({ kind: "sign", problem: replace(i, { ...t, c: -t.c }) });
+    if (!["sin", "cos", "sec2", "csc2"].includes(t.t)) variants.push({ kind: "sign", problem: replace(i, { ...t, c: -t.c }) });
   });
   return variants;
 }
@@ -1702,6 +1885,11 @@ Object.assign(GENERATORS, {
   linExpLn: genLinExpLn,
   linTrig: genLinTrig,
   linBoss: genLinBoss,
+  extAx: genExtAx,
+  extCot: genExtCot,
+  extAsin: genExtAsin,
+  extLin: genExtLin,
+  extBoss: genExtBoss,
 });
 
 Object.assign(NEAR_MISS_TEXT, {
@@ -1722,6 +1910,14 @@ Object.assign(NEAR_MISS_TEXT, {
   linSign: `כמעט! בדקו את הסימן: כאן ${ltr("a")} שלילי, ומחלקים בו עם הסימן.`,
   linFrac: `כמעט! חלוקה ב-${ltr("1/n")} היא כפל ב-${ltr("n")}.`,
   atanArg: `כמעט! ${ltr("1+a²x² = 1+(ax)²")}, ולכן בתוך ה-${ltr("arctan")} צריך ${ltr("ax")}.`,
+  expLn: `כמעט! ${ltr("∫aˣdx = aˣ/ln a")} - מחלקים ב-${ltr("ln a")}.`,
+  expPow: `כמעט! ${ltr("aˣ")} היא לא חזקה של ${ltr("x")}, ולכן כלל החזקה לא עובד: ${ltr("∫aˣdx = aˣ/ln a")}.`,
+  cotSign: `כמעט! ${ltr("∫dx/sin²x = −cot x")} - עם מינוס.`,
+  cotTan: `כמעט! ${ltr("∫dx/sin²x = −cot x")}, לא ${ltr("tan")}.`,
+  asinAtan: `כמעט! נראה ש-${ltr("arcsin")} ו-${ltr("arctan")} התחלפו: ${ltr("∫dx/√(1−x²) = arcsin x")}, ${ltr("∫dx/(1+x²) = arctan x")}.`,
+  asinArg: `כמעט! ${ltr("1−a²x² = 1−(ax)²")}, ולכן בתוך ה-${ltr("arcsin")} צריך ${ltr("ax")}.`,
+  trigPow: `כמעט! כלל החזקה עובד רק על חזקה של ${ltr("x")}, לא על ${ltr("tan²x")} או ${ltr("cot²x")}.`,
+  trigIdentity: `כמעט! בדקו את הזהות: ${ltr("1+tan²x = 1/cos²x")}, ${ltr("1+cot²x = 1/sin²x")}.`,
 });
 
 // ---------------------------------------------------------------------------
@@ -1762,6 +1958,24 @@ const ROOMS = [
       { gen: "linExpLn" },
       { gen: "linTrig" },
       { gen: "linBoss", boss: true },
+    ],
+  },
+  {
+    id: "more",
+    floor: 1,
+    kind: "ext",
+    title: "אינטגרלים נוספים",
+    en: "More basic integrals",
+    tag: "עוד פונקציות מהטבלה",
+    label: "הרחבה",
+    stars: 1,
+    requires: ["linear"],
+    nodes: [
+      { gen: "extAx" },
+      { gen: "extCot" },
+      { gen: "extAsin" },
+      { gen: "extLin" },
+      { gen: "extBoss", boss: true },
     ],
   },
   {
@@ -2332,12 +2546,13 @@ const STAIRS_DOWN_SVG = (() => {
 
 // Top-down plan of floor 1 (basic integrals): one room after the other.
 // One line, right to left (RTL): entrance · hall · room 1 · hall · room 2 ·
-// hall · the stairs up. The marker stands in the hall in front of a door;
-// the way on goes through the room.
+// hall · the stairs up (row 3). The marker stands in the hall in front of a
+// door; the way on goes through the room. A side hall goes up from the last
+// hall to the extension room (row 1).
 function renderBasicFloor() {
   const up = stairsOpen();
   const stairs = `
-    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:7;grid-row:1" data-node="stairs"
+    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:7;grid-row:3" data-node="stairs"
          role="button" tabindex="0" aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
       ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
       ${stairsSvg(!up)}
@@ -2354,14 +2569,19 @@ function renderBasicFloor() {
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
         </div>`}
       <div class="floor-grid floor-basic">
-        <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
+        ${mapTorch(3, 1)}
+        <div class="cell ext-cell" style="grid-column:6;grid-row:1">${roomCardHtml(ROOM_BY_ID.more)}</div>
+        <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
         </div>
-        <div class="hall" style="grid-column:2;grid-row:1" data-spot="basic" aria-hidden="true"></div>
-        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
-        <div class="hall" style="grid-column:4;grid-row:1" data-spot="linear" aria-hidden="true"></div>
-        <div class="cell" style="grid-column:5;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
-        <div class="hall" style="grid-column:6;grid-row:1" data-spot="stairs" aria-hidden="true"></div>
+        <div class="hall" style="grid-column:2;grid-row:3" data-spot="basic" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:3">${roomCardHtml(ROOM_BY_ID.basic)}</div>
+        <div class="hall" style="grid-column:4;grid-row:3" data-spot="linear" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:5;grid-row:3">${roomCardHtml(ROOM_BY_ID.linear)}</div>
+        <div class="hall-branch" style="grid-column:6;grid-row:2 / 4" aria-hidden="true">
+          <div class="hall hall-v" data-spot="more"></div>
+          <div class="hall" data-spot="stairs"></div>
+        </div>
         ${stairs}
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
@@ -2459,11 +2679,14 @@ const BASIC_FLOOR_NODES = {
   entrance: { nav: { left: "basic" } },
   basic: { nav: { left: "linear", right: "entrance" } },
   linear: { nav: { right: "basic", left: "stairs" } },
-  stairs: { nav: { right: "linear" } },
+  stairs: { nav: { right: "linear", up: "more" } },
+  more: { nav: { down: "stairs", left: "stairs", right: "linear" } },
 };
 
-// Floor 1's places in walking order.
+// Floor 1's places in walking order; the side room is as far along as the
+// stairs (past room 2).
 const BASIC_FLOOR_PATH = ["entrance", "basic", "linear", "stairs"];
+const pathIndex = (id) => BASIC_FLOOR_PATH.indexOf(id === "more" ? "stairs" : id);
 
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
@@ -2516,7 +2739,12 @@ function corridorY(which) {
 function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
-  if (currentFloor() === 1) return [a, b]; // straight along the line, through the rooms
+  if (currentFloor() === 1) {
+    // Along the line, through the rooms; the side hall goes straight up.
+    if (to === "more") return [a, { x: b.x, y: a.y }, b];
+    if (from === "more") return [a, { x: a.x, y: b.y }, b];
+    return [a, b];
+  }
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
   const fa = mapNodes()[from].area;
   const ta = mapNodes()[to].area;
@@ -2618,7 +2846,7 @@ function stepMarker(dir) {
   if (!to) return;
   // Floor 1: the marker walks up to a locked door; going on from there,
   // through the locked room, asks whether to open it.
-  if (currentFloor() === 1 && BASIC_FLOOR_PATH.indexOf(to) > BASIC_FLOOR_PATH.indexOf(here) && placeLocked(here)) {
+  if (currentFloor() === 1 && pathIndex(to) > pathIndex(here) && placeLocked(here)) {
     openLockFor(here);
     return;
   }
@@ -2645,8 +2873,8 @@ function openLockFor(id) {
 // the marker stops at its door. There, or at the place, a lock asks whether
 // to open it; an open place is entered.
 function basicFloorGo(id) {
-  const a = BASIC_FLOOR_PATH.indexOf(markerNode());
-  const b = BASIC_FLOOR_PATH.indexOf(id);
+  const a = pathIndex(markerNode());
+  const b = pathIndex(id);
   let stop = id;
   for (let k = a; k < b; k++) {
     if (placeLocked(BASIC_FLOOR_PATH[k])) {
@@ -3436,7 +3664,9 @@ function victoryNews(room, before) {
   if (room.floor === 1) {
     if (!before.firstWin) return news;
     const opened = ROOMS.find((r) => r.floor === 1 && (r.requires || []).includes(room.id));
-    if (opened && !(store.openedRooms || {})[opened.id]) news.push({ icon: padlockSvg(room.num, true), text: `חדר ${opened.num} נפתח` });
+    if (opened && !(store.openedRooms || {})[opened.id]) {
+      news.push({ icon: padlockSvg(room.num, true), text: opened.num ? `חדר ${opened.num} נפתח` : `"${opened.title}" נפתח` });
+    }
     if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות לקומה 2 נפתחו" });
     return news;
   }
@@ -3477,7 +3707,10 @@ function showConquest(room, { score, prevBest, wins, before }) {
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next = "";
   const floor1Left = FLOOR1_IDS.filter((id) => !isConquered(id));
-  if (room.floor === 1) next = floor1Left.length ? `החדר הבא: "${ROOM_BY_ID[floor1Left[0]].title}"` : "";
+  if (room.floor === 1) {
+    if (floor1Left.length) next = `החדר הבא: "${ROOM_BY_ID[floor1Left[0]].title}"`;
+    else if (!isConquered("more")) next = `אפשר גם "${ROOM_BY_ID.more.title}" (הרחבה), או לעלות לקומה 2`;
+  }
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
   else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
