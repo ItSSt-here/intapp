@@ -1816,8 +1816,6 @@ body { overflow-x: clip; }
 /* Floor 1 map: one row of rooms, the corridor, the entrance; stairs up    */
 /* ---------------------------------------------------------------------- */
 
-.room-card.soon { opacity: 0.55; filter: saturate(0.35); cursor: default; box-shadow: none; }
-.room-card.soon:hover { transform: none; }
 
 .stairs {
   display: flex;

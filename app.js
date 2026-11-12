@@ -1086,6 +1086,9 @@ const NEAR_MISS_TEXT = {
 //   { t: "atan", c }        c / (1 + x^2)
 // Only the near-miss variants use { t: "lnq", c } (2c x/(1+x^2), the
 // derivative of c ln(1+x^2)) and a whole-integrand override `fn`.
+// Room 2 gives a term an argument u = a x + b in place of x:
+//   u: [num, den, b]  with a = num/den (den > 1 only for x/2, x/3)
+// and its integral is F(u)/a - the formula taught for f(ax+b).
 // Problem: { kind: "basic", shown, terms, steps?, boss? } where `shown` is
 // the integrand as the exam writes it (roots, fractions) and `steps` are the
 // rewriting lines of a "simplify first" exercise.
@@ -1111,21 +1114,97 @@ const pow = (c, p, q = 1) => ({ t: "pow", c, p, q });
 
 // --- values -----------------------------------------------------------------
 
+const linA = (t) => (t.u ? t.u[0] / t.u[1] : 1); // the a of a x + b
+const linValue = (t, x) => (t.u ? linA(t) * x + t.u[2] : x);
+
 function basicTermValue(term, x) {
   const { c } = term;
+  const v = linValue(term, x);
   switch (term.t) {
-    case "pow": return c * (term.q === 1 ? x ** term.p : Math.pow(x, term.p / term.q));
-    case "exp": return c * Math.exp(x);
-    case "sin": return c * Math.sin(x);
-    case "cos": return c * Math.cos(x);
-    case "sec2": return c / Math.cos(x) ** 2;
-    case "atan": return c / (1 + x * x);
-    case "lnq": return (2 * c * x) / (1 + x * x);
+    case "pow": return c * (term.q === 1 ? v ** term.p : Math.pow(v, term.p / term.q));
+    case "exp": return c * Math.exp(v);
+    case "sin": return c * Math.sin(v);
+    case "cos": return c * Math.cos(v);
+    case "sec2": return c / Math.cos(v) ** 2;
+    case "atan": return c / (1 + v * v);
+    case "lnq": return (2 * c * v) / (1 + v * v); // (c/a) ln(1+u^2), differentiated
   }
   return NaN;
 }
 
 const basicIntegrandFn = (p) => p.fn || ((x) => p.terms.reduce((s, t) => s + basicTermValue(t, x), 0));
+
+// Where a term's argument v may be sampled: inside a root's domain, near a
+// pole but not on it, inside (-pi/2, pi/2) for 1/cos^2 and for 1/(1+v^2)
+// (whose slip is tan), and small enough that a big power or e^v doesn't
+// swamp the other terms within the checker's 1% tolerance.
+function linTermAllows(t, v) {
+  const a = Math.abs(v);
+  switch (t.t) {
+    case "pow":
+      if (t.q > 1) return v >= 0.15 && v <= 3;
+      if (t.p < 0) return a >= 0.2 && a <= 2;
+      return a <= 2;
+    case "exp": return a <= 3;
+    case "sec2":
+    case "atan": return a <= 1.3;
+  }
+  return a <= 6;
+}
+
+// The x's in [-4, 4] (step 0.005) where every term may be sampled.
+function linCandidates(p) {
+  const out = [];
+  for (let i = -800; i <= 800; i++) {
+    const x = i / 200;
+    if (p.terms.every((t) => linTermAllows(t, linValue(t, x)))) out.push(x);
+  }
+  return out;
+}
+
+const lnTerms = (p) => p.terms.filter((t) => t.t === "pow" && t.p === -t.q && t.u);
+
+// Where a term carries real weight: at least half of all the other terms
+// together. A slip in a term only shows (beyond the checker's 1% tolerance)
+// at such points.
+function dominantFor(p, i, xs) {
+  return xs.filter((x) => {
+    const vals = p.terms.map((t) => Math.abs(basicTermValue(t, x)));
+    const others = vals.reduce((s, v) => s + v, 0) - vals[i];
+    return vals[i] >= 0.5 * others;
+  });
+}
+
+// Enough room to sample, every term weighty somewhere, and both signs
+// inside every ln|u| (so a missing | | shows up).
+function linFits(p) {
+  const xs = linCandidates(p);
+  if (xs.length < 60) return false;
+  if (!p.terms.every((_, i) => dominantFor(p, i, xs).length >= 8)) return false;
+  return lnTerms(p).every((t) => xs.filter((x) => linValue(t, x) > 0).length >= 10 && xs.filter((x) => linValue(t, x) < 0).length >= 10);
+}
+
+// Room 2: points spread over the allowed x's, three where each term is
+// weighty, and three on each side of every ln|u|. One-point zones.
+function linSampleZones(p) {
+  const xs = linCandidates(p);
+  const pts = [];
+  for (let k = 0; k < 8; k++) {
+    const chunk = xs.slice(Math.floor((k * xs.length) / 8), Math.floor(((k + 1) * xs.length) / 8));
+    if (chunk.length) pts.push(pick(chunk));
+  }
+  p.terms.forEach((_, i) => {
+    const own = dominantFor(p, i, xs);
+    for (let k = 0; k < 3 && own.length; k++) pts.push(pick(own));
+  });
+  for (const t of lnTerms(p)) {
+    for (const side of [1, -1]) {
+      const own = xs.filter((x) => side * linValue(t, x) > 0);
+      for (let k = 0; k < 3 && own.length; k++) pts.push(pick(own));
+    }
+  }
+  return pts.map((x) => [x, x]);
+}
 
 // Points near 0 and further out, on both sides of 0 (so ln x without | |
 // shows up). Within the checker's 1% tolerance a slip in one term hides
@@ -1134,6 +1213,7 @@ const basicIntegrandFn = (p) => p.fn || ((x) => p.terms.reduce((s, t) => s + bas
 // Roots: x > 0 only. 1/cos^2 x, and 1/(1+x^2) (whose slip is tan x):
 // inside (-pi/2, pi/2).
 function basicSampleZones(p) {
+  if (p.terms.some((t) => t.u)) return linSampleZones(p);
   if (p.terms.some((t) => t.t === "pow" && t.q > 1)) return [[0.2, 0.5], [0.6, 1], [1.2, 2.5]];
   const trig = p.terms.some((t) => t.t === "sec2" || t.t === "atan");
   const pole = p.terms.some((t) => t.t === "pow" && t.p < 0);
@@ -1145,9 +1225,35 @@ function basicSampleZones(p) {
 
 const absCoef = (c) => (Math.abs(c) === 1 ? "" : Math.abs(c)); // "x", not "1x"
 
-// x^p inside a root: "\sqrt{x}", "\sqrt[3]{x^2}".
-function rootLatex(p, q) {
-  const inner = p === 1 ? "x" : `x^${p}`;
+// The argument a x + b: "x", "3x-2", "5-x", "\frac{x}{2}".
+function argLatex(t) {
+  if (!t.u) return "x";
+  const [num, den, b] = t.u;
+  if (den > 1) return `${num < 0 ? "-" : ""}\\frac{x}{${den}}${b ? fmtSigned(b, false) : ""}`;
+  const ax = `${num < 0 ? "-" : ""}${Math.abs(num) === 1 ? "" : Math.abs(num)}x`;
+  if (!b) return ax;
+  return num < 0 && b > 0 ? `${b}${ax}` : `${ax}${fmtSigned(b, false)}`;
+}
+
+// The argument as a base for a power: "x" or "\left(3x-2\right)".
+const baseLatex = (t) => (t.u ? `\\left(${argLatex(t)}\\right)` : "x");
+
+// After a function name: "\sin x", "\sin 4x", "\sin\frac{x}{2}",
+// "\sin\left(1-3x\right)".
+const fnArgLatex = (t) => (t.u && t.u[2] !== 0 ? `\\left(${argLatex(t)}\\right)` : ` ${argLatex(t)}`);
+
+// "x^{\frac{2}{5}}", "x^{-\frac{1}{2}}", "x^{-3}" - of the term's argument.
+function powerLatex(p, q, t = {}) {
+  if (q === 1) return p === 0 ? "" : p === 1 ? argLatex(t) : `${baseLatex(t)}^{${p}}`;
+  return `${baseLatex(t)}^{${p < 0 ? "-" : ""}\\frac{${Math.abs(p)}}{${q}}}`;
+}
+
+// A positive whole power, as written in an exercise: "x^3", "(2x+1)^3".
+const wholePowerLatex = (k, t) => (k === 1 ? argLatex(t) : t.u ? `${baseLatex(t)}^${k}` : xPower(k));
+
+// The argument to the power p inside a root: "\sqrt{x}", "\sqrt[3]{(2x-3)^2}".
+function rootLatex(p, q, t = {}) {
+  const inner = wholePowerLatex(p, t);
   return q === 2 ? `\\sqrt{${inner}}` : `\\sqrt[${q}]{${inner}}`;
 }
 
@@ -1155,70 +1261,103 @@ function rootLatex(p, q) {
 function shownTermLatex(term, isFirst) {
   const sign = signLatex(term.c, isFirst);
   const abs = Math.abs(term.c);
+  const f = fnArgLatex(term);
   switch (term.t) {
     case "pow": {
       const { p, q } = term;
       if (q === 1) {
         if (p === 0) return sign + abs;
-        if (p > 0) return sign + absCoef(term.c) + xPower(p);
-        return `${sign}\\frac{${abs}}{${xPower(-p)}}`;
+        if (p > 0) return sign + absCoef(term.c) + wholePowerLatex(p, term);
+        return `${sign}\\frac{${abs}}{${wholePowerLatex(-p, term)}}`;
       }
-      if (p > 0) return sign + absCoef(term.c) + rootLatex(p, q);
-      return `${sign}\\frac{${abs}}{${rootLatex(-p, q)}}`;
+      if (p > 0) return sign + absCoef(term.c) + rootLatex(p, q, term);
+      return `${sign}\\frac{${abs}}{${rootLatex(-p, q, term)}}`;
     }
-    case "exp": return `${sign}${absCoef(term.c)}e^x`;
-    case "sin": return `${sign}${absCoef(term.c)}\\sin x`;
-    case "cos": return `${sign}${absCoef(term.c)}\\cos x`;
-    case "sec2": return `${sign}\\frac{${abs}}{\\cos^2x}`;
-    case "atan": return `${sign}\\frac{${abs}}{1+x^2}`;
+    case "exp": return `${sign}${absCoef(term.c)}e^{${argLatex(term)}}`;
+    case "sin": return `${sign}${absCoef(term.c)}\\sin${f}`;
+    case "cos": return `${sign}${absCoef(term.c)}\\cos${f}`;
+    case "sec2": return `${sign}\\frac{${abs}}{\\cos^2${f}}`;
+    case "atan": {
+      const a2 = linA(term) ** 2; // 1/(1+(ax)^2), b = 0
+      return `${sign}\\frac{${abs}}{1+${a2 === 1 ? "" : a2}x^2}`;
+    }
   }
   return "";
 }
 
-// "x^{\frac{2}{5}}", "x^{-\frac{1}{2}}", "x^{-3}".
-function powerLatex(p, q) {
-  if (q === 1) return p === 0 ? "" : p === 1 ? "x" : `x^{${p}}`;
-  return `x^{${p < 0 ? "-" : ""}\\frac{${Math.abs(p)}}{${q}}}`;
-}
-
-// The same term written as a power of x, ready for the power rule.
+// The same term written as a power of its argument, ready for the power rule.
 function powerTermLatex(term, isFirst) {
   if (term.t !== "pow" || (term.p >= 0 && term.q === 1) || term.p === -term.q) return shownTermLatex(term, isFirst);
-  return signLatex(term.c, isFirst) + absCoef(term.c) + powerLatex(term.p, term.q);
+  return signLatex(term.c, isFirst) + absCoef(term.c) + powerLatex(term.p, term.q, term);
 }
 
-// (num/den) x^(P/Q), reduced; negative powers go under a fraction bar.
-function powerAnswerLatex(num, den, P, Q, isFirst) {
-  const sign = signLatex(num, isFirst);
+// A reduced coefficient num/den in front of `body`.
+function coefLatex(num, den, body, isFirst) {
   const abs = Math.abs(num);
-  const coef = den === 1 ? (abs === 1 && P !== 0 ? "" : `${abs}`) : `\\frac{${abs}}{${den}}`;
-  if (P === 0) return sign + coef;
-  if (P > 0) {
-    const body = Q === 2 && P === 1 ? "\\sqrt{x}" : powerLatex(P, Q);
-    return sign + coef + body;
-  }
-  // c x^(-k) = c / x^k; a root when 0 < k < 1
-  const under = Q === 1 ? xPower(-P) : -P < Q ? rootLatex(-P, Q) : powerLatex(-P, Q);
-  return `${sign}\\frac{${abs}}{${den === 1 ? "" : den}${under}}`;
+  const coef = den === 1 ? (abs === 1 && body ? "" : `${abs}`) : `\\frac{${abs}}{${den}}`;
+  return signLatex(num, isFirst) + coef + body;
 }
 
-function integratedTermLatex(term, isFirst) {
-  const { c } = term;
-  switch (term.t) {
-    case "pow": {
-      const { p, q } = term;
-      if (p === -q) return `${signLatex(c, isFirst)}${absCoef(c)}\\ln|x|`;
-      const [P, Q] = ratio(p + q, q); // the new exponent
-      const [num, den] = ratio(c * q, p + q); // c divided by it
-      return powerAnswerLatex(num, den, P, Q, isFirst);
-    }
-    case "exp": return `${signLatex(c, isFirst)}${absCoef(c)}e^x`;
-    case "sin": return `${signLatex(-c, isFirst)}${absCoef(c)}\\cos x`;
-    case "cos": return `${signLatex(c, isFirst)}${absCoef(c)}\\sin x`;
-    case "sec2": return `${signLatex(c, isFirst)}${absCoef(c)}\\tan x`;
-    case "atan": return `${signLatex(c, isFirst)}${absCoef(c)}\\arctan x`;
+// (num/den) u^(P/Q), reduced; negative powers go under a fraction bar.
+function powerAnswerLatex(num, den, P, Q, isFirst, t = {}) {
+  if (P === 0) return coefLatex(num, den, "", isFirst);
+  if (P > 0) return coefLatex(num, den, Q === 2 && P === 1 ? `\\sqrt{${argLatex(t)}}` : powerLatex(P, Q, t), isFirst);
+  // c u^(-k) = c / u^k; a root when 0 < k < 1
+  let under = Q === 1 ? wholePowerLatex(-P, t) : -P < Q ? rootLatex(-P, Q, t) : powerLatex(-P, Q, t);
+  if (den !== 1 && t.u && Q === 1 && P === -1) under = baseLatex(t); // 3(1-3x), not 31-3x
+  return `${signLatex(num, isFirst)}\\frac{${Math.abs(num)}}{${den === 1 ? "" : den}${under}}`;
+}
+
+// The table's antiderivative of one function, without coefficient.
+function tableIntegralLatex(t) {
+  const f = fnArgLatex(t);
+  switch (t.t) {
+    case "exp": return `e^{${argLatex(t)}}`;
+    case "sin": return `\\cos${f}`; // with a minus
+    case "cos": return `\\sin${f}`;
+    case "sec2": return `\\tan${f}`;
+    case "atan": return t.u ? `\\arctan\\left(${argLatex(t)}\\right)` : "\\arctan x";
   }
   return "";
+}
+
+// c f(ax+b)  ->  (c/a) F(ax+b).
+function integratedTermLatex(term, isFirst) {
+  const { c } = term;
+  const [an, ad] = term.u ? [term.u[0], term.u[1]] : [1, 1]; // a = an/ad
+  if (term.t === "pow") {
+    const { p, q } = term;
+    if (p === -q) {
+      const [num, den] = ratio(c * ad, an);
+      return coefLatex(num, den, `\\ln|${argLatex(term)}|`, isFirst);
+    }
+    const [P, Q] = ratio(p + q, q); // the new exponent
+    const [num, den] = ratio(c * q * ad, (p + q) * an); // c divided by it and by a
+    return powerAnswerLatex(num, den, P, Q, isFirst, term);
+  }
+  const [num, den] = ratio((term.t === "sin" ? -c : c) * ad, an);
+  return coefLatex(num, den, tableIntegralLatex(term), isFirst);
+}
+
+// Room 2's middle line: each term as c * (1/a) * F(ax+b), unsimplified.
+function formulaTermLatex(term, isFirst) {
+  if (!term.u) return integratedTermLatex(term, isFirst);
+  const [an, ad] = term.u;
+  const lead = signLatex(term.c, isFirst) + (Math.abs(term.c) === 1 ? "" : `${Math.abs(term.c)}\\cdot `);
+  const overA = ad === 1 ? `\\frac{1}{${an}}` : `\\frac{1}{${an < 0 ? "-" : ""}\\frac{1}{${ad}}}`;
+  let F;
+  if (term.t === "pow") {
+    const { p, q } = term;
+    if (p === -q) F = `\\ln|${argLatex(term)}|`;
+    else {
+      const [P, Q] = ratio(p + q, q);
+      const E = Q === 1 ? `${P}` : `${P < 0 ? "-" : ""}\\frac{${Math.abs(P)}}{${Q}}`;
+      F = `\\frac{${powerLatex(P, Q, term)}}{${E}}`;
+    }
+  } else {
+    F = term.t === "sin" ? `\\left(-${tableIntegralLatex(term)}\\right)` : tableIntegralLatex(term);
+  }
+  return `${lead}${overA}\\cdot ${F}`;
 }
 
 const sumLatex = (terms, fmt) => terms.map((t, i) => fmt(t, i === 0)).join("");
@@ -1227,12 +1366,13 @@ const sumIntegrand = (terms, fmt) => (terms.length > 1 ? `\\left(${sumLatex(term
 const basicProblemLatex = (p) => `\\int ${p.shown}\\,dx`;
 const basicAntiderivativeLatex = (p) => sumLatex(p.terms, integratedTermLatex) + "+C";
 
-// Worked solution: the exercise, any rewriting (simplify, then powers of x),
-// and the integral.
+// Worked solution: the exercise, any rewriting (simplify, then powers),
+// in room 2 the formula F(ax+b)/a written out, and the integral.
 function basicSolutionLatex(p) {
   const lines = (p.steps || []).map((s) => `\\int ${s}\\,dx`);
   const asPowers = `\\int ${sumIntegrand(p.terms, powerTermLatex)}\\,dx`;
   if (asPowers !== basicProblemLatex(p) && !lines.includes(asPowers)) lines.push(asPowers);
+  if (p.terms.some((t) => t.u)) lines.push(sumLatex(p.terms, formulaTermLatex));
   lines.push(basicAntiderivativeLatex(p));
   return `\\begin{aligned}${basicProblemLatex(p)} &= ${lines.join(" \\\\ &= ")}\\end{aligned}`;
 }
@@ -1354,6 +1494,111 @@ function bossProduct() {
   return { kind: "basic", shown, terms, steps: [step], boss: { type: "product", a, m1, n1, m2, n2 } };
 }
 
+// --- room 2: f(ax+b) ----------------------------------------------------------
+
+// Arguments: a positive a (3x-2), a negative a (5-x, 1-2x; a = -1 often),
+// a fraction (x/2, x/3), or a x alone (4x).
+// No common factor: 2x+1, not 4x+2.
+function coprimeArg(drawA, drawB) {
+  for (;;) {
+    const a = drawA();
+    const b = drawB();
+    if (gcd(a, b) === 1) return [a, 1, b];
+  }
+}
+const posArg = () => coprimeArg(() => randInt(2, 5), () => nonZero(-5, 5));
+const negArg = () => coprimeArg(() => (chance(0.5) ? -1 : -randInt(2, 3)), () => randInt(1, 6));
+const fracArg = () => [1, randInt(2, 3), 0];
+const scaledArg = (max = 5) => [randInt(2, max), 1, 0];
+
+// A coefficient that, with probability `clean`, makes the answer's
+// coefficient whole: a multiple of `div` (when that is small).
+function linCoef(div, clean = 0.55) {
+  div = Math.abs(div);
+  if (div > 1 && div <= 12 && chance(clean)) return div * pick([1, -1]);
+  return nonZero(-6, 6);
+}
+
+const withArg = (t, u) => ({ ...t, u });
+
+// Draw until the terms leave room to sample (see linFits).
+function linProblem(makeTerms) {
+  for (;;) {
+    const p = basicProblem(makeTerms());
+    if (linFits(p)) return p;
+  }
+}
+
+// 1. Powers of ax+b: c (ax+b)^n and c / (ax+b)^m.
+function genLinPow() {
+  return linProblem(() => {
+    const n = randInt(2, 5);
+    const m = randInt(2, 3);
+    const u1 = posArg();
+    const u2 = chance(0.5) ? posArg() : negArg();
+    return [
+      withArg(pow(linCoef(u1[0] * (n + 1)), n), u1),
+      withArg(pow(linCoef(u2[0] * (m - 1)), -m), u2),
+    ];
+  });
+}
+
+// 2. Roots of ax+b: one over a positive a, one in a denominator over a
+// negative a (5 - x).
+function genLinRoot() {
+  return linProblem(() => {
+    const [p1, q1] = pick([[1, 2], [1, 2], [1, 3], [2, 3]]);
+    const [p2, q2] = pick([[-1, 2], [-1, 2], [-1, 3]]);
+    const u1 = posArg();
+    const u2 = negArg();
+    return [
+      withArg(pow(linCoef(u1[0] * (p1 + q1)), p1, q1), u1),
+      withArg(pow(linCoef(u2[0] * (p2 + q2)), p2, q2), u2),
+    ];
+  });
+}
+
+// 3. e^(ax+b) and c/(ax+b), in a shuffled order.
+function genLinExpLn() {
+  return linProblem(() => {
+    const u1 = chance(0.5) ? posArg() : negArg();
+    const u2 = chance(0.5) ? posArg() : negArg();
+    return shuffled([withArg({ t: "exp", c: linCoef(u1[0]) }, u1), withArg(pow(linCoef(u2[0]), -1), u2)]);
+  });
+}
+
+// 4. Trig: sin, cos and 1/cos^2, one of them of x/n, the others of a x
+// (sin/cos sometimes of b - a x). 1/cos^2(a x) keeps x near 0, where
+// sin(x/n) would be too small to check - so x/n then goes to cos.
+function genLinTrig() {
+  return linProblem(() => {
+    const secFrac = chance(0.4);
+    const [f1, f2] = secFrac ? shuffled(["sin", "cos"]) : ["sin", "cos"];
+    const u1 = chance(0.7) ? scaledArg() : negArg();
+    const u2 = secFrac ? (chance(0.7) ? scaledArg() : negArg()) : fracArg();
+    const u3 = secFrac ? fracArg() : scaledArg(3);
+    return shuffled([
+      withArg({ t: f1, c: linCoef(u1[0]) }, u1),
+      withArg({ t: f2, c: linCoef(u2[0]) }, u2),
+      withArg({ t: "sec2", c: nonZero(-5, 5) }, u3),
+    ]);
+  });
+}
+
+// Boss: 1/(1+(ax)^2) and two of e^(x/n), c/(b-ax), c/(b-ax)^2, sqrt(ax+b).
+function genLinBoss() {
+  return linProblem(() => {
+    const ua = scaledArg(3);
+    const others = shuffled([
+      () => withArg({ t: "exp", c: nonZero(-4, 4) }, fracArg()),
+      () => { const u = negArg(); return withArg(pow(linCoef(u[0]), -1), u); },
+      () => { const u = negArg(); return withArg(pow(linCoef(u[0]), -2), u); },
+      () => { const u = posArg(); return withArg(pow(linCoef(u[0] * 3), 1, 2), u); },
+    ]).slice(0, 2);
+    return shuffled([withArg({ t: "atan", c: linCoef(ua[0]) }, ua), ...others.map((f) => f())]);
+  });
+}
+
 // --- common slips -------------------------------------------------------------
 
 const numDeriv = (F) => (x) => (F(x + 1e-5) - F(x - 1e-5)) / 2e-5;
@@ -1387,6 +1632,23 @@ function basicNearMissVariants(p) {
     variants.push({ kind: "expAdd", problem: replace(1, pow(p.terms[1].c, -m2, n2)) });
   }
 
+  // Room 2: the division by a. Each slip as the coefficient the slipped
+  // answer's derivative would carry: c a (not divided), c a^2 (multiplied),
+  // -c (divided by |a|, the sign lost).
+  p.terms.forEach((t, i) => {
+    const a = linA(t);
+    if (a === 1) return;
+    if (a < 0) variants.push({ kind: "linSign", problem: replace(i, { ...t, c: -t.c }) });
+    if (a !== -1) variants.push({ kind: "linForgot", problem: replace(i, { ...t, c: t.c * a }) });
+    if (a * a !== 1) variants.push({ kind: t.u[1] > 1 ? "linFrac" : "linMult", problem: replace(i, { ...t, c: t.c * a * a }) });
+    if (t.t === "atan") {
+      // 1/(1+4x^2) taken as 1/(1+x^2): c arctan x, or (c/a) arctan x
+      const { u, ...plain } = t;
+      variants.push({ kind: "atanArg", problem: replace(i, plain) });
+      variants.push({ kind: "atanArg", problem: replace(i, { ...plain, c: t.c / a }) });
+    }
+  });
+
   p.terms.forEach((t, i) => {
     if (t.t === "pow") {
       const e = t.p / t.q;
@@ -1399,7 +1661,7 @@ function basicNearMissVariants(p) {
       variants.push({ kind: "powCoef", problem: replace(i, { ...t, c: (t.c * (e + 1)) / e }) }); // divided by n, not n+1
       if ((e + 1) ** 2 !== 1) variants.push({ kind: "powCoef", problem: replace(i, { ...t, c: t.c * (e + 1) ** 2 }) }); // multiplied
       if (e < 0) {
-        variants.push({ kind: "powLn", problem: replace(i, pow(t.c, -1)) }); // c ln|x|
+        variants.push({ kind: "powLn", problem: replace(i, { ...t, p: -1, q: 1 }) }); // c ln|x|
         const [P, Q] = ratio(t.p - 2 * t.q, t.q); // exponent went down: c x^(e-1)/(e-1)
         variants.push({ kind: "powExp", problem: replace(i, at(t.c, P, Q)) });
       }
@@ -1411,11 +1673,11 @@ function basicNearMissVariants(p) {
     if (t.t === "sin" || t.t === "cos") variants.push({ kind: "trigSign", problem: replace(i, { ...t, c: -t.c }) });
     if (t.t === "sec2") {
       variants.push({ kind: "tanSign", problem: replace(i, { ...t, c: -t.c }) });
-      variants.push({ kind: "tanAtan", problem: replace(i, { t: "atan", c: t.c }) });
+      variants.push({ kind: "tanAtan", problem: replace(i, { ...t, t: "atan" }) });
     }
     if (t.t === "atan") {
-      variants.push({ kind: "atanLn", problem: replace(i, { t: "lnq", c: t.c }) });
-      variants.push({ kind: "tanAtan", problem: replace(i, { t: "sec2", c: t.c }) });
+      variants.push({ kind: "atanLn", problem: replace(i, { ...t, t: "lnq" }) });
+      variants.push({ kind: "tanAtan", problem: replace(i, { ...t, t: "sec2" }) });
     }
   });
   // Both sin and cos with the wrong sign.
@@ -1435,6 +1697,11 @@ Object.assign(GENERATORS, {
   basicLn: genBasicLn,
   basicTable: genBasicTable,
   basicBoss: genBasicBoss,
+  linPow: genLinPow,
+  linRoot: genLinRoot,
+  linExpLn: genLinExpLn,
+  linTrig: genLinTrig,
+  linBoss: genLinBoss,
 });
 
 Object.assign(NEAR_MISS_TEXT, {
@@ -1450,6 +1717,11 @@ Object.assign(NEAR_MISS_TEXT, {
   split: "לא מבצעים אינטגרל למונה ולמכנה בנפרד. קודם מפשטים לסכום של חזקות.",
   squareExpand: `כמעט! בפתיחת הסוגריים חסר האיבר האמצעי: ${ltr("(a+b)² = a²+2ab+b²")}.`,
   expAdd: `כמעט! בכפל חזקות מחברים את המעריכים: ${ltr("xᵃ·xᵇ = xᵃ⁺ᵇ")}.`,
+  linForgot: `כמעט! חסרה החלוקה ב-${ltr("a")}: ${ltr("∫f(ax+b)dx = F(ax+b)/a")}.`,
+  linMult: `כמעט! מחלקים ב-${ltr("a")}, לא כופלים: ${ltr("∫f(ax+b)dx = F(ax+b)/a")}.`,
+  linSign: `כמעט! בדקו את הסימן: כאן ${ltr("a")} שלילי, ומחלקים בו עם הסימן.`,
+  linFrac: `כמעט! חלוקה ב-${ltr("1/n")} היא כפל ב-${ltr("n")}.`,
+  atanArg: `כמעט! ${ltr("1+a²x² = 1+(ax)²")}, ולכן בתוך ה-${ltr("arctan")} צריך ${ltr("ax")}.`,
 });
 
 // ---------------------------------------------------------------------------
@@ -1476,6 +1748,22 @@ const ROOMS = [
       { gen: "basicLn" },
       { gen: "basicTable" },
       { gen: "basicBoss", boss: true },
+    ],
+  },
+  {
+    id: "linear",
+    floor: 1,
+    kind: "core",
+    num: 2,
+    title: "שינוי לינארי",
+    en: "f(ax+b)",
+    tag: "שיטה: חלוקה ב-a",
+    nodes: [
+      { gen: "linPow" },
+      { gen: "linRoot" },
+      { gen: "linExpLn" },
+      { gen: "linTrig" },
+      { gen: "linBoss", boss: true },
     ],
   },
   {
@@ -1608,6 +1896,7 @@ const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(
 // The upper wing (review, non-monic, the topic medal) opens once the three core
 // rooms are conquered - or earlier, if the student opens its gate anyway.
 const CORE_IDS = ["repeated", "pf1", "irreducible"];
+const FLOOR1_IDS = ["basic", "linear"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
@@ -1618,7 +1907,7 @@ function isLocked(room) {
 }
 
 function recommendedRoomId() {
-  if (ACTIVE_FLOOR === 1) return isConquered("basic") ? null : "basic";
+  if (ACTIVE_FLOOR === 1) return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -1948,15 +2237,10 @@ const STAIRS_SVG = `
 
 // Top-down plan of floor 1 (basic integrals). Grid columns run right to left
 // (RTL):
-//   row 1  room 1 · room 2 (still to come) · a torch · the stairs up
+//   row 1  room 1 · room 2 · a torch · the stairs up
 //   row 3  corridor
 //   row 5  entrance
 function renderBasicFloor() {
-  const soonCard = (num, title) => `
-    <div class="room-card room-core soon" aria-disabled="true">
-      <div class="room-head"><span class="room-num">${num}</span><span class="room-title" dir="ltr">${title}</span></div>
-      <div class="room-label">בקרוב</div>
-    </div>`;
   towerEl.innerHTML = `
     <div class="floor-map">
       <div class="floor-label">קומה 1 · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
@@ -1968,7 +2252,7 @@ function renderBasicFloor() {
       <div class="floor-grid floor-basic">
         ${mapTorch(3, 1)}
         <div class="cell" style="grid-column:1;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
-        <div class="cell" style="grid-column:2;grid-row:1">${soonCard(2, "F(ax+b)")}</div>
+        <div class="cell" style="grid-column:2;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
         <div class="cell stairs" style="grid-column:4;grid-row:1 / 4" aria-label="מדרגות לקומה 2 - בקרוב">
           ${STAIRS_SVG}
           <span class="stairs-label">לקומה 2</span>
@@ -2073,8 +2357,9 @@ function renderRationalFloor() {
 // walks it there along the corridors, then goes in.
 
 const BASIC_FLOOR_NODES = {
-  entrance: { area: "lower", at: "top", nav: { up: "basic", right: "basic" } },
-  basic: { area: "lower", at: "bottom", nav: { down: "entrance", left: "entrance" } },
+  entrance: { area: "lower", at: "top", nav: { up: "linear", right: "basic" } },
+  basic: { area: "lower", at: "bottom", nav: { left: "linear", down: "entrance" } },
+  linear: { area: "lower", at: "bottom", nav: { right: "basic", down: "entrance" } },
 };
 
 const RATIONAL_FLOOR_NODES = {
@@ -2964,7 +3249,8 @@ function showConquest(room, { score, prevBest, wins, before }) {
   // Where to go next.
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next = "";
-  if (room.floor === 1) next = "";
+  const floor1Left = FLOOR1_IDS.filter((id) => !isConquered(id));
+  if (room.floor === 1) next = floor1Left.length ? `נשארו במסדרון: ${quotedTitles(floor1Left)}` : "";
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
   else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
