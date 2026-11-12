@@ -3016,13 +3016,13 @@ const lockDialog = $("lockDialog");
 // What "open anyway" opens: floor 2's upper wing, or floor 1's stairs.
 let lockDialogFor = "wing";
 
-// One dialog for every lock: a title, a text, a button to the recommended
-// room, and (when the lock may be forced) "open anyway".
-function showLockDialog({ title, html, room, anyway }) {
+// One dialog for every lock: a title, a text that names the rooms to do
+// first, "not now" (back to the map, where the marker stands), and (when the
+// lock may be forced) "open anyway". It never sends the student anywhere.
+function showLockDialog({ title, html, anyway }) {
   $("lockDialogTitle").textContent = title;
   $("lockDialogText").innerHTML = html;
-  $("lockBackBtn").textContent = `ל"${room.title}"${anyway ? " (מומלץ)" : ""}`;
-  $("lockBackBtn").dataset.room = room.id;
+  $("lockBackBtn").textContent = "לא עכשיו";
   $("lockAnywayBtn").hidden = !anyway;
   lockDialogFor = anyway || "wing";
   lockDialog.hidden = false;
@@ -3038,7 +3038,6 @@ function openGateDialog() {
     html:
       `האגף העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
       `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`,
-    room: ROOM_BY_ID[missing[0]], // the first core room that's still open
     anyway: "wing",
   });
 }
@@ -3049,19 +3048,20 @@ function openLockedRoomDialog(room) {
   const before = ROOM_BY_ID[missingRequirements(room)[0]];
   showLockDialog({
     title: "לא מומלץ עדיין",
-    html: `החדר הזה בנוי על חדר <bdi dir="ltr">${before.num}</bdi>. מומלץ לעבור אותו קודם - אבל אפשר לפתוח את החדר כבר עכשיו.`,
-    room: before,
+    html: `מומלץ לעבור קודם את חדר <bdi dir="ltr">${before.num}</bdi>, שהחדר הזה בנוי עליו - אבל אפשר לפתוח אותו כבר עכשיו.`,
     anyway: room.id,
   });
 }
 
 // Floor 1's stairs: open after room 2, or anyway.
 function openStairsDialog() {
-  const next = ROOM_BY_ID[recommendedRoomId() || "linear"];
+  const missing = FLOOR1_IDS.filter((id) => !isConquered(id));
+  const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
   showLockDialog({
     title: "לא מומלץ עדיין",
-    html: "המדרגות לקומה 2 נפתחות אחרי חדר 2. מומלץ לעבור קודם את החדרים בקומה הזאת - אבל אפשר לפתוח אותן כבר עכשיו.",
-    room: next,
+    html:
+      `המדרגות לקומה 2 נפתחות אחרי חדר 2. מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi>` +
+      ` - אבל אפשר לפתוח אותן כבר עכשיו.`,
     anyway: "stairs",
   });
 }
@@ -3070,10 +3070,7 @@ function closeLockDialog() {
   lockDialog.hidden = true;
 }
 
-$("lockBackBtn").addEventListener("click", (e) => {
-  closeLockDialog();
-  goToRoom(e.currentTarget.dataset.room);
-});
+$("lockBackBtn").addEventListener("click", closeLockDialog);
 $("lockAnywayBtn").addEventListener("click", () => {
   closeLockDialog();
   if (lockDialogFor === "stairs") store.stairsOpen = true;
