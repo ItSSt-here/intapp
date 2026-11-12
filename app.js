@@ -1758,6 +1758,7 @@ const ROOMS = [
     title: "שינוי לינארי",
     en: "f(ax+b)",
     tag: "שיטה: חלוקה ב-a",
+    requires: ["basic"],
     nodes: [
       { gen: "linPow" },
       { gen: "linRoot" },
@@ -1900,11 +1901,18 @@ const FLOOR1_IDS = ["basic", "linear"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
+// Floor 1 is one room after the other: a room opens when the one before it
+// is won. On floor 2 the upper wing opens as a whole (or when forced).
 function isLocked(room) {
   if (!room.requires) return false;
   const rec = roomRecord(room.id);
-  return !wingOpen() && !rec.run && rec.wins === 0;
+  if (rec.run || rec.wins > 0) return false;
+  if (room.floor === 1) return missingRequirements(room).length > 0;
+  return !wingOpen();
 }
+
+// The stairs up from floor 1: open after room 2, or when forced.
+const stairsOpen = () => isConquered("linear") || !!store.stairsOpen;
 
 function recommendedRoomId() {
   if (ACTIVE_FLOOR === 1) return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
@@ -2024,8 +2032,9 @@ function roomCardHtml(room) {
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`];
   if (room.blurb) info.push(`<div>${room.blurb}</div>`);
   if (locked) {
-    const nums = missingRequirements(room).map((id) => ROOM_BY_ID[id].num).join(", ");
-    info.push(`<div class="info-note">נפתח אחרי חדרים <bdi dir="ltr">${nums}</bdi>.</div>`);
+    const missing = missingRequirements(room);
+    const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
+    info.push(`<div class="info-note">נפתח אחרי ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi>.</div>`);
   }
   if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length} · ניקוד כרגע: ${rec.run.score}</div>`);
   if (conquered) info.push(`<div class="info-note">ניצחתם בחדר ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
@@ -2034,6 +2043,7 @@ function roomCardHtml(room) {
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
+      ${locked && room.floor === 1 ? `<span class="card-lock">${padlockSvg(ROOM_BY_ID[room.requires[0]].num, false)}</span>` : ""}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
@@ -2235,12 +2245,20 @@ const STAIRS_SVG = `
       .join("")}
   </svg>`;
 
-// Top-down plan of floor 1 (basic integrals). Grid columns run right to left
-// (RTL):
-//   row 1  room 1 · room 2 · a torch · the stairs up
-//   row 3  corridor
-//   row 5  entrance
+// Top-down plan of floor 1 (basic integrals): one room after the other.
+// Grid columns run right to left (RTL):
+//   row 1  room 1 · hall · room 2 · hall · the stairs up
+//   row 3  the entrance, under room 1
 function renderBasicFloor() {
+  const up = stairsOpen();
+  const stairs = `
+    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:5;grid-row:1" data-node="stairs"
+         aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
+      ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
+      ${STAIRS_SVG}
+      <span class="stairs-label">לקומה 2</span>
+      ${up ? '<span class="stairs-soon">בקרוב</span>' : '<button type="button" class="open-anyway stairs-anyway" data-open-stairs>לפתוח בכל זאת</button>'}
+    </div>`;
   towerEl.innerHTML = `
     <div class="floor-map">
       <div class="floor-label">קומה 1 · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
@@ -2250,18 +2268,14 @@ function renderBasicFloor() {
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
         </div>`}
       <div class="floor-grid floor-basic">
-        ${mapTorch(3, 1)}
+        ${mapTorch(3, 3)}
+        ${stairs}
+        <div class="hall" style="grid-column:4;grid-row:1" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
+        <div class="hall" style="grid-column:2;grid-row:1" aria-hidden="true"></div>
         <div class="cell" style="grid-column:1;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
-        <div class="cell" style="grid-column:2;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
-        <div class="cell stairs" style="grid-column:4;grid-row:1 / 4" aria-label="מדרגות לקומה 2 - בקרוב">
-          ${STAIRS_SVG}
-          <span class="stairs-label">לקומה 2</span>
-          <span class="stairs-soon">בקרוב</span>
-        </div>
-        ${doorway(1, 2)}${doorway(2, 2)}
-        <div class="cell corridor main" style="grid-column:1 / 4;grid-row:3"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
-        ${doorway(2, 4)}
-        <div class="cell entrance" style="grid-column:2;grid-row:5" data-node="entrance">
+        ${doorway(1, 2)}
+        <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
         </div>
         <div class="map-marker" aria-hidden="true">
@@ -2357,10 +2371,15 @@ function renderRationalFloor() {
 // walks it there along the corridors, then goes in.
 
 const BASIC_FLOOR_NODES = {
-  entrance: { area: "lower", at: "top", nav: { up: "linear", right: "basic" } },
+  entrance: { area: "lower", at: "top", nav: { up: "basic", left: "basic" } },
   basic: { area: "lower", at: "bottom", nav: { left: "linear", down: "entrance" } },
-  linear: { area: "lower", at: "bottom", nav: { right: "basic", down: "entrance" } },
+  linear: { area: "lower", at: "bottom", nav: { right: "basic", left: "stairs" } },
+  stairs: { area: "lower", at: "bottom", nav: { right: "linear" } },
 };
+
+// Floor 1's places in walking order: the marker passes through each one
+// between where it is and where it goes.
+const BASIC_FLOOR_PATH = ["entrance", "basic", "linear", "stairs"];
 
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
@@ -2404,6 +2423,12 @@ function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
+  if (ACTIVE_FLOOR === 1) {
+    const i = BASIC_FLOOR_PATH.indexOf(from);
+    const j = BASIC_FLOOR_PATH.indexOf(to);
+    const ids = i <= j ? BASIC_FLOOR_PATH.slice(i, j + 1) : BASIC_FLOOR_PATH.slice(j, i + 1).reverse();
+    return ids.map(nodePoint);
+  }
   const fa = MAP_NODES[from].area;
   const ta = MAP_NODES[to].area;
   const lowY = corridorY("main");
@@ -2432,6 +2457,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return wingOpen() ? "היכנסו ↵" : "";
+  if (id === "stairs") return stairsOpen() ? "" : "מדרגות ↵";
   if (!ROOM_BY_ID[id]) return "";
   return isLocked(ROOM_BY_ID[id]) ? "" : "היכנסו ↵";
 }
@@ -2519,9 +2545,13 @@ function activateMarker() {
     else openGateDialog();
     return;
   }
+  if (id === "stairs") {
+    if (!stairsOpen()) openStairsDialog();
+    return;
+  }
   const room = ROOM_BY_ID[id];
   if (!room) return;
-  if (isLocked(room)) openGateDialog();
+  if (isLocked(room)) openLockedRoomDialog(room);
   else zoomIntoRoom(id).then(() => goToRoom(id));
 }
 
@@ -2572,12 +2602,23 @@ towerEl.addEventListener("click", (e) => {
     openGateDialog();
     return;
   }
+  if (e.target.closest("[data-open-stairs]")) {
+    e.stopPropagation();
+    openStairsDialog();
+    return;
+  }
   if (markerBusy) return;
   const card = e.target.closest("[data-room]");
   if (card) {
     const room = ROOM_BY_ID[card.dataset.room];
-    if (isLocked(room)) openGateDialog();
+    if (isLocked(room)) openLockedRoomDialog(room);
     else walkTo(room.id).then(() => zoomIntoRoom(room.id)).then(() => goToRoom(room.id));
+    return;
+  }
+  if (e.target.closest('[data-node="stairs"]')) {
+    walkTo("stairs").then(() => {
+      if (!stairsOpen()) openStairsDialog();
+    });
     return;
   }
   const gate = e.target.closest('[data-node="gate"]');
@@ -2607,18 +2648,56 @@ towerEl.addEventListener("keydown", (e) => {
 // One gate for the whole upper wing, not one per room.
 const lockDialog = $("lockDialog");
 
-function openGateDialog() {
-  const missing = CORE_IDS.filter((id) => !isConquered(id));
-  const rec = ROOM_BY_ID[missing[0]]; // the first core room that's still open
-  // Room numbers, not names; only the rooms still to do.
-  const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
-  $("lockDialogText").innerHTML =
-    `האגף העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
-    `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`;
-  $("lockBackBtn").textContent = `ל"${rec.title}" (מומלץ)`;
-  $("lockBackBtn").dataset.room = rec.id;
+// What "open anyway" opens: floor 2's upper wing, or floor 1's stairs.
+let lockDialogFor = "wing";
+
+// One dialog for every lock: a title, a text, a button to the recommended
+// room, and (when the lock may be forced) "open anyway".
+function showLockDialog({ title, html, room, anyway }) {
+  $("lockDialogTitle").textContent = title;
+  $("lockDialogText").innerHTML = html;
+  $("lockBackBtn").textContent = `ל"${room.title}"${anyway ? " (מומלץ)" : ""}`;
+  $("lockBackBtn").dataset.room = room.id;
+  $("lockAnywayBtn").hidden = !anyway;
+  lockDialogFor = anyway || "wing";
   lockDialog.hidden = false;
   $("lockBackBtn").focus();
+}
+
+function openGateDialog() {
+  const missing = CORE_IDS.filter((id) => !isConquered(id));
+  // Room numbers, not names; only the rooms still to do.
+  const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
+  showLockDialog({
+    title: "לא מומלץ עדיין",
+    html:
+      `האגף העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
+      `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`,
+    room: ROOM_BY_ID[missing[0]], // the first core room that's still open
+    anyway: "wing",
+  });
+}
+
+// Floor 1: a room opens only after the one before it.
+function openLockedRoomDialog(room) {
+  if (room.floor !== 1) return openGateDialog();
+  const before = ROOM_BY_ID[missingRequirements(room)[0]];
+  showLockDialog({
+    title: "החדר נעול",
+    html: `החדר נפתח אחרי שעוברים את חדר <bdi dir="ltr">${before.num}</bdi>.`,
+    room: before,
+  });
+}
+
+// Floor 1's stairs: open after room 2, or anyway.
+function openStairsDialog() {
+  const next = ROOM_BY_ID[recommendedRoomId() || "linear"];
+  showLockDialog({
+    title: "לא מומלץ עדיין",
+    html: "המדרגות לקומה 2 נפתחות אחרי חדר 2. מומלץ לעבור קודם את החדרים בקומה הזאת - אבל אפשר לפתוח אותן כבר עכשיו.",
+    room: next,
+    anyway: "stairs",
+  });
 }
 
 function closeLockDialog() {
@@ -2631,9 +2710,10 @@ $("lockBackBtn").addEventListener("click", (e) => {
 });
 $("lockAnywayBtn").addEventListener("click", () => {
   closeLockDialog();
-  store.wingOpen = true;
+  if (lockDialogFor === "stairs") store.stairsOpen = true;
+  else store.wingOpen = true;
   saveStore();
-  renderMap(); // the fog lifts
+  renderMap(); // the fog lifts, or the stairs open
 });
 lockDialog.addEventListener("click", (e) => {
   if (e.target === lockDialog) closeLockDialog();
@@ -2790,7 +2870,7 @@ function updatePath(animate) {
   placePawn(animate);
   const node = view.room.nodes[view.node];
   $("nodeCaption").textContent = node
-    ? `תרגיל ${view.node + 1} מתוך ${view.room.nodes.length}${node.boss ? " · בוס" : ""}`
+    ? `תרגיל ${view.node + 1} מתוך ${view.room.nodes.length}${node.boss ? " · אינטגרל בוס" : ""}`
     : "ניצחון! עברתם את החדר";
   roomView.classList.toggle("boss-node", !!(node && node.boss));
 }
@@ -3018,7 +3098,7 @@ checkBtn.addEventListener("click", () => {
     const score = rec.run.score;
     const prevBest = rec.best;
     // The floor as it was, so the victory screen can say what this win changed.
-    const before = { firstWin: rec.wins === 0, medal: medalState(), wing: wingOpen() };
+    const before = { firstWin: rec.wins === 0, medal: medalState(), wing: wingOpen(), stairs: stairsOpen() };
     rec.best = prevBest === null ? score : Math.max(prevBest, score);
     rec.wins += 1;
     rec.run = null;
@@ -3037,7 +3117,7 @@ checkBtn.addEventListener("click", () => {
   rec.run.problem = makeProblem(view.room, nextNode, rec.run);
   saveStore();
   view.pending = { node: nextNode, problem: rec.run.problem, advance: true };
-  nextBtn.textContent = view.room.nodes[nextNode].boss ? "לבוס ←" : "המשך ←";
+  nextBtn.textContent = view.room.nodes[nextNode].boss ? "לאינטגרל הבוס ←" : "המשך ←";
   nextBtn.hidden = false;
   nextBtn.classList.add("ready");
   nextBtn.focus();
@@ -3213,6 +3293,13 @@ const GATE_ICON = `
 // What this win changed on the floor: a lock, the gate, the medal.
 function victoryNews(room, before) {
   const news = [];
+  if (room.floor === 1) {
+    if (!before.firstWin) return news;
+    const opened = ROOMS.find((r) => r.floor === 1 && (r.requires || []).includes(room.id));
+    if (opened) news.push({ icon: padlockSvg(room.num, true), text: `חדר ${opened.num} נפתח` });
+    if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות לקומה 2 נפתחו" });
+    return news;
+  }
   if (before.firstWin && CORE_IDS.includes(room.id)) {
     news.push({ icon: padlockSvg(room.num, true), text: `מנעול ${room.num} נפתח` });
   }
@@ -3250,7 +3337,7 @@ function showConquest(room, { score, prevBest, wins, before }) {
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next = "";
   const floor1Left = FLOOR1_IDS.filter((id) => !isConquered(id));
-  if (room.floor === 1) next = floor1Left.length ? `נשארו במסדרון: ${quotedTitles(floor1Left)}` : "";
+  if (room.floor === 1) next = floor1Left.length ? `החדר הבא: "${ROOM_BY_ID[floor1Left[0]].title}"` : "";
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
   else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
