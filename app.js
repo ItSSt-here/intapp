@@ -1189,6 +1189,10 @@ let justConquered = null; // room id whose card flips on the next map render
 const LOCK_SVG =
   '<svg class="lock-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/></svg>';
 
+// A banner hanging from a conquered chamber.
+const PENNANT_SVG =
+  '<svg class="conquered-flag" viewBox="0 0 24 34" aria-hidden="true"><rect class="rod" x="0" y="0" width="24" height="3" rx="1.5"/><path class="cloth" d="M3 3h18v28l-9-6-9 6z"/><path class="tick" d="M7.5 13.5l3.2 3.2 6-6.2"/></svg>';
+
 function nodeDotsHtml(room, doneCount, currentIndex = -1) {
   return room.nodes
     .map((n, i) => {
@@ -1234,7 +1238,7 @@ function roomCardHtml(room) {
   const stars = room.stars ? `<span class="stars">${"★".repeat(room.stars)}</span>` : "";
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
-      ${conquered ? '<span class="conquered-flag" aria-hidden="true">✓</span>' : ""}
+      ${conquered ? PENNANT_SVG : ""}
       <div class="room-head">
         ${locked ? LOCK_SVG : ""}<span class="room-title">${room.title}</span>${stars}
         <span class="info-wrap">
@@ -1249,29 +1253,72 @@ function roomCardHtml(room) {
     </div>`;
 }
 
+// The flag on the roof: rolled down the pole until the three core rooms are
+// conquered, then raised (with a gold star once the review is conquered too).
+const FLAG_SVG = `
+  <svg class="roof-flag" viewBox="0 0 70 64" aria-hidden="true">
+    <rect class="pole" x="9" y="2" width="3" height="62" rx="1.5"/>
+    <circle class="pole-cap" cx="10.5" cy="3" r="3"/>
+    <g class="flag-cloth">
+      <path d="M12 8 C26 4 36 13 50 8 L54 8 C48 15 50 22 54 28 C40 33 28 24 12 28 Z"/>
+      <text x="31" y="23" text-anchor="middle">1</text>
+      <path class="flag-star" d="M44 13l1.5 3.1 3.4.5-2.5 2.4.6 3.4-3-1.6-3 1.6.6-3.4-2.5-2.4 3.4-.5z"/>
+    </g>
+  </svg>`;
+
+// Arched wooden door at the foot of the tower.
+const DOOR_SVG = `
+  <svg class="tower-door" viewBox="0 0 60 56" aria-hidden="true">
+    <path class="door-frame" d="M2 56V26a28 26 0 0 1 56 0v30z"/>
+    <path class="door-wood" d="M8 56V27a22 21 0 0 1 44 0v29z"/>
+    <path class="door-planks" d="M19 56V10M30 56V6M41 56V10"/>
+    <path class="door-band" d="M8 24h44M8 44h44"/>
+    <circle class="door-ring" cx="37" cy="36" r="2.6"/>
+  </svg>`;
+
+// Stairs between two rooms; lit once the student has climbed them.
+function stairsHtml(area, lower, upper) {
+  const climbed = isConquered(lower.id) || isConquered(upper.id) || !!roomRecord(upper.id).run;
+  return `<div class="stairs ${area}${climbed ? " climbed" : ""}" aria-hidden="true"><span></span><span></span><span></span><span></span></div>`;
+}
+
 function renderMap() {
   const [prep, rep, core, irr, review, ext] = ["division", "repeated", "pf1", "irreducible", "review", "nonmonic"].map((id) => ROOM_BY_ID[id]);
+  const floorDone = [rep, core, irr].every((r) => isConquered(r.id));
+  const classes = ["tower-scene"];
+  if (floorDone) classes.push("floor-done");
+  if (isConquered(review.id)) classes.push("review-done");
   towerEl.innerHTML = `
-    <div class="tower-crown" aria-hidden="true"></div>
-    <div class="tower-body">
-      <div class="floor-label">קומה 1 · פונקציות רציונליות <span dir="ltr">(rational functions)</span></div>
-      <div class="floor-rooms">
-        <div class="branch area-ext">
-          ${roomCardHtml(ext)}
-          <div class="conn dashed branch-conn" aria-hidden="true"></div>
+    <div class="${classes.join(" ")}">
+      <div class="tower-wrap">
+        <div class="tower-main">
+          <div class="tower-roof">${FLAG_SVG}<div class="tower-crown" aria-hidden="true"></div></div>
+          <div class="tower-body">
+            <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
+            <div class="floor-rooms">
+              <div class="area-review">${roomCardHtml(review)}</div>
+              ${stairsHtml("area-connR", irr, review)}
+              <div class="area-irr">${roomCardHtml(irr)}</div>
+              ${stairsHtml("area-conn0", core, irr)}
+              <div class="area-core">${roomCardHtml(core)}</div>
+              ${stairsHtml("area-conn", rep, core)}
+              <div class="area-rep">${roomCardHtml(rep)}</div>
+              ${stairsHtml("area-conn2", prep, rep)}
+              <div class="area-prep">${roomCardHtml(prep)}</div>
+            </div>
+          </div>
+          <div class="tower-base">${DOOR_SVG}<span class="door-label">כניסה</span></div>
         </div>
-        <div class="area-review">${roomCardHtml(review)}</div>
-        <div class="conn area-connR" aria-hidden="true"></div>
-        <div class="area-irr">${roomCardHtml(irr)}</div>
-        <div class="conn area-conn0" aria-hidden="true"></div>
-        <div class="area-core">${roomCardHtml(core)}</div>
-        <div class="conn area-conn" aria-hidden="true"></div>
-        <div class="area-rep">${roomCardHtml(rep)}</div>
-        <div class="conn area-conn2" aria-hidden="true"></div>
-        <div class="area-prep">${roomCardHtml(prep)}</div>
+        <div class="turret-col">
+          <div class="turret">
+            <div class="turret-crown" aria-hidden="true"></div>
+            <div class="turret-body"><div class="bridge" aria-hidden="true"></div>${roomCardHtml(ext)}</div>
+            <div class="turret-corbel" aria-hidden="true"></div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="tower-base">כניסה</div>`;
+      <div class="ground" aria-hidden="true"></div>
+    </div>`;
   justConquered = null;
 }
 
