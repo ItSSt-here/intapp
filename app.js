@@ -1419,6 +1419,30 @@ function renderMedalView() {
     </ul>`;
 }
 
+// Back on the map after a first win in a core room: once the zoom-out has
+// settled, that padlock jiggles and springs open; if it was the last one, the
+// gate doors swing open and the fog lifts off the upper wing.
+function playUnlock() {
+  const u = pendingUnlock;
+  pendingUnlock = null;
+  if (!u) return;
+  const lock = towerEl.querySelectorAll(".padlock")[u.lock - 1];
+  const t0 = reducedMotion() ? 0 : 750;
+  setTimeout(() => lock && lock.classList.add("unlocking"), t0);
+  setTimeout(() => {
+    if (!lock) return;
+    lock.classList.add("open");
+    lock.setAttribute("aria-label", `מנעול ${u.lock} - פתוח`);
+  }, t0 + 420);
+  if (!u.gate) return;
+  setTimeout(() => {
+    const passage = towerEl.querySelector(".passage");
+    if (passage) passage.classList.add("open");
+    towerEl.querySelectorAll("[data-open-wing]").forEach((b) => b.remove());
+    towerEl.querySelectorAll(".wing.fogged").forEach((c) => c.classList.replace("fogged", "wing-reveal"));
+  }, t0 + 1300);
+}
+
 function goToMedals() {
   location.hash = "#/medals";
 }
@@ -1442,9 +1466,13 @@ function renderMap() {
     store.wingRevealed = true;
     saveStore();
   }
-  const wingCls = open ? (reveal ? " wing-reveal" : "") : " fogged";
-  const gateCls = open ? (coreDone() ? " open" : " open forced") : "";
-  const locks = CORE_IDS.map((id, i) => padlockSvg(i + 1, isConquered(id))).join("");
+  // A lock (and the gate) that this visit opened is drawn shut first, then
+  // opens in front of the student - see playUnlock().
+  const unlockNow = pendingUnlock;
+  const shownOpen = open && !(unlockNow && unlockNow.gate);
+  const wingCls = shownOpen ? (reveal ? " wing-reveal" : "") : " fogged";
+  const gateCls = shownOpen ? (coreDone() ? " open" : " open forced") : "";
+  const locks = CORE_IDS.map((id, i) => padlockSvg(i + 1, isConquered(id) && !(unlockNow && unlockNow.lock === i + 1))).join("");
 
   towerEl.innerHTML = `
     <div class="floor-map">
@@ -1456,7 +1484,7 @@ function renderMap() {
         ${doorway(1, 2)}${doorway(2, 2)}${doorway(3, 2)}
         <div class="cell corridor upper wing${wingCls}" style="grid-column:1 / 5;grid-row:3">
           <div class="corridor-label">אגף עליון</div>
-          ${open ? "" : '<button type="button" class="open-anyway phone-only" data-open-wing>לפתוח בכל זאת</button>'}
+          ${shownOpen ? "" : '<button type="button" class="open-anyway phone-only" data-open-wing>לפתוח בכל זאת</button>'}
         </div>
         <div class="cell" style="grid-column:1;grid-row:5">${roomCardHtml(rep)}</div>
         <div class="cell" style="grid-column:2;grid-row:5">${roomCardHtml(core)}</div>
@@ -1466,7 +1494,7 @@ function renderMap() {
             <div class="gate-locks">${locks}</div>
             <div class="gate-doors" aria-hidden="true"><div class="gate-door"></div><div class="gate-door"></div></div>
           </div>
-          ${open ? "" : '<button type="button" class="open-anyway gate-anyway" data-open-wing>לפתוח בכל זאת</button>'}
+          ${shownOpen ? "" : '<button type="button" class="open-anyway gate-anyway" data-open-wing>לפתוח בכל זאת</button>'}
         </div>
         ${doorway(1, 6)}${doorway(2, 6)}${doorway(3, 6)}
         <div class="cell corridor main" style="grid-column:1 / 5;grid-row:7"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
@@ -1817,7 +1845,19 @@ function enterRoom(id) {
   showProblem({ animate: false });
 }
 
+// "Room cleared": the last step is solved. The path lights up gold node by
+// node, the boss last and biggest, before the victory screen comes in.
+// Returns how long to hold the room on screen.
+function celebratePath() {
+  const nodes = pathEl.querySelectorAll(".pnode");
+  if (reducedMotion()) return 700;
+  nodes.forEach((el, i) => (el.style.animationDelay = `${0.45 + i * 0.18}s`));
+  roomView.classList.add("room-cleared");
+  return 450 + nodes.length * 180 + 1300;
+}
+
 function buildPath(room) {
+  roomView.classList.remove("room-cleared");
   pathEl.innerHTML =
     room.nodes
       .map((n, i) => `<div class="pnode${n.boss ? " boss" : ""}" data-i="${i}"><span>${n.boss ? "★" : i + 1}</span></div>`)
@@ -2040,13 +2080,16 @@ checkBtn.addEventListener("click", () => {
   if (nextNode >= view.room.nodes.length) {
     const score = rec.run.score;
     const prevBest = rec.best;
+    // The floor as it was, so the victory screen can say what this win changed.
+    const before = { firstWin: rec.wins === 0, medal: medalState(), wing: wingOpen() };
     rec.best = prevBest === null ? score : Math.max(prevBest, score);
     rec.wins += 1;
     rec.run = null;
     saveStore();
     view.node = nextNode;
     updatePath(true);
-    setTimeout(() => showConquest(view.room, { score, prevBest, wins: rec.wins }), 900);
+    const wait = celebratePath();
+    setTimeout(() => showConquest(view.room, { score, prevBest, wins: rec.wins, before }), wait);
     return;
   }
   rec.run.node = nextNode;
@@ -2153,35 +2196,78 @@ function sealSvg(score) {
     </svg>`;
 }
 
-function showConquest(room, { score, prevBest, wins }) {
+// A small stone arch with open doors: "the gate opened".
+const GATE_ICON = `
+  <svg class="news-gate" viewBox="0 0 30 30" aria-hidden="true">
+    <path d="M3 29V14a12 12 0 0 1 24 0v15z" fill="#2b241c" stroke="#8d806a" stroke-width="2.5"/>
+    <path d="M6 29V15l4 2v12zM24 29V15l-4 2v12z" fill="#7a5230"/>
+    <path d="M12 29V18a3 3 0 0 1 6 0v11z" fill="#f2c94c" opacity="0.8"/>
+  </svg>`;
+
+// What this win changed on the floor: a lock, the gate, the medal.
+function victoryNews(room, before) {
+  const news = [];
+  if (before.firstWin && CORE_IDS.includes(room.id)) {
+    news.push({ icon: padlockSvg(room.num, true), text: `מנעול ${room.num} נפתח` });
+  }
+  if (!before.wing && wingOpen()) news.push({ icon: GATE_ICON, text: "השער לאגף העליון נפתח" });
+  const m = medalState();
+  const b = before.medal;
+  if (m.earned && !b.earned) {
+    news.push({ icon: medalSvg(m), text: `קיבלתם מדליה · ממוצע <b>${m.avg}</b>` });
+  } else if (m.earned) {
+    if ((m.gold && !b.gold) || (m.star && !b.star)) news.push({ icon: medalSvg(m), text: "המדליה השתדרגה" });
+    else if (m.avg !== b.avg) {
+      news.push({ icon: medalSvg(m), text: `ממוצע המדליה עלה: <bdi dir="ltr">${b.avg} → ${m.avg}</bdi>` });
+    }
+  }
+  return news;
+}
+
+// Set by a first win in a core room; the map opens that lock (and the gate,
+// if it was the last one) when the student walks back out.
+let pendingUnlock = null;
+
+function showConquest(room, { score, prevBest, wins, before }) {
   justConquered = room.id;
   let bestLine;
-  if (prevBest === null) bestLine = `ציון ראשון בחדר: <b>${score}</b>`;
-  else if (score > prevBest) bestLine = `שיא חדש! <b>${score}</b> <span class="muted">(קודם: ${prevBest})</span>`;
-  else bestLine = `הציון הפעם: <b>${score}</b> · השיא שלך: <b>${prevBest}</b>`;
+  if (prevBest === null) bestLine = `ציון ראשון בחדר`;
+  else if (score > prevBest) bestLine = `שיא חדש! <span class="dim">(קודם: ${prevBest})</span>`;
+  else bestLine = `השיא שלכם: <b>${prevBest}</b>`;
 
-  // What is left on the floor, now that this room is conquered.
+  const news = victoryNews(room, before);
+  if (before.firstWin && CORE_IDS.includes(room.id)) {
+    pendingUnlock = { lock: room.num, gate: !before.wing && wingOpen() };
+  }
+
+  // Where to go next.
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
-  let next;
+  let next = "";
   if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
-  else if (CORE_IDS.includes(room.id)) next = "עברתם את שלושת החדרים! המנעולים נפתחו - המדליה שלכם מחכה בחדר המדליות";
-  else if (room.id === "review") next = "עברתם את התרגילים המעורבבים - המדליה שלכם השתדרגה! · אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
-  else if (room.id === "nonmonic") next = "עברתם את \"מכנה עם מקדם מוביל\" - המדליה שלכם השתדרגה!";
-  else next = "";
+  else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
+  else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
+
+  const newsHtml = news.length
+    ? `<ul class="victory-news">${news
+        .map((n, i) => `<li style="animation-delay:${1.5 + i * 0.35}s"><span class="news-icon">${n.icon}</span><span>${n.text}</span></li>`)
+        .join("")}</ul>`
+    : "";
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;
   $("conquest").innerHTML = `
     <div class="seal-wrap">${sealSvg(score)}</div>
     <h2>ניצחון! עברתם את החדר</h2>
-    <div class="conquest-room">${room.title}<div dir="ltr" class="muted conquest-room-en">${room.en}</div></div>
+    <div class="conquest-room"><span class="victory-plaque">${room.title}</span><div dir="ltr" class="conquest-room-en">${room.en}</div></div>
     <div class="conquest-dots">${room.nodes
       .map((n, i) => `<span class="mini-node done${n.boss ? " boss" : ""}" style="animation-delay:${0.9 + i * 0.15}s"></span>`)
       .join("")}</div>
     ${score === 10 ? '<div class="perfect">★ מושלם - בלי אף טעות</div>' : ""}
-    <div class="conquest-best">${bestLine}</div>
-    <div class="conquest-wins">ניצחונות בחדר: ${wins}</div>
-    <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
-    <div class="conquest-next">${next}</div>`;
+    <div class="conquest-best">${bestLine} · <span class="dim">ניצחונות בחדר: ${wins}</span></div>
+    ${newsHtml}
+    <div class="victory-end" style="animation-delay:${1.3 + news.length * 0.35}s">
+      <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
+      ${next ? `<div class="conquest-next">${next}</div>` : ""}
+    </div>`;
   $("toTowerBtn").addEventListener("click", goToMap);
   // The run is over; drop the room from history so Back/reload lands on the map.
   history.replaceState(null, "", "#/");
@@ -2208,6 +2294,7 @@ function route() {
       mapZoom.cancel();
       mapZoom = null;
     }
+    playUnlock();
   }
 }
 

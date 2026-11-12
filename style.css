@@ -272,7 +272,21 @@ button:disabled {
 
 .padlock { width: 26px; height: 33px; overflow: visible; }
 .padlock .shackle { fill: none; stroke: #b7b9bd; stroke-width: 2.6; transition: transform 0.5s ease; }
-.padlock .lock-body { fill: #8a8d93; stroke: #4b4d52; stroke-width: 1.2; }
+.padlock .lock-body { fill: #8a8d93; stroke: #4b4d52; stroke-width: 1.2; transition: fill 0.35s ease, stroke 0.35s ease; }
+
+/* Opening in front of the student: a jiggle, then a gold flash as it springs. */
+.padlock.unlocking {
+  transform-origin: 50% 0;
+  animation: lock-jiggle 0.42s ease, lock-flash 1.1s ease 0.42s;
+}
+@keyframes lock-jiggle {
+  20% { transform: rotate(-12deg); }
+  45% { transform: rotate(10deg); }
+  70% { transform: rotate(-6deg); }
+}
+@keyframes lock-flash {
+  30% { transform: scale(1.3); filter: drop-shadow(0 0 5px #f2c94c) drop-shadow(0 0 2px #fff7d6); }
+}
 .padlock text { font: 700 11px "Segoe UI", Arial, sans-serif; fill: white; }
 .padlock.open .shackle { stroke: #9fd6b5; transform: translateY(-4px) rotate(-14deg); transform-origin: 6.5px 13px; }
 .padlock.open .lock-body { fill: var(--good); stroke: #2f6b45; }
@@ -731,6 +745,24 @@ button:disabled {
   margin: 8px 0 12px;
 }
 
+/* Room cleared: each node flashes and turns gold in turn, the boss last and
+   biggest; the pawn hops; the caption lights up. */
+#roomView.room-cleared .pnode { animation: node-gild 0.55s ease both; }
+#roomView.room-cleared .pnode.boss { animation: boss-gild 0.9s ease both; }
+#roomView.room-cleared .pconn-fill { background: #e2b33a; transition: width 0.45s ease, background 0.5s ease 0.5s; }
+#roomView.room-cleared .pawn { border-top-color: #e2b33a; animation: pawn-hop 0.5s ease 3; }
+#roomView.room-cleared .node-caption { color: #a77b06; font-weight: 700; font-size: 1.05rem; animation: fade-up 0.4s ease both; }
+
+@keyframes node-gild {
+  45% { transform: scale(1.4); box-shadow: 0 0 0 8px rgba(242, 201, 76, 0.45); }
+  100% { transform: scale(1); background: #e2b33a; border-color: #9c7414; color: white; box-shadow: 0 0 10px 2px rgba(242, 201, 76, 0.5); }
+}
+@keyframes boss-gild {
+  40% { transform: rotate(45deg) scale(1.7); box-shadow: 0 0 0 12px rgba(242, 201, 76, 0.45), 0 0 30px 12px rgba(255, 196, 70, 0.6); }
+  100% { transform: rotate(45deg) scale(1.2); background: #e2b33a; border-color: #9c7414; color: white; box-shadow: 0 0 16px 5px rgba(255, 196, 70, 0.6); }
+}
+@keyframes pawn-hop { 50% { margin-top: -8px; } }
+
 .in-ext-room .pnode:not(.boss).done { background: var(--ext); border-color: var(--ext); }
 .in-ext-room .pnode:not(.boss).current { border-color: var(--ext); color: var(--ext); }
 .in-ext-room .pconn-fill { background: var(--ext); }
@@ -1025,15 +1057,100 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 /* Conquest                                                               */
 /* ---------------------------------------------------------------------- */
 
+/* A torch-lit stone hall, in the same rock and gold as the floor map. */
 .conquest {
+  position: relative;
   text-align: center;
-  padding: 24px 8px;
-  --ink: var(--good);
+  padding: 26px 18px 24px;
+  color: #f3ead6;
+  border-radius: 16px;
+  background:
+    radial-gradient(45% 35% at 8% 10%, rgba(255, 170, 60, 0.22), transparent),
+    radial-gradient(45% 35% at 92% 10%, rgba(255, 170, 60, 0.22), transparent),
+    radial-gradient(60% 45% at 50% 22%, rgba(255, 210, 120, 0.12), transparent),
+    var(--tiles, none),
+    #2c2721;
+  box-shadow: inset 0 0 0 4px #5a4f40, inset 0 0 60px rgba(0, 0, 0, 0.55);
+  --ink: #8fd3a8;
+  --tiles: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34'%3E%3Cpath d='M0 .5H34M.5 0V34' stroke='%23ffffff' stroke-opacity='.035' fill='none'/%3E%3C/svg%3E");
 }
 
-.conquest.tier-high { --ink: var(--gold); }
-.conquest.tier-mid { --ink: var(--mid); }
-.conquest.tier-low { --ink: var(--bad); }
+.conquest.tier-high { --ink: #f2c94c; }
+.conquest.tier-mid { --ink: #e8b04a; }
+.conquest.tier-low { --ink: #ec8a72; }
+
+/* Two torches flickering in the top corners. */
+.conquest::before,
+.conquest::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  width: 10px;
+  height: 16px;
+  border-radius: 50% 50% 45% 45%;
+  background: radial-gradient(circle at 50% 70%, #fff3c4, #ffb23f 55%, #e0631c);
+  box-shadow: 0 0 14px 6px rgba(255, 160, 50, 0.45);
+  animation: torch-flicker 1.8s ease-in-out infinite;
+}
+.conquest::before { inset-inline-start: 18px; }
+.conquest::after { inset-inline-end: 18px; animation-delay: -0.9s; }
+
+@keyframes torch-flicker {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  30% { transform: scale(0.9, 1.08); opacity: 0.85; }
+  60% { transform: scale(1.05, 0.95); }
+}
+
+.conquest .dim { color: #b9ad95; }
+.seal { filter: drop-shadow(0 0 10px rgba(242, 201, 76, 0.25)); }
+
+/* The room's name on a carved plaque, like the floor's. */
+.victory-plaque {
+  display: inline-block;
+  padding: 4px 18px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #4b3f2b;
+  background: linear-gradient(180deg, #f5efe2, #e3d8c1);
+  border: 2px solid #8a7a5e;
+  border-radius: 6px;
+}
+.conquest-room-en { font-size: 0.75rem; color: #b9ad95; margin-top: 4px; }
+
+/* What this win changed on the floor. */
+.victory-news {
+  list-style: none;
+  margin: 4px auto 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.victory-news li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 250px;
+  padding: 7px 16px 7px 12px;
+  font-weight: 600;
+  text-align: start;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(242, 201, 76, 0.45);
+  border-radius: 10px;
+  animation: news-in 0.45s cubic-bezier(0.2, 0.7, 0.3, 1.3) both;
+}
+.news-icon { flex: none; width: 34px; height: 36px; display: flex; align-items: center; justify-content: center; }
+.news-icon .padlock { width: 24px; height: 30px; }
+.news-icon .medal { width: 36px; height: 35px; }
+.news-gate { width: 28px; height: 28px; }
+
+@keyframes news-in {
+  from { transform: translateY(10px) scale(0.9); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.victory-end { animation: fade-up 0.4s ease both; }
 
 .seal-wrap { display: flex; justify-content: center; margin-bottom: 12px; }
 
@@ -1072,6 +1189,9 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 .conquest-dots { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; }
 .conquest-dots .mini-node { width: 16px; height: 16px; animation: dot-light 0.3s ease both; }
 .conquest-dots .mini-node.boss { animation-name: dot-light-boss; }
+/* Gold, like the path that just lit up in the room. */
+.conquest-dots .mini-node { background: #e2b33a; border-color: #9c7414; }
+.conquest-dots .mini-node.boss { width: 18px; height: 18px; box-shadow: 0 0 10px 3px rgba(255, 196, 70, 0.45); }
 
 @keyframes dot-light {
   from { transform: scale(0.2); opacity: 0; }
@@ -1083,12 +1203,12 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   to { transform: rotate(45deg) scale(1); opacity: 1; }
 }
 
-.perfect { color: var(--gold); font-weight: 700; margin-bottom: 6px; }
-.conquest-best { margin-bottom: 4px; }
-.conquest-wins { color: var(--muted); font-size: 0.9rem; margin-bottom: 18px; }
-.conquest-next { margin-top: 12px; color: var(--muted); font-size: 0.9rem; }
+.perfect { color: #f2c94c; font-weight: 700; margin-bottom: 6px; }
+.conquest-best { margin-bottom: 16px; }
+.conquest-next { margin-top: 12px; color: #b9ad95; font-size: 0.9rem; }
+.conquest h2 { color: var(--ink); text-shadow: 0 0 18px rgba(242, 201, 76, 0.25); }
 
-.conquest-best, .conquest-wins, .conquest h2, .conquest-room, .perfect, #toTowerBtn, .conquest-next {
+.conquest-best, .conquest h2, .conquest-room, .perfect {
   animation: fade-up 0.4s ease 0.9s both;
 }
 
