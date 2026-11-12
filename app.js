@@ -376,7 +376,8 @@ function nonMonicTerms() {
 const GENERATORS = {
   // degree-2 numerator over a linear denominator
   div1: () => ({ Q: [randInt(-5, 5), 1], terms: [{ A: nonZero(-6, 6), m: 1, n: randInt(-5, 5) }], display: "factored" }),
-  div2: () => ({ Q: [randInt(-5, 5), nonZero(-3, 3)], terms: [{ A: nonZero(-7, 7), m: 1, n: randInt(-6, 6) }], display: "factored" }),
+  // degree-3 numerator over a linear denominator
+  div3: () => ({ Q: [randInt(-4, 4), randInt(-3, 3), nonZero(-2, 2)], terms: [{ A: nonZero(-6, 6), m: 1, n: randInt(-4, 4) }], display: "factored" }),
   // monic quadratic denominators
   pfFactored: () => ({ Q: [], terms: monicTerms({ coef: 5, root: 4 }), display: "factored" }),
   pfExpanded: () => ({ Q: [], terms: monicTerms({ coef: 7, root: 6 }), display: "expanded" }),
@@ -1031,10 +1032,10 @@ const ROOMS = [
     title: "חילוק פולינומים",
     en: "Polynomial division",
     tag: "הכנה · אופציונלי",
-    blurb: "מונה ממעלה 2 חלקי מכנה לינארי. יודעים לחלק פולינומים? אפשר לדלג.",
+    blurb: "כאן נלמד לחשב אינטגרל על ידי חילוק פולינומים: מונה ממעלה 2 או 3 חלקי מכנה לינארי. יודעים לחלק פולינומים? אפשר לדלג.",
     nodes: [
-      { gen: "div1", title: "חילוק במכנה לינארי" },
-      { gen: "div2", title: "חילוק במכנה לינארי - עוד אחד" },
+      { gen: "div1", title: "מונה ממעלה 2" },
+      { gen: "div3", title: "אינטגרל הבוס: מונה ממעלה 3", boss: true },
     ],
   },
   {
@@ -1154,7 +1155,7 @@ function missingRequirements(room) {
 
 const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(", ");
 
-// The upper wing (review, non-monic, stairs up) opens once the three core
+// The upper wing (review, non-monic, the topic medal) opens once the three core
 // rooms are conquered - or earlier, if the student opens its gate anyway.
 const CORE_IDS = ["repeated", "pf1", "irreducible"];
 const coreDone = () => CORE_IDS.every(isConquered);
@@ -1199,9 +1200,9 @@ let justConquered = null; // room id whose card flips on the next map render
 const LOCK_SVG =
   '<svg class="lock-icon" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="8" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none"/></svg>';
 
-// A banner hanging from a conquered chamber.
+// A gold victory banner hanging on a completed room.
 const PENNANT_SVG =
-  '<svg class="conquered-flag" viewBox="0 0 24 34" aria-hidden="true"><rect class="rod" x="0" y="0" width="24" height="3" rx="1.5"/><path class="cloth" d="M3 3h18v28l-9-6-9 6z"/><path class="tick" d="M7.5 13.5l3.2 3.2 6-6.2"/></svg>';
+  '<svg class="conquered-flag" viewBox="0 0 24 34" aria-hidden="true"><rect class="rod" x="0" y="0" width="24" height="3" rx="1.5"/><path class="cloth" d="M3 3h18v28l-9-6-9 6z"/><path class="star" d="M12 7.5l1.9 3.9 4.3.6-3.1 3 .7 4.3-3.8-2-3.8 2 .7-4.3-3.1-3 4.3-.6z"/></svg>';
 
 function nodeDotsHtml(room, doneCount, currentIndex = -1) {
   return room.nodes
@@ -1233,21 +1234,20 @@ function roomCardHtml(room) {
   if (rec.run) {
     side = `<span class="score-chip small tier-${scoreTier(rec.run.score)}" title="הניקוד בחדר עכשיו">${rec.run.score}</span>`;
   } else if (conquered) {
-    side = `<span class="wins" title="מספר הפעמים שהחדר נכבש">×${rec.wins}</span>` +
+    side = `<span class="wins" title="מספר הניצחונות בחדר">×${rec.wins}</span>` +
       `<span class="score-chip small tier-${scoreTier(rec.best)}" title="הציון הטוב ביותר">${rec.best}</span>`;
   }
 
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`, `<div>${room.blurb}</div>`];
   if (locked) info.push(`<div class="info-note">נפתח אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
   if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length}.</div>`);
-  if (conquered) info.push(`<div class="info-note">נכבש ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
+  if (conquered) info.push(`<div class="info-note">ניצחתם בחדר ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
 
   const done = rec.run ? rec.run.node : conquered ? room.nodes.length : 0;
   const stars = room.stars ? `<span class="stars">${"★".repeat(room.stars)}</span>` : "";
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
-      ${hereId() === room.id ? YOU_ARE_HERE : ""}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}${locked ? LOCK_SVG : ""}<span class="room-title">${room.title}</span>${stars}
         <span class="info-wrap">
@@ -1272,18 +1272,105 @@ const DOOR_SVG = `
     <circle class="door-ring" cx="37" cy="36" r="2.6"/>
   </svg>`;
 
-// "You are here": the room the student was in last (the entrance at first).
-const YOU_ARE_HERE = '<span class="you-are-here" title="אתם כאן" aria-label="אתם כאן"></span>';
-const hereId = () => (store.lastRoom && ROOM_BY_ID[store.lastRoom] ? store.lastRoom : "entrance");
-
 // A doorway through the wall between two areas of the map.
 const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
 
+// One padlock on the wing's gate, numbered after its core room.
+function padlockSvg(n, open) {
+  return `
+    <svg class="padlock${open ? " open" : ""}" viewBox="0 0 24 30" role="img" aria-label="מנעול ${n}${open ? " - פתוח" : ""}">
+      <path class="shackle" d="M6.5 13V8.5a5.5 5.5 0 0 1 11 0V13"/>
+      <rect class="lock-body" x="2.5" y="12" width="19" height="16" rx="3"/>
+      <text x="12" y="24.5" text-anchor="middle">${n}</text>
+    </svg>`;
+}
+
+// --- the topic medal: earned by rooms 1-3, upgraded by the optional rooms ---
+
+const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
+
+function medalState() {
+  const earned = coreDone();
+  const avg = earned ? CORE_IDS.reduce((s, id) => s + roomRecord(id).best, 0) / CORE_IDS.length : null;
+  return {
+    earned,
+    avg: avg === null ? null : Math.round(avg * 10) / 10,
+    gold: isConquered("review"),
+    star: isConquered("nonmonic"),
+  };
+}
+
+// Two laurel branches curving up either side of the medal.
+function laurelLeaves(color) {
+  let leaves = "";
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 7; i++) {
+      const deg = 250 - i * 22; // from the bottom, up the side
+      const a = (deg * Math.PI) / 180;
+      const x = 60 + side * 47 * Math.cos(a);
+      const y = 58 - 47 * Math.sin(a);
+      const rot = side * (deg - 90);
+      leaves += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="3.6" ry="8" transform="rotate(${rot.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${color}"/>`;
+    }
+  }
+  return leaves;
+}
+
+function medalSvg(m) {
+  const star = '<path class="medal-star" d="M60 4l3.8 7.8 8.6 1.2-6.2 6 1.5 8.6L60 23.5l-7.7 4.1 1.5-8.6-6.2-6 8.6-1.2z"/>';
+  const ribbon = `
+    <path class="medal-ribbon" d="M10 94h100l-6 9 6 9H10l6-9z"/>
+    <text class="medal-ribbon-text" x="60" y="106.5" text-anchor="middle">פונקציות רציונליות</text>`;
+  if (!m.earned) {
+    return `
+      <svg class="medal empty" viewBox="0 0 120 116" role="img" aria-label="המדליה עוד לא הושגה">
+        <g opacity="0.3">${laurelLeaves("#8c8270")}</g>
+        <circle cx="60" cy="58" r="34" class="medal-outline"/>
+        <text x="60" y="69" text-anchor="middle" class="medal-q">?</text>
+        ${ribbon}
+      </svg>`;
+  }
+  const fill = MEDAL_COLORS[scoreTier(m.avg)];
+  return `
+    <svg class="medal${m.gold ? " gold" : ""}" viewBox="0 0 120 116" role="img" aria-label="מדליה: ממוצע ${m.avg}">
+      ${laurelLeaves(m.gold ? "#c9a227" : "#6f8f4e")}
+      <circle cx="60" cy="58" r="35" class="medal-rim"/>
+      <circle cx="60" cy="58" r="30" fill="${fill}"/>
+      <circle cx="60" cy="58" r="26" class="medal-inner"/>
+      <text x="60" y="47" text-anchor="middle" class="medal-int">∫</text>
+      <text x="60" y="72" text-anchor="middle" class="medal-avg">${m.avg}</text>
+      ${m.star ? star : ""}
+      ${ribbon}
+    </svg>`;
+}
+
+function trophyHtml() {
+  const m = medalState();
+  const sig = m.earned ? `${m.avg}|${m.gold}|${m.star}` : "";
+  const isNew = m.earned && store.medalSeen !== sig;
+  if (isNew) {
+    store.medalSeen = sig;
+    saveStore();
+  }
+  const perk = (on, text) => `<div class="medal-perk${on ? " on" : ""}">${on ? "✓" : "○"} ${text}</div>`;
+  const caption = m.earned
+    ? `<div class="medal-title">מדליית הנושא</div>
+       <div class="medal-line">ממוצע חדרים <bdi dir="ltr">1, 2, 3</bdi>: <b>${m.avg}</b></div>
+       ${perk(m.gold, "חזרה: מסגרת זהב")}${perk(m.star, "◆: כוכב")}`
+    : `<div class="medal-title">מדליית הנושא</div>
+       <div class="medal-line">מחכה לכם אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>`;
+  return `
+    <div class="trophy-room${m.earned ? " earned" : ""}${isNew ? " medal-new" : ""}" data-node="trophy">
+      ${medalSvg(m)}
+      <div class="medal-caption">${caption}</div>
+    </div>`;
+}
+
 // Top-down plan of floor 1. Grid columns run right to left (RTL): rooms 1-3,
-// then a narrow passage up to the upper wing.
-//   row 1  upper wing: review · non-monic · stairs to floor 2
+// then the gate up to the upper wing.
+//   row 1  upper wing: review · non-monic · the topic medal
 //   row 3  upper corridor (fogged until the wing opens)
-//   row 5  core rooms 1 · 2 · 3, and the gated passage
+//   row 5  core rooms 1 · 2 · 3, and the gate with its three locks
 //   row 7  main corridor
 //   row 9  polynomial division (walk through it - or solve it)
 //   row 11 entrance
@@ -1297,50 +1384,204 @@ function renderMap() {
     saveStore();
   }
   const wingCls = open ? (reveal ? " wing-reveal" : "") : " fogged";
-  const done = coreDone();
-
-  const stairs = `
-    <div class="stairs-room${done ? " floor-done" : ""}">
-      <div class="stairs-steps" aria-hidden="true"></div>
-      <div class="stairs-text">
-        <div class="room-title">מדרגות לקומה 2</div>
-        ${done ? '<div class="stairs-note done-note">סיימתם את קומה 1</div>' : ""}<div class="stairs-note">קומה 2 · בקרוב</div>
-      </div>
-    </div>`;
-
-  const upperCorridor = open
-    ? `<div class="corridor-label">אגף עליון</div>`
-    : `<div class="corridor-label">אגף עליון · נפתח אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>
-       <button type="button" class="open-anyway" data-open-wing>לפתוח בכל זאת</button>`;
+  const gateCls = open ? (coreDone() ? " open" : " open forced") : "";
+  const locks = CORE_IDS.map((id, i) => padlockSvg(i + 1, isConquered(id))).join("");
 
   towerEl.innerHTML = `
-    <div class="floor-map${done ? " floor-done" : ""}">
+    <div class="floor-map">
       <div class="floor-label">קומה 1 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
       <div class="floor-grid">
         <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
         <div class="cell wing${wingCls}" style="grid-column:2;grid-row:1">${roomCardHtml(ext)}</div>
-        <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${stairs}</div>
+        <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${trophyHtml()}</div>
         ${doorway(1, 2)}${doorway(2, 2)}${doorway(3, 2)}
-        <div class="cell corridor upper wing${wingCls}" style="grid-column:1 / 5;grid-row:3">${upperCorridor}</div>
-        ${doorway(4, 4)}
+        <div class="cell corridor upper wing${wingCls}" style="grid-column:1 / 5;grid-row:3">
+          <div class="corridor-label">אגף עליון</div>
+          ${open ? "" : '<button type="button" class="open-anyway phone-only" data-open-wing>לפתוח בכל זאת</button>'}
+        </div>
         <div class="cell" style="grid-column:1;grid-row:5">${roomCardHtml(rep)}</div>
         <div class="cell" style="grid-column:2;grid-row:5">${roomCardHtml(core)}</div>
         <div class="cell" style="grid-column:3;grid-row:5">${roomCardHtml(irr)}</div>
-        <div class="cell passage${open ? " open" : ""}" style="grid-column:4;grid-row:5"${open ? "" : ' data-open-wing role="button" tabindex="0" aria-label="שער לאגף העליון"'}>
-          <div class="portcullis" aria-hidden="true"></div>
+        <div class="cell passage${gateCls}" style="grid-column:4;grid-row:4 / 7" data-node="gate">
+          <div class="gate-arch">
+            <div class="gate-locks">${locks}</div>
+            <div class="gate-doors" aria-hidden="true"><div class="gate-door"></div><div class="gate-door"></div></div>
+          </div>
+          ${open ? "" : '<button type="button" class="open-anyway gate-anyway" data-open-wing>לפתוח בכל זאת</button>'}
         </div>
-        ${doorway(1, 6)}${doorway(2, 6)}${doorway(3, 6)}${doorway(4, 6)}
-        <div class="cell corridor" style="grid-column:1 / 5;grid-row:7"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
+        ${doorway(1, 6)}${doorway(2, 6)}${doorway(3, 6)}
+        <div class="cell corridor main" style="grid-column:1 / 5;grid-row:7"><div class="corridor-label">מסדרון · בחרו חדר</div></div>
         ${doorway(2, 8)}
         <div class="cell" style="grid-column:2;grid-row:9">${roomCardHtml(prep)}</div>
         ${doorway(2, 10)}
-        <div class="cell entrance" style="grid-column:2;grid-row:11">
-          ${hereId() === "entrance" ? YOU_ARE_HERE : ""}${DOOR_SVG}<span class="door-label">כניסה</span>
+        <div class="cell entrance" style="grid-column:2;grid-row:11" data-node="entrance">
+          ${DOOR_SVG}<span class="door-label">כניסה</span>
+        </div>
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
         </div>
       </div>
     </div>`;
   justConquered = null;
+  requestAnimationFrame(() => placeMarker(markerNode(), false));
 }
+
+// --- the "you are here" marker ---------------------------------------------
+// It stands at the doorway of a room (or the entrance, or the gate). Arrow
+// keys step it between neighbouring places; Enter goes in. A click on a room
+// walks it there along the corridors, then goes in.
+
+const MAP_NODES = {
+  entrance: { area: "lower", at: "top", nav: { up: "division" } },
+  division: { area: "lower", at: "top", nav: { up: "pf1", down: "entrance" } },
+  repeated: { area: "lower", at: "bottom", nav: { left: "pf1", down: "division" } },
+  pf1: { area: "lower", at: "bottom", nav: { right: "repeated", left: "irreducible", down: "division" } },
+  irreducible: { area: "lower", at: "bottom", nav: { right: "pf1", left: "gate", down: "division" } },
+  gate: { area: "gate", at: "bottom", dy: 13, nav: { right: "irreducible", up: "trophy", down: "irreducible" } },
+  trophy: { area: "upper", at: "bottom", nav: { right: "nonmonic", down: "gate" } },
+  nonmonic: { area: "upper", at: "bottom", nav: { right: "review", left: "trophy", down: "gate" } },
+  review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
+};
+
+const markerNode = () => (MAP_NODES[store.lastRoom] ? store.lastRoom : "entrance");
+let markerBusy = false;
+
+function nodeEl(id) {
+  return ROOM_BY_ID[id] ? towerEl.querySelector(`[data-room="${id}"]`) : towerEl.querySelector(`[data-node="${id}"]`);
+}
+
+// A point relative to the floor grid.
+function nodePoint(id) {
+  const grid = towerEl.querySelector(".floor-grid").getBoundingClientRect();
+  const r = nodeEl(id).getBoundingClientRect();
+  const at = MAP_NODES[id].at;
+  const y = at === "top" ? r.top : at === "bottom" ? r.bottom : r.top + r.height / 2;
+  return { x: r.left + r.width / 2 - grid.left, y: y - grid.top + (MAP_NODES[id].dy || 0) };
+}
+
+function corridorY(which) {
+  const grid = towerEl.querySelector(".floor-grid").getBoundingClientRect();
+  const r = towerEl.querySelector(`.corridor.${which}`).getBoundingClientRect();
+  return r.top + r.height / 2 - grid.top;
+}
+
+// The way between two places: out into the corridor, along it, and in -
+// through the gate when going between the lower floor and the upper wing.
+function routePoints(from, to) {
+  const a = nodePoint(from);
+  const b = nodePoint(to);
+  if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
+  const lowY = corridorY("main");
+  const upY = corridorY("upper");
+  const g = nodePoint("gate");
+  const fa = MAP_NODES[from].area;
+  const ta = MAP_NODES[to].area;
+  const pts = [a];
+  if (fa === "lower") pts.push({ x: a.x, y: lowY });
+  if (fa === "upper") pts.push({ x: a.x, y: upY });
+  if (fa === "gate") pts.push({ x: a.x, y: ta === "upper" ? upY : lowY });
+  if ((fa === "lower" && ta === "upper") || (fa === "upper" && ta === "lower")) {
+    const [y1, y2] = fa === "lower" ? [lowY, upY] : [upY, lowY];
+    pts.push({ x: g.x, y: y1 }, { x: g.x, y: y2 });
+  }
+  if (ta === "gate") pts.push({ x: b.x, y: fa === "upper" ? upY : lowY });
+  if (ta === "lower") pts.push({ x: b.x, y: lowY });
+  if (ta === "upper") pts.push({ x: b.x, y: upY });
+  pts.push(b);
+  return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
+}
+
+const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
+
+function markerHintText(id) {
+  if (id === "gate") return wingOpen() ? "" : "שער ↵";
+  if (!ROOM_BY_ID[id]) return "";
+  return isLocked(ROOM_BY_ID[id]) ? "" : "היכנסו ↵";
+}
+
+function placeMarker(id, save = true) {
+  const marker = towerEl.querySelector(".map-marker");
+  if (!marker || mapView.hidden || !nodeEl(id)) return;
+  marker.style.transform = markerTransform(nodePoint(id));
+  marker.querySelector(".marker-hint").textContent = markerHintText(id);
+  towerEl.querySelectorAll(".marker-here").forEach((el) => el.classList.remove("marker-here"));
+  nodeEl(id).classList.add("marker-here");
+  if (save && store.lastRoom !== id) {
+    store.lastRoom = id;
+    saveStore();
+  }
+}
+
+// Walk to a place; resolves when the marker has arrived.
+function walkTo(id) {
+  const from = markerNode();
+  const marker = towerEl.querySelector(".map-marker");
+  if (from === id || !marker) {
+    placeMarker(id);
+    return Promise.resolve();
+  }
+  const pts = routePoints(from, id);
+  const lens = pts.slice(1).map((p, i) => Math.hypot(p.x - pts[i].x, p.y - pts[i].y));
+  const total = lens.reduce((s, l) => s + l, 0) || 1;
+  let acc = 0;
+  const frames = pts.map((p, i) => {
+    if (i > 0) acc += lens[i - 1];
+    return { transform: markerTransform(p), offset: acc / total };
+  });
+  marker.querySelector(".marker-hint").textContent = "";
+  markerBusy = true;
+  const duration = Math.min(700, Math.max(180, total * 1.1));
+  const anim = marker.animate(frames, { duration, easing: "ease-in-out" });
+  return anim.finished.catch(() => {}).then(() => {
+    markerBusy = false;
+    placeMarker(id);
+  });
+}
+
+// Step from the marker's place in a direction, if there's a way there.
+function stepMarker(dir) {
+  const here = markerNode();
+  const to = MAP_NODES[here].nav[dir];
+  if (!to) return;
+  if (MAP_NODES[to].area === "upper" && !wingOpen()) {
+    if (here === "gate") openGateDialog();
+    else walkTo("gate");
+    return;
+  }
+  walkTo(to);
+}
+
+// Enter: go into the room the marker stands at (or try the gate).
+function activateMarker() {
+  const id = markerNode();
+  if (id === "gate") {
+    if (!wingOpen()) openGateDialog();
+    return;
+  }
+  const room = ROOM_BY_ID[id];
+  if (!room) return;
+  if (isLocked(room)) openGateDialog();
+  else goToRoom(id);
+}
+
+const ARROW_DIRS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
+
+document.addEventListener("keydown", (e) => {
+  if (mapView.hidden || !lockDialog.hidden || markerBusy) return;
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  if (ARROW_DIRS[e.key]) {
+    e.preventDefault();
+    stepMarker(ARROW_DIRS[e.key]);
+  } else if (e.key === "Enter" && !e.target.closest("button, [data-room], .passage")) {
+    e.preventDefault();
+    activateMarker();
+  }
+});
+
+window.addEventListener("resize", () => {
+  if (!mapView.hidden && towerEl.querySelector(".map-marker")) placeMarker(markerNode(), false);
+});
 
 function closeInfoPopovers(except) {
   towerEl.querySelectorAll(".info-wrap.open").forEach((w) => {
@@ -1371,15 +1612,27 @@ towerEl.addEventListener("click", (e) => {
     openGateDialog();
     return;
   }
+  if (markerBusy) return;
   const card = e.target.closest("[data-room]");
-  if (!card) return;
-  const room = ROOM_BY_ID[card.dataset.room];
-  if (isLocked(room)) openGateDialog();
-  else goToRoom(room.id);
+  if (card) {
+    const room = ROOM_BY_ID[card.dataset.room];
+    if (isLocked(room)) openGateDialog();
+    else walkTo(room.id).then(() => goToRoom(room.id));
+    return;
+  }
+  const gate = e.target.closest('[data-node="gate"]');
+  if (gate) {
+    walkTo("gate").then(() => {
+      if (!wingOpen()) openGateDialog();
+    });
+    return;
+  }
+  const place = e.target.closest('[data-node="trophy"], [data-node="entrance"]');
+  if (place && !place.closest(".fogged")) walkTo(place.dataset.node);
 });
 
 towerEl.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-room], .passage[data-open-wing]")) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-room]")) {
     e.preventDefault();
     e.target.click();
   }
@@ -1394,8 +1647,8 @@ function openGateDialog() {
   const missing = CORE_IDS.filter((id) => !isConquered(id));
   const rec = ROOM_BY_ID[missing[0]]; // the first core room that's still open
   $("lockDialogText").textContent =
-    `האגף העליון (חזרה, ◆ מקדם ל-x ומדרגות לקומה 2) בנוי על שלושת החדרים במסדרון. ` +
-    `מומלץ לכבוש קודם את ${quotedTitles(missing)} - אבל אפשר לפתוח אותו כבר עכשיו.`;
+    `האגף העליון (חזרה, ◆ מקדם ל-x ומדליית הנושא) בנוי על שלושת החדרים במסדרון. ` +
+    `מומלץ לעבור קודם את ${quotedTitles(missing)} - אבל אפשר לפתוח אותו כבר עכשיו.`;
   $("lockBackBtn").textContent = `ל"${rec.title}" (מומלץ)`;
   $("lockBackBtn").dataset.room = rec.id;
   lockDialog.hidden = false;
@@ -1510,7 +1763,7 @@ function updatePath(animate) {
   const node = view.room.nodes[view.node];
   $("nodeCaption").textContent = node
     ? `תרגיל ${view.node + 1} מתוך ${view.room.nodes.length} · ${node.title}`
-    : "החדר נכבש!";
+    : "ניצחון! עברתם את החדר";
   roomView.classList.toggle("boss-node", !!(node && node.boss));
 }
 
@@ -1786,7 +2039,7 @@ function sealSvg(score) {
       <defs><path id="sealArc" d="M 38 100 A 62 62 0 0 1 162 100"/></defs>
       <circle cx="100" cy="100" r="92" class="seal-ring"/>
       <circle cx="100" cy="100" r="80" class="seal-ring thin"/>
-      <text class="seal-arc"><textPath href="#sealArc" startOffset="50%" text-anchor="middle">★ CONQUERED ★</textPath></text>
+      <text class="seal-arc"><textPath href="#sealArc" startOffset="50%" text-anchor="middle">★ VICTORY ★</textPath></text>
       <text x="100" y="128" text-anchor="middle" class="seal-score">${score}</text>
       <text x="100" y="156" text-anchor="middle" class="seal-sub">מתוך 10</text>
     </svg>`;
@@ -1803,22 +2056,22 @@ function showConquest(room, { score, prevBest, wins }) {
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next;
   if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
-  else if (CORE_IDS.includes(room.id)) next = "כבשת את שלושת החדרים! האגף העליון נפתח: חזרה, ◆ מקדם ל-x ומדרגות לקומה 2";
-  else if (room.id === "review") next = "כבשת את החזרה! · אפשר גם ◆ מקדם ל-x (הרחבה)";
-  else if (room.id === "nonmonic") next = "כבשת את ההרחבה!";
+  else if (CORE_IDS.includes(room.id)) next = "עברתם את שלושת החדרים! המנעולים נפתחו - מדליית הנושא מחכה באגף העליון";
+  else if (room.id === "review") next = "עברתם את החזרה - המדליה קיבלה מסגרת זהב! · אפשר גם ◆ מקדם ל-x (הרחבה)";
+  else if (room.id === "nonmonic") next = "עברתם את ההרחבה - המדליה קיבלה כוכב!";
   else next = "";
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;
   $("conquest").innerHTML = `
     <div class="seal-wrap">${sealSvg(score)}</div>
-    <h2>כבשת את החדר!</h2>
+    <h2>ניצחון! עברתם את החדר</h2>
     <div class="conquest-room">${room.title}<div dir="ltr" class="muted conquest-room-en">${room.en}</div></div>
     <div class="conquest-dots">${room.nodes
       .map((n, i) => `<span class="mini-node done${n.boss ? " boss" : ""}" style="animation-delay:${0.9 + i * 0.15}s"></span>`)
       .join("")}</div>
     ${score === 10 ? '<div class="perfect">★ מושלם - בלי אף טעות</div>' : ""}
     <div class="conquest-best">${bestLine}</div>
-    <div class="conquest-wins">נכבש ×${wins}</div>
+    <div class="conquest-wins">ניצחונות בחדר: ${wins}</div>
     <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
     <div class="conquest-next">${next}</div>`;
   $("toTowerBtn").addEventListener("click", goToMap);
