@@ -2295,6 +2295,41 @@ function sealSvg(score) {
     </svg>`;
 }
 
+// A wall torch: iron plate and ring, a wooden handle with a tarred head, and
+// a three-layer flame. Gradient ids are unique per torch - an id first
+// defined inside a hidden view would not paint in a visible one.
+let torchCount = 0;
+function torchHtml(side) {
+  const n = ++torchCount;
+  return `
+    <div class="torch torch-${side}" aria-hidden="true">
+      <div class="torch-fire">
+        <svg class="torch-flame" viewBox="0 0 40 48">
+          <defs><linearGradient id="tfl${n}" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stop-color="#d9480f"/><stop offset="0.6" stop-color="#ff8c1a"/><stop offset="1" stop-color="#ffb347" stop-opacity="0.85"/>
+          </linearGradient></defs>
+          <path fill="url(#tfl${n})" d="M20 2C27 14 36 22 34 34C32 43 26 47 20 47C14 47 8 43 6 34C4 22 13 14 20 2Z"/>
+          <path fill="#ffc23a" d="M20 14C25 22 30 28 28 36C27 42 23 45 20 45C17 45 13 42 12 36C10 28 15 22 20 14Z"/>
+          <path fill="#fff4c8" d="M20 26C23 31 25 35 24 39C23 42 21 43 20 43C19 43 17 42 16 39C15 35 17 31 20 26Z"/>
+        </svg>
+      </div>
+      <svg class="torch-mount" viewBox="0 0 34 50">
+        <defs><linearGradient id="twd${n}" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#5e3b1f"/><stop offset="0.45" stop-color="#9a6a3c"/><stop offset="1" stop-color="#5e3b1f"/>
+        </linearGradient></defs>
+        <rect x="10" y="26" width="14" height="22" rx="2" fill="#3b342c" stroke="#1e1914" stroke-width="1.2"/>
+        <circle cx="13" cy="30" r="1.1" fill="#8a7a5e"/><circle cx="21" cy="30" r="1.1" fill="#8a7a5e"/>
+        <circle cx="13" cy="44" r="1.1" fill="#8a7a5e"/><circle cx="21" cy="44" r="1.1" fill="#8a7a5e"/>
+        <path d="M11 10H23L20 48H14Z" fill="url(#twd${n})" stroke="#3e2714" stroke-width="1"/>
+        <rect x="8" y="28" width="18" height="5" rx="2" fill="#2b241c" stroke="#6b5f4f" stroke-width="1"/>
+        <path d="M5 1H29L25 11H9Z" fill="#4a3a2a" stroke="#2a2016" stroke-width="1"/>
+        <path d="M7 4.5H27M8.5 8H25.5" stroke="#2a2016" stroke-width="1"/>
+      </svg>
+    </div>`;
+}
+
+$("roomHeader").insertAdjacentHTML("afterbegin", torchHtml("l") + torchHtml("r"));
+
 // A small stone arch with open doors: "the gate opened".
 const GATE_ICON = `
   <svg class="news-gate" viewBox="0 0 30 30" aria-hidden="true">
@@ -2354,6 +2389,7 @@ function showConquest(room, { score, prevBest, wins, before }) {
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;
   $("conquest").innerHTML = `
+    ${torchHtml("l")}${torchHtml("r")}
     <div class="seal-wrap">${sealSvg(score)}</div>
     <h2>ניצחון! עברתם את החדר</h2>
     <div class="conquest-room"><span class="victory-plaque">${room.title}</span><div dir="ltr" class="conquest-room-en">${room.en}</div></div>

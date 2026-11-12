@@ -701,20 +701,59 @@ button:disabled {
   transition: border-color 0.6s ease, box-shadow 0.6s ease;
 }
 
-.room-header::before,
-.room-header::after {
+/* Wall torches: an iron bracket on the wall, a wooden handle, and a flame
+   with a warm halo. */
+.torch {
+  position: absolute;
+  width: 40px;
+  height: 92px;
+  pointer-events: none;
+  z-index: 1;
+}
+.torch-mount { position: absolute; left: 3px; bottom: 0; width: 34px; height: 50px; overflow: visible; }
+.torch-fire {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 48px;
+}
+.torch-fire::before {
   content: "";
   position: absolute;
-  top: 38%;
-  width: 9px;
-  height: 14px;
-  border-radius: 50% 50% 45% 45%;
-  background: radial-gradient(circle at 50% 70%, #fff3c4, #ffb23f 55%, #e0631c);
-  box-shadow: 0 0 12px 6px rgba(255, 160, 50, 0.4);
-  animation: torch-flicker 1.8s ease-in-out infinite;
+  left: 50%;
+  top: 58%;
+  width: 110px;
+  height: 110px;
+  margin: -55px 0 0 -55px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 170, 60, 0.45), rgba(255, 140, 40, 0.15) 45%, transparent 70%);
+  animation: halo-breathe 2.4s ease-in-out infinite;
 }
-.room-header::before { left: -8px; }
-.room-header::after { right: -8px; animation-delay: -0.9s; }
+.torch-flame {
+  position: relative;
+  width: 40px;
+  height: 48px;
+  overflow: visible;
+  transform-origin: 50% 95%;
+  animation: flame-flicker 1.1s ease-in-out infinite alternate;
+}
+.torch-r .torch-flame { animation-delay: -0.55s; animation-duration: 1.3s; }
+
+@keyframes flame-flicker {
+  0% { transform: scale(1, 1) skewX(0deg); }
+  35% { transform: scale(0.94, 1.07) skewX(-3deg); }
+  70% { transform: scale(1.05, 0.95) skewX(2deg); }
+  100% { transform: scale(0.97, 1.04) skewX(-1deg); }
+}
+@keyframes halo-breathe {
+  50% { opacity: 0.75; transform: scale(0.92); }
+}
+
+.room-header .torch { top: 50%; margin-top: -46px; }
+.room-header .torch-l { left: 8px; }
+.room-header .torch-r { right: 8px; }
+.room-header { padding-inline: 58px; }
 
 .room-header .room-label { margin-top: 3px; }
 .room-header .room-name-en,
@@ -851,17 +890,17 @@ button:disabled {
 /* Correct answer: one small gold spark flies up to the node... */
 .spark {
   position: fixed;
-  top: -7px;
-  left: -7px;
-  width: 14px;
-  height: 14px;
+  top: -12px;
+  left: -12px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: radial-gradient(circle, #fffdf2 0 25%, #ffc22e 55%, #e8900c 100%);
-  box-shadow: 0 0 8px 3px rgba(240, 150, 20, 0.75), 0 0 22px 7px rgba(240, 170, 40, 0.35);
+  box-shadow: 0 0 12px 5px rgba(240, 150, 20, 0.75), 0 0 34px 12px rgba(240, 170, 40, 0.35);
   pointer-events: none;
   z-index: 20;
 }
-.spark-tail { width: 10px; height: 10px; top: -5px; left: -5px; box-shadow: 0 0 6px 2px rgba(240, 150, 20, 0.5); }
+.spark-tail { width: 17px; height: 17px; top: -8.5px; left: -8.5px; box-shadow: 0 0 10px 4px rgba(240, 150, 20, 0.5); }
 
 /* ...and the node fills in with a single soft ring as it lands. */
 .pnode.just-done { animation: node-land 0.5s ease-out; }
@@ -997,12 +1036,10 @@ math-field.display-field {
   to { transform: scaleX(1); }
 }
 
-#roomView.boss-entering .room-header::before,
-#roomView.boss-entering .room-header::after {
-  animation: torch-flare 1s ease;
-}
-@keyframes torch-flare {
-  40% { transform: scale(1.35, 1.5); box-shadow: 0 0 18px 10px rgba(255, 120, 40, 0.55); }
+/* At a boss, the torches burn purple for a moment, then settle back. */
+#roomView.boss-entering .torch-fire { animation: torch-boss 1.3s ease; }
+@keyframes torch-boss {
+  20%, 65% { filter: hue-rotate(235deg) saturate(1.5) brightness(1.1); transform: scale(1.3); }
 }
 
 .problem-card-outgoing {
@@ -1226,27 +1263,10 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 .conquest.tier-mid { --ink: #e8b04a; }
 .conquest.tier-low { --ink: #ec8a72; }
 
-/* Two torches flickering in the top corners. */
-.conquest::before,
-.conquest::after {
-  content: "";
-  position: absolute;
-  top: 18px;
-  width: 10px;
-  height: 16px;
-  border-radius: 50% 50% 45% 45%;
-  background: radial-gradient(circle at 50% 70%, #fff3c4, #ffb23f 55%, #e0631c);
-  box-shadow: 0 0 14px 6px rgba(255, 160, 50, 0.45);
-  animation: torch-flicker 1.8s ease-in-out infinite;
-}
-.conquest::before { inset-inline-start: 18px; }
-.conquest::after { inset-inline-end: 18px; animation-delay: -0.9s; }
-
-@keyframes torch-flicker {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  30% { transform: scale(0.9, 1.08); opacity: 0.85; }
-  60% { transform: scale(1.05, 0.95); }
-}
+/* Two torches on the hall's walls. */
+.conquest .torch { top: 22px; }
+.conquest .torch-l { left: 18px; }
+.conquest .torch-r { right: 18px; }
 
 .conquest .dim { color: #b9ad95; }
 .seal { filter: drop-shadow(0 0 10px rgba(242, 201, 76, 0.25)); }
@@ -1390,7 +1410,8 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   .floor-label { font-size: 1rem; margin-bottom: 18px; }
 
   /* Room: a little wider, larger math and path. */
-  #roomView, #conquestView { max-width: 760px; margin: 0 auto; }
+  #roomView { max-width: 880px; margin: 0 auto; }
+  #conquestView { max-width: 760px; margin: 0 auto; }
   .room-name { font-size: 1.3rem; }
   .pnode { width: 36px; height: 36px; font-size: 0.95rem; }
   .pconn { width: 72px; }
@@ -1550,3 +1571,48 @@ body { overflow-x: clip; }
 
 /* "מבוא": a quiet neutral label - the optional warm-up room. */
 .room-prep .room-label { color: #55606b; background: #eef0f2; border-color: #c4cad0; }
+
+/* ---------------------------------------------------------------------- */
+/* Room: castle walls all round the room, a clean courtyard inside        */
+/* ---------------------------------------------------------------------- */
+
+.castle-wall {
+  --bricks: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='32'%3E%3Crect width='64' height='32' fill='%23463d33'/%3E%3Cg stroke='%23352e26' stroke-width='1'%3E%3Crect x='1' y='1' width='30' height='14' rx='1.5' fill='%23766957'/%3E%3Crect x='33' y='1' width='30' height='14' rx='1.5' fill='%236c604f'/%3E%3Crect x='-15' y='17' width='30' height='14' rx='1.5' fill='%237d705d'/%3E%3Crect x='17' y='17' width='30' height='14' rx='1.5' fill='%23706352'/%3E%3Crect x='49' y='17' width='30' height='14' rx='1.5' fill='%237d705d'/%3E%3C/g%3E%3Cg stroke='%23ffffff' stroke-opacity='.1'%3E%3Cpath d='M2 2.5H30M34 2.5H62M2 18.5H14M18 18.5H46M50 18.5H62'/%3E%3C/g%3E%3C/svg%3E");
+  position: relative;
+  margin-top: 16px; /* room for the battlements */
+  padding: 26px;
+  background: var(--bricks), #5f5446;
+  border-radius: 6px;
+  box-shadow: 0 6px 0 #2c2721, 0 10px 24px rgba(44, 39, 33, 0.3);
+}
+
+/* Battlements along the top of the wall. */
+.castle-wall::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -16px;
+  height: 16px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 4px, rgba(0, 0, 0, 0.25) 4px 5px, transparent 5px 30px, rgba(0, 0, 0, 0.3) 30px 31px, transparent 31px 48px),
+    var(--bricks) 0 -2px, #5f5446;
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 30px, transparent 30px 48px);
+  mask: repeating-linear-gradient(90deg, #000 0 30px, transparent 30px 48px);
+  border-radius: 3px 3px 0 0;
+}
+
+/* The courtyard: plain and light, so the math stays easy to read. */
+.castle-court {
+  padding: 20px 22px 18px;
+  background: var(--bg);
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 2px #2c2721, inset 0 4px 14px rgba(44, 39, 33, 0.28);
+}
+
+.castle-court #feedback:empty { display: none; }
+
+@media (max-width: 480px) {
+  .castle-wall { padding: 10px; }
+  .castle-court { padding: 12px 10px; }
+}
