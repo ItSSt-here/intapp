@@ -1728,9 +1728,6 @@ Object.assign(NEAR_MISS_TEXT, {
 // The tower: floor 1
 // ---------------------------------------------------------------------------
 
-// Which floor the map shows. Floor 2 (rational functions) is kept intact but
-// not shown while floor 1 (basic integrals) is being built.
-const ACTIVE_FLOOR = 1;
 
 const ROOMS = [
   {
@@ -1887,6 +1884,10 @@ function roomRecord(id) {
 
 const isConquered = (id) => roomRecord(id).wins > 0;
 
+// The floor the map shows: 1 (basic integrals) unless the student has gone
+// up the stairs (or is in a floor-2 room).
+const currentFloor = () => (store.floor === 2 ? 2 : 1);
+
 // The rooms this one builds on that aren't conquered yet.
 function missingRequirements(room) {
   return [].concat(room.requires || []).filter((id) => !isConquered(id));
@@ -1907,7 +1908,7 @@ function isLocked(room) {
   if (!room.requires) return false;
   const rec = roomRecord(room.id);
   if (rec.run || rec.wins > 0) return false;
-  if (room.floor === 1) return missingRequirements(room).length > 0;
+  if (room.floor === 1) return missingRequirements(room).length > 0 && !(store.openedRooms || {})[room.id];
   return !wingOpen();
 }
 
@@ -1915,7 +1916,7 @@ function isLocked(room) {
 const stairsOpen = () => isConquered("linear") || !!store.stairsOpen;
 
 function recommendedRoomId() {
-  if (ACTIVE_FLOOR === 1) return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
+  if (currentFloor() === 1) return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -2229,8 +2230,32 @@ function goToMedals() {
 
 $("medalBackBtn").addEventListener("click", () => goToMap());
 
+// Up or down the stairs: the map of the other floor comes in, with the
+// marker standing where the stairs arrive (floor 2's door at the bottom, or
+// floor 1's stairs).
+function goToFloor(n) {
+  store.floor = n;
+  store.lastRoom = n === 2 ? "entrance" : "stairs";
+  saveStore();
+  if (mapZoom) {
+    mapZoom.cancel();
+    mapZoom = null;
+  }
+  renderMap();
+  window.scrollTo(0, 0);
+  if (!reducedMotion()) {
+    mapView.animate(
+      [{ transform: `translateY(${n === 2 ? 24 : -24}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: 380, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
+    );
+  }
+}
+
+const goUpstairs = () => zoomIntoRoom("stairs").then(() => goToFloor(2));
+const goDownstairs = () => goToFloor(1);
+
 function renderMap() {
-  if (ACTIVE_FLOOR === 1) renderBasicFloor();
+  if (currentFloor() === 1) renderBasicFloor();
   else renderRationalFloor();
 }
 
@@ -2253,11 +2278,12 @@ function renderBasicFloor() {
   const up = stairsOpen();
   const stairs = `
     <div class="cell stairs${up ? "" : " locked"}" style="grid-column:5;grid-row:1" data-node="stairs"
-         aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
+         role="button" tabindex="0" aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
       ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
       ${STAIRS_SVG}
       <span class="stairs-label">לקומה 2</span>
-      ${up ? '<span class="stairs-soon">בקרוב</span>' : '<button type="button" class="open-anyway stairs-anyway" data-open-stairs>לפתוח בכל זאת</button>'}
+      <span class="stairs-floor">פונקציות רציונליות</span>
+      ${up ? "" : '<button type="button" class="open-anyway stairs-anyway" data-open-stairs>לפתוח בכל זאת</button>'}
     </div>`;
   towerEl.innerHTML = `
     <div class="floor-map">
@@ -2349,7 +2375,7 @@ function renderRationalFloor() {
         <div class="cell" style="grid-column:2;grid-row:9">${roomCardHtml(prep)}</div>
         ${doorway(2, 10)}
         <div class="cell entrance" style="grid-column:2;grid-row:11" data-node="entrance">
-          ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
+          ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומה 1</span>
         </div>
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
@@ -2393,9 +2419,9 @@ const RATIONAL_FLOOR_NODES = {
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
 
-const MAP_NODES = ACTIVE_FLOOR === 1 ? BASIC_FLOOR_NODES : RATIONAL_FLOOR_NODES;
+const mapNodes = () => (currentFloor() === 1 ? BASIC_FLOOR_NODES : RATIONAL_FLOOR_NODES);
 
-const markerNode = () => (MAP_NODES[store.lastRoom] ? store.lastRoom : "entrance");
+const markerNode = () => (mapNodes()[store.lastRoom] ? store.lastRoom : "entrance");
 let markerBusy = false;
 
 function nodeEl(id) {
@@ -2406,9 +2432,9 @@ function nodeEl(id) {
 function nodePoint(id) {
   const grid = towerEl.querySelector(".floor-grid").getBoundingClientRect();
   const r = nodeEl(id).getBoundingClientRect();
-  const at = MAP_NODES[id].at;
+  const at = mapNodes()[id].at;
   const y = at === "top" ? r.top : at === "bottom" ? r.bottom : r.top + r.height / 2;
-  return { x: r.left + r.width / 2 - grid.left, y: y - grid.top + (MAP_NODES[id].dy || 0) };
+  return { x: r.left + r.width / 2 - grid.left, y: y - grid.top + (mapNodes()[id].dy || 0) };
 }
 
 function corridorY(which) {
@@ -2423,14 +2449,14 @@ function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
-  if (ACTIVE_FLOOR === 1) {
+  if (currentFloor() === 1) {
     const i = BASIC_FLOOR_PATH.indexOf(from);
     const j = BASIC_FLOOR_PATH.indexOf(to);
     const ids = i <= j ? BASIC_FLOOR_PATH.slice(i, j + 1) : BASIC_FLOOR_PATH.slice(j, i + 1).reverse();
     return ids.map(nodePoint);
   }
-  const fa = MAP_NODES[from].area;
-  const ta = MAP_NODES[to].area;
+  const fa = mapNodes()[from].area;
+  const ta = mapNodes()[to].area;
   const lowY = corridorY("main");
   if (fa === "lower" && ta === "lower") {
     return [a, { x: a.x, y: lowY }, { x: b.x, y: lowY }, b].filter((p, i, pts) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
@@ -2457,7 +2483,8 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return wingOpen() ? "היכנסו ↵" : "";
-  if (id === "stairs") return stairsOpen() ? "" : "מדרגות ↵";
+  if (id === "stairs") return stairsOpen() ? "עולים ↵" : "מדרגות ↵";
+  if (id === "entrance" && currentFloor() === 2) return "לקומה 1 ↵";
   if (!ROOM_BY_ID[id]) return "";
   return isLocked(ROOM_BY_ID[id]) ? "" : "היכנסו ↵";
 }
@@ -2523,9 +2550,9 @@ function walkTo(id) {
 // Step from the marker's place in a direction, if there's a way there.
 function stepMarker(dir) {
   const here = markerNode();
-  const to = MAP_NODES[here].nav[dir];
+  const to = mapNodes()[here].nav[dir];
   if (!to) return;
-  if (MAP_NODES[to].area === "upper" && !wingOpen()) {
+  if (mapNodes()[to].area === "upper" && !wingOpen()) {
     if (here === "gate") openGateDialog();
     else walkTo("gate");
     return;
@@ -2546,7 +2573,12 @@ function activateMarker() {
     return;
   }
   if (id === "stairs") {
-    if (!stairsOpen()) openStairsDialog();
+    if (stairsOpen()) goUpstairs();
+    else openStairsDialog();
+    return;
+  }
+  if (id === "entrance") {
+    if (currentFloor() === 2) goDownstairs();
     return;
   }
   const room = ROOM_BY_ID[id];
@@ -2563,7 +2595,7 @@ document.addEventListener("keydown", (e) => {
   if (ARROW_DIRS[e.key]) {
     e.preventDefault();
     stepMarker(ARROW_DIRS[e.key]);
-  } else if (e.key === "Enter" && !e.target.closest("button, [data-room], .passage")) {
+  } else if (e.key === "Enter" && !e.target.closest("button, [data-room], .passage, [data-node=\"stairs\"]")) {
     e.preventDefault();
     activateMarker();
   }
@@ -2617,7 +2649,8 @@ towerEl.addEventListener("click", (e) => {
   }
   if (e.target.closest('[data-node="stairs"]')) {
     walkTo("stairs").then(() => {
-      if (!stairsOpen()) openStairsDialog();
+      if (stairsOpen()) goUpstairs();
+      else openStairsDialog();
     });
     return;
   }
@@ -2633,11 +2666,16 @@ towerEl.addEventListener("click", (e) => {
     else walkTo("trophy").then(() => zoomIntoRoom("trophy")).then(goToMedals);
     return;
   }
-  if (e.target.closest('[data-node="entrance"]')) walkTo("entrance");
+  if (e.target.closest('[data-node="entrance"]')) {
+    // Floor 2's door is the way back down to floor 1.
+    walkTo("entrance").then(() => {
+      if (currentFloor() === 2) goDownstairs();
+    });
+  }
 });
 
 towerEl.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-room], [data-node="trophy"]')) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-room], [data-node="trophy"], [data-node="stairs"]')) {
     e.preventDefault();
     e.target.click();
   }
@@ -2678,14 +2716,15 @@ function openGateDialog() {
   });
 }
 
-// Floor 1: a room opens only after the one before it.
+// Floor 1: a room opens after the one before it - or anyway.
 function openLockedRoomDialog(room) {
   if (room.floor !== 1) return openGateDialog();
   const before = ROOM_BY_ID[missingRequirements(room)[0]];
   showLockDialog({
-    title: "החדר נעול",
-    html: `החדר נפתח אחרי שעוברים את חדר <bdi dir="ltr">${before.num}</bdi>.`,
+    title: "לא מומלץ עדיין",
+    html: `החדר הזה בנוי על חדר <bdi dir="ltr">${before.num}</bdi>. מומלץ לעבור אותו קודם - אבל אפשר לפתוח את החדר כבר עכשיו.`,
     room: before,
+    anyway: room.id,
   });
 }
 
@@ -2711,6 +2750,7 @@ $("lockBackBtn").addEventListener("click", (e) => {
 $("lockAnywayBtn").addEventListener("click", () => {
   closeLockDialog();
   if (lockDialogFor === "stairs") store.stairsOpen = true;
+  else if (ROOM_BY_ID[lockDialogFor]) store.openedRooms = { ...store.openedRooms, [lockDialogFor]: true };
   else store.wingOpen = true;
   saveStore();
   renderMap(); // the fog lifts, or the stairs open
@@ -2766,6 +2806,7 @@ function enterRoom(id) {
   const room = ROOM_BY_ID[id];
   const rec = roomRecord(id);
   store.lastRoom = id;
+  store.floor = room.floor === 1 ? 1 : 2; // back out onto this room's floor
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
@@ -3296,7 +3337,7 @@ function victoryNews(room, before) {
   if (room.floor === 1) {
     if (!before.firstWin) return news;
     const opened = ROOMS.find((r) => r.floor === 1 && (r.requires || []).includes(room.id));
-    if (opened) news.push({ icon: padlockSvg(room.num, true), text: `חדר ${opened.num} נפתח` });
+    if (opened && !(store.openedRooms || {})[opened.id]) news.push({ icon: padlockSvg(room.num, true), text: `חדר ${opened.num} נפתח` });
     if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות לקומה 2 נפתחו" });
     return news;
   }
@@ -3376,7 +3417,7 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
-  } else if (location.hash === "#/medals" && ACTIVE_FLOOR === 2 && wingOpen()) {
+  } else if (location.hash === "#/medals" && currentFloor() === 2 && wingOpen()) {
     store.lastRoom = "trophy";
     saveStore();
     renderMedalView();

@@ -1860,3 +1860,5 @@ body { overflow-x: clip; }
     border-block: 3px solid var(--jamb);
   }
 }
+.stairs-floor { font-size: 0.72rem; color: var(--muted); text-align: center; }
+.stairs:not(.locked):hover { box-shadow: inset 0 0 0 2px #e0cf9e; }
