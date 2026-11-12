@@ -2446,10 +2446,10 @@ $("medalBackBtn").addEventListener("click", () => goToMap());
 
 // Up or down the stairs: the map of the other floor comes in, with the
 // marker standing where the stairs arrive (floor 2's door at the bottom, or
-// floor 1's stairs).
-function goToFloor(n) {
+// floor 1's stairs) - or, from the floor panel, at `at`.
+function goToFloor(n, at) {
   store.floor = n;
-  store.lastRoom = n === 2 ? "entrance" : "stairs";
+  store.lastRoom = at || (n === 2 ? "entrance" : "stairs");
   saveStore();
   if (mapZoom) {
     mapZoom.cancel();
@@ -2471,7 +2471,79 @@ const goDownstairs = () => goToFloor(1);
 function renderMap() {
   if (currentFloor() === 1) renderBasicFloor();
   else renderRationalFloor();
+  renderTowerNav();
 }
+
+// --- the floor panel: the tower in cross-section -----------------------------
+// Beside the map: the floors stacked as in the tower. A click goes straight
+// to a floor; a locked floor asks, with "open anyway". Floor 2's gate to its
+// upper wing is not here: it is opened on the map, by hand.
+
+const towerNavEl = $("towerNav");
+
+function towerNavItems() {
+  return [
+    {
+      go: "2",
+      mark: "2",
+      name: "קומה 2",
+      sub: "פונקציות רציונליות",
+      locked: !stairsOpen(),
+      done: coreDone(),
+      here: currentFloor() === 2,
+    },
+    {
+      go: "1",
+      mark: "1",
+      name: "קומה 1",
+      sub: "אינטגרלים בסיסיים",
+      locked: false,
+      done: FLOOR1_IDS.every(isConquered),
+      here: currentFloor() === 1,
+    },
+  ];
+}
+
+function renderTowerNav() {
+  towerNavEl.innerHTML = `
+    <div class="tn-roof" aria-hidden="true"></div>
+    <div class="tn-floors">
+      ${towerNavItems()
+        .map((f) => {
+          const cls = ["tn-floor"];
+          if (f.here) cls.push("here");
+          if (f.locked) cls.push("locked");
+          if (f.done) cls.push("done");
+          const state = f.locked ? padlockSvg("", false) : f.done ? '<span class="tn-done" title="הושלם">✓</span>' : "";
+          const label = `${f.name} · ${f.sub}${f.locked ? " - נעול" : ""}${f.here ? " - אתם כאן" : ""}`;
+          return `
+            <button type="button" class="${cls.join(" ")}" data-go="${f.go}" title="${label}" aria-label="${label}"${f.here ? ' aria-current="location"' : ""}>
+              <span class="tn-mark">${f.mark}</span>
+              <span class="tn-text"><span class="tn-name">${f.name}</span><span class="tn-sub">${f.sub}</span></span>
+              <span class="tn-state">${state}</span>
+              ${f.here ? '<span class="tn-here" aria-hidden="true"></span>' : ""}
+            </button>`;
+        })
+        .join("")}
+    </div>`;
+}
+
+// Go to a floor from the panel - or ask, if it's locked.
+function towerNavGo(go) {
+  if (markerBusy) return;
+  dismissMapTip();
+  const n = Number(go);
+  if (n === 2 && !stairsOpen()) {
+    openStairsDialog(() => goToFloor(2, "entrance"));
+    return;
+  }
+  if (n !== currentFloor()) goToFloor(n, "entrance");
+}
+
+towerNavEl.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go]");
+  if (b) towerNavGo(b.dataset.go);
+});
 
 // The way up: stone steps climbing into a dark arched stairwell, lit from
 // the corridor and fading into the dark. Locked, an iron grille closes it.
@@ -2558,7 +2630,6 @@ function renderBasicFloor() {
       ${stairsSvg(!up)}
       <span class="stairs-label">לקומה 2</span>
       <span class="stairs-floor">פונקציות רציונליות</span>
-      ${up ? "" : '<button type="button" class="open-anyway stairs-anyway" data-open-stairs>לפתוח בכל זאת</button>'}
     </div>`;
   towerEl.innerHTML = `
     <div class="floor-map">
@@ -2963,11 +3034,6 @@ towerEl.addEventListener("click", (e) => {
     openGateDialog();
     return;
   }
-  if (e.target.closest("[data-open-stairs]")) {
-    e.stopPropagation();
-    openStairsDialog();
-    return;
-  }
   if (markerBusy) return;
   const card = e.target.closest("[data-room]");
   if (card) {
@@ -3013,13 +3079,16 @@ towerEl.addEventListener("keydown", (e) => {
 // One gate for the whole upper wing, not one per room.
 const lockDialog = $("lockDialog");
 
-// What "open anyway" opens: floor 2's upper wing, or floor 1's stairs.
+// What "open anyway" opens: floor 2's upper wing, or floor 1's stairs - and
+// where to go then (from the floor panel: to the floor just opened).
 let lockDialogFor = "wing";
+let lockDialogThen = null;
 
 // One dialog for every lock: a title, a text that names the rooms to do
 // first, "not now" (back to the map, where the marker stands), and (when the
 // lock may be forced) "open anyway". It never sends the student anywhere.
-function showLockDialog({ title, html, anyway }) {
+function showLockDialog({ title, html, anyway, then = null }) {
+  lockDialogThen = then;
   $("lockDialogTitle").textContent = title;
   $("lockDialogText").innerHTML = html;
   $("lockBackBtn").textContent = "לא עכשיו";
@@ -3054,7 +3123,7 @@ function openLockedRoomDialog(room) {
 }
 
 // Floor 1's stairs: open after room 2, or anyway.
-function openStairsDialog() {
+function openStairsDialog(then) {
   const missing = FLOOR1_IDS.filter((id) => !isConquered(id));
   const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
   showLockDialog({
@@ -3063,6 +3132,7 @@ function openStairsDialog() {
       `המדרגות לקומה 2 נפתחות אחרי חדר 2. מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi>` +
       ` - אבל אפשר לפתוח אותן כבר עכשיו.`,
     anyway: "stairs",
+    then,
   });
 }
 
@@ -3078,6 +3148,7 @@ $("lockAnywayBtn").addEventListener("click", () => {
   else store.wingOpen = true;
   saveStore();
   renderMap(); // the fog lifts, or the stairs open
+  if (lockDialogThen) lockDialogThen();
 });
 lockDialog.addEventListener("click", (e) => {
   if (e.target === lockDialog) closeLockDialog();
