@@ -1,43 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Partial Fractions Integral Practice</title>
+<title>מגדל האינטגרלים</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="container">
-    <h1>Partial Fractions Integral Practice</h1>
-    <p class="subtitle">Find the antiderivative using partial fractions.</p>
 
-    <div id="problemCardSlot">
-      <div class="card problem-card" id="problemCard">
-        <div class="label">Evaluate the integral</div>
-        <math-field id="problem" read-only class="display-field"></math-field>
+    <!-- Tower map -->
+    <section id="mapView" class="view">
+      <header class="map-header">
+        <h1>מגדל האינטגרלים</h1>
+        <p class="subtitle">כל חדר הוא כמה תרגילים קצרים. כובשים חדר, ומטפסים הלאה.</p>
+      </header>
+      <div class="tower" id="tower"></div>
+    </section>
+
+    <!-- Room -->
+    <section id="roomView" class="view" hidden>
+      <div class="room-bar">
+        <button type="button" id="backBtn" class="link-btn">→ למגדל</button>
+        <div class="room-name-wrap">
+          <div class="room-name" id="roomName"></div>
+          <div class="room-name-en" id="roomEn" dir="ltr"></div>
+        </div>
+        <div class="score-wrap" id="scoreWrap">
+          <span class="score-label">ניקוד</span>
+          <span id="scoreChip" class="score-chip"></span>
+        </div>
+      </div>
+
+      <div class="path" id="path"></div>
+      <div class="node-caption" id="nodeCaption"></div>
+
+      <div id="problemCardSlot">
+        <div class="card problem-card" id="problemCard">
+          <div class="label">חשבו את האינטגרל</div>
+          <math-field id="problem" read-only class="display-field" dir="ltr"></math-field>
+        </div>
+      </div>
+
+      <div class="card answer-card" id="answerCard">
+        <div class="answer-badge" id="answerBadge"></div>
+        <div class="answer-status-text" id="answerStatusText"></div>
+        <div class="label">התשובה שלך</div>
+        <div class="answer-hint">כתבו <b dir="ltr">ln</b> ללוגריתם ו-<b dir="ltr">| |</b> לערך מוחלט. ה-<bdi dir="ltr">+C</bdi> לא חובה. אפשר ללחוץ <b>Enter</b> לבדיקה.</div>
+        <math-field id="answer" class="input-field" dir="ltr" virtual-keyboard-mode="onfocus"></math-field>
+        <div id="solutionLabel" class="label showing-solution" hidden>פתרון</div>
+        <div class="solution-scroll">
+          <math-field id="solution" read-only class="solution-field" dir="ltr" hidden></math-field>
+        </div>
+      </div>
+
+      <div class="buttons">
+        <button type="button" id="checkBtn">בדיקה</button>
+        <button type="button" id="solutionBtn">הצג פתרון <bdi class="cost" dir="ltr">(−3)</bdi></button>
+        <button type="button" id="nextBtn" hidden>המשך ←</button>
+      </div>
+
+      <div id="feedback" class="feedback"></div>
+    </section>
+
+    <!-- Room conquered -->
+    <section id="conquestView" class="view" hidden>
+      <div id="conquest" class="conquest"></div>
+    </section>
+  </div>
+
+  <!-- "Open anyway" confirmation for a room that isn't next on the path -->
+  <div id="lockDialog" class="dialog-backdrop" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="lockDialogTitle">
+      <h2 id="lockDialogTitle">לא מומלץ עדיין</h2>
+      <p id="lockDialogText"></p>
+      <div class="dialog-buttons">
+        <button type="button" id="lockBackBtn" class="primary-btn"></button>
+        <button type="button" id="lockAnywayBtn" class="secondary-btn">לפתוח בכל זאת</button>
       </div>
     </div>
-
-    <div class="card answer-card" id="answerCard">
-      <div class="answer-badge" id="answerBadge"></div>
-      <div class="answer-status-text" id="answerStatusText"></div>
-      <div class="label">Your answer</div>
-      <div class="answer-hint">Type <b>ln</b> for the logarithm and use <b>| |</b> for absolute value. The “+ C” is optional.</div>
-      <math-field id="answer" class="input-field" virtual-keyboard-mode="onfocus"></math-field>
-      <div id="solutionLabel" class="label showing-solution" hidden>Solution</div>
-      <math-field id="solution" read-only class="solution-field" hidden></math-field>
-    </div>
-
-    <div class="buttons">
-      <button id="checkBtn">Check</button>
-      <button id="solutionBtn">Show solution</button>
-      <button id="nextBtn">Another exercise</button>
-    </div>
-
-    <div id="feedback" class="feedback"></div>
-
-    <!-- TEMP: plain on purpose, to be replaced by a real type chooser -->
-    <p><button id="typeBtn" type="button" style="font-size: 0.8rem; padding: 4px 8px; background: #ddd; color: #333; font-weight: normal;"></button></p>
   </div>
 
   <script type="module" src="app.js"></script>

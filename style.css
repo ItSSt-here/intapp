@@ -16,6 +16,15 @@
   --warn-border: #eed3a4;
   --bad: #dc2626;
   --bad-bg: #fef2f2;
+  --gold: #b8860b;
+  --gold-bg: #fbf3d9;
+  --mid: #a77b06;
+  --mid-bg: #fdf6d8;
+  --mid-border: #ecd27a;
+  --ext: #5b4bc4;
+  --ext-tint: #f0eefc;
+  --ext-border: #b9b0ec;
+  --stone: #efeae0;
 }
 
 [hidden] { display: none !important; }
@@ -29,7 +38,7 @@ body {
   color: var(--text);
   display: flex;
   justify-content: center;
-  padding: 40px 16px;
+  padding: 32px 16px;
 }
 
 .container {
@@ -39,14 +48,474 @@ body {
 
 h1 {
   font-size: 1.5rem;
-  margin-bottom: 4px;
+  margin: 0 0 4px;
 }
 
 .subtitle {
   color: var(--muted);
   margin-top: 0;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
+
+.muted { color: var(--muted); font-weight: normal; }
+
+button {
+  font: inherit;
+  font-size: 1rem;
+  padding: 11px 22px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.12s ease, transform 0.05s ease, box-shadow 0.12s ease;
+}
+
+button:active { transform: translateY(1px); }
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.primary-btn {
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 2px 6px rgba(13, 125, 114, 0.35);
+}
+
+.primary-btn:hover { background: var(--accent-hover); }
+
+.secondary-btn {
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.secondary-btn:hover { background: #f2efe7; }
+
+.link-btn {
+  background: none;
+  color: var(--accent);
+  padding: 6px 4px;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Score chips (map, room bar)                                            */
+/* ---------------------------------------------------------------------- */
+
+.score-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  border: 2px solid;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.score-chip.small { font-size: 0.85rem; padding: 1px 7px; border-width: 1.5px; }
+
+.tier-high { --tier: var(--good); --tier-bg: #e9f5ec; --tier-edge: var(--gold); }
+.tier-mid { --tier: var(--mid); --tier-bg: var(--mid-bg); --tier-edge: var(--mid-border); }
+.tier-low { --tier: var(--bad); --tier-bg: var(--bad-bg); --tier-edge: #f3b4b4; }
+
+.score-chip.tier-high, .score-chip.tier-mid, .score-chip.tier-low {
+  color: var(--tier);
+  background: var(--tier-bg);
+  border-color: var(--tier-edge);
+}
+
+.score-chip.hit { animation: chip-hit 0.45s ease; }
+
+@keyframes chip-hit {
+  30% { transform: scale(1.25); background: var(--bad); color: white; border-color: var(--bad); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Tower map                                                              */
+/* ---------------------------------------------------------------------- */
+
+.tower { margin: 0 auto; max-width: 520px; }
+
+/* Battlements: alternating merlons along the top of the tower. */
+.tower-crown {
+  height: 18px;
+  margin: 0 -6px;
+  background:
+    linear-gradient(90deg, var(--accent) 50%, transparent 0) 0 0 / 36px 12px repeat-x,
+    linear-gradient(var(--accent), var(--accent)) 0 12px / 100% 6px no-repeat;
+}
+
+.tower-body {
+  border: 3px solid var(--accent);
+  border-top: none;
+  border-bottom: none;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(13, 125, 114, 0.06) 27px 28px),
+    var(--stone);
+  padding: 14px 14px 18px;
+}
+
+.floor-label {
+  text-align: center;
+  font-weight: 700;
+  color: var(--accent-hover);
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+
+.floor-rooms { display: flex; flex-direction: column; }
+
+.tower-base {
+  text-align: center;
+  background: var(--accent);
+  color: white;
+  font-size: 0.8rem;
+  padding: 6px;
+  border-radius: 0 0 8px 8px;
+  margin: 0 -6px;
+}
+
+.conn {
+  width: 4px;
+  height: 22px;
+  margin: 0 auto;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.conn.dashed {
+  background: none;
+  border-inline-start: 3px dashed var(--ext-border);
+  width: 0;
+}
+
+/* The extension branches off to the side of the core room. */
+.branch {
+  display: flex;
+  flex-direction: column;
+  width: 82%;
+  margin-inline-start: auto; /* pushed to the left in RTL */
+}
+
+.branch-conn { margin: 0 auto 0 30%; height: 18px; }
+
+.room-card {
+  position: relative;
+  background: var(--card-bg);
+  border: 2px solid var(--accent-tint-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(20, 22, 30, 0.06);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.room-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(20, 22, 30, 0.1); }
+.room-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* A card with its popover open sits above its neighbours. */
+.room-card:has(.info-wrap:hover, .info-wrap.open, .info-btn:focus-visible) { z-index: 5; }
+
+.room-head { display: flex; align-items: center; gap: 6px; }
+.room-title { font-weight: 700; font-size: 1.15rem; }
+.stars { color: var(--gold); letter-spacing: 1px; font-size: 0.85rem; }
+
+.room-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 24px;
+}
+
+.room-side { display: flex; align-items: center; gap: 6px; }
+.wins { font-size: 0.85rem; font-weight: 600; color: var(--good-hover); }
+
+/* (i): details on hover (mouse) or tap (tablet). */
+.info-wrap { position: relative; margin-inline-start: auto; display: inline-flex; }
+
+.info-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: var(--muted);
+  font: italic 700 0.8rem Georgia, "Times New Roman", serif;
+  line-height: 1;
+  opacity: 0.75;
+}
+
+.info-btn:hover, .info-wrap.open .info-btn { opacity: 1; color: var(--accent); }
+
+.room-info {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  inset-inline-end: -8px;
+  width: 260px;
+  padding: 10px 12px;
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(20, 22, 30, 0.16);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: right;
+  cursor: default;
+  z-index: 6;
+}
+
+.room-info > div + div { margin-top: 4px; }
+.info-wrap:hover .room-info, .info-wrap.open .room-info, .info-btn:focus-visible + .room-info { display: block; }
+.info-en { color: var(--muted); font-size: 0.8rem; text-align: left; }
+.info-tag { font-weight: 600; }
+.info-note { color: var(--accent-hover); font-weight: 600; }
+
+.room-core { border-color: var(--accent); border-width: 2.5px; background: linear-gradient(135deg, #fff, var(--accent-tint)); }
+.room-core .room-title { color: var(--accent-hover); }
+
+.room-prep { border-color: var(--warn-border); background: var(--warn-bg); }
+.room-prep .room-title { color: #8a5a1e; }
+
+.room-ext { border-color: var(--ext-border); border-style: dashed; background: var(--ext-tint); }
+.room-ext .room-title { color: var(--ext); }
+
+.room-card.recommended { box-shadow: 0 0 0 4px rgba(13, 125, 114, 0.18), 0 3px 10px rgba(20, 22, 30, 0.08); }
+.room-card.conquered { border-style: solid; }
+
+.conquered-flag {
+  position: absolute;
+  top: -10px;
+  inset-inline-start: -8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--good);
+  color: white;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(20, 22, 30, 0.25);
+}
+
+/* Locked: greyed out (without a filter, so the popover keeps its colours). */
+.room-card.locked { background: #f1efea; border-color: #d6d1c6; box-shadow: none; }
+.room-card.locked:hover { transform: none; }
+.room-card.locked .room-title, .room-card.locked .stars { color: #9a948a; }
+.room-card.locked .mini-node { border-color: #c4beb3; }
+
+.lock-icon { width: 15px; height: 15px; fill: #9a948a; stroke: #9a948a; stroke-width: 1.6; flex: none; }
+.lock-icon path { fill: none; }
+
+.open-anyway {
+  background: none;
+  padding: 2px 0;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.open-anyway:hover { color: var(--text); }
+
+/* Mini node path on the room cards (and the conquest screen). */
+.mini-path { display: flex; align-items: center; }
+
+.mini-node {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: white;
+  flex: none;
+}
+
+.mini-node.boss { border-radius: 2px; transform: rotate(45deg); border-color: var(--warn); }
+.mini-node.done { background: var(--accent); }
+.mini-node.boss.done { background: var(--warn); }
+.mini-node.current { box-shadow: 0 0 0 3px rgba(13, 125, 114, 0.25); }
+.mini-conn { width: 14px; height: 2px; background: var(--accent-tint-border); flex: none; }
+.room-ext .mini-node:not(.boss) { border-color: var(--ext); }
+.room-ext .mini-node:not(.boss).done { background: var(--ext); }
+.room-ext .mini-node.current { box-shadow: 0 0 0 3px rgba(91, 75, 196, 0.25); }
+
+/* The room flips over to its conquered face when the student returns. */
+.room-card.just-conquered { animation: card-flip 0.9s ease both; }
+
+@keyframes card-flip {
+  0% { transform: perspective(700px) rotateY(0); }
+  45% { transform: perspective(700px) rotateY(90deg); }
+  55% { transform: perspective(700px) rotateY(90deg); }
+  100% { transform: perspective(700px) rotateY(0); box-shadow: 0 0 0 6px rgba(79, 157, 105, 0.25); }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Dialog                                                                 */
+/* ---------------------------------------------------------------------- */
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 30, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+.dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(20, 22, 30, 0.25);
+}
+
+.dialog h2 { margin: 0 0 8px; font-size: 1.15rem; }
+.dialog p { margin: 0 0 16px; line-height: 1.5; }
+.dialog-buttons { display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------------------------------------------------------------------- */
+/* Room: top bar and node path                                            */
+/* ---------------------------------------------------------------------- */
+
+.room-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.room-name-wrap { text-align: center; flex: 1; min-width: 0; }
+.room-name { font-weight: 700; font-size: 1.15rem; }
+.room-name-en { font-size: 0.75rem; color: var(--muted); }
+
+.score-wrap { position: relative; display: flex; align-items: center; gap: 6px; }
+.score-label { font-size: 0.75rem; color: var(--muted); }
+
+.penalty-pop {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: -4px;
+  color: var(--bad);
+  font-weight: 800;
+  pointer-events: none;
+  animation: penalty-rise 1s ease-out forwards;
+}
+
+@keyframes penalty-rise {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-26px); opacity: 0; }
+}
+
+.path {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 0 6px;
+}
+
+.pnode {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2.5px solid var(--accent-tint-border);
+  background: white;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  transition: transform 0.35s ease, background 0.35s ease, border-color 0.35s ease, color 0.35s ease;
+}
+
+.pnode.boss {
+  border-radius: 6px;
+  transform: rotate(45deg);
+  border-color: var(--warn-border);
+  color: var(--warn);
+}
+
+.pnode.boss span { transform: rotate(-45deg); }
+
+.pnode.done { background: var(--accent); border-color: var(--accent); color: white; }
+.pnode.current { transform: scale(1.3); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 5px rgba(13, 125, 114, 0.15); }
+.pnode.boss.current { transform: rotate(45deg) scale(1.3); border-color: var(--warn); color: var(--warn); box-shadow: 0 0 0 5px rgba(201, 138, 63, 0.2); }
+.pnode.boss.done { background: var(--warn); border-color: var(--warn); color: white; }
+
+.pconn {
+  width: clamp(24px, 9vw, 64px);
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  flex: none;
+}
+
+/* Fills from the right: the path is walked right to left. */
+.pconn-fill {
+  height: 100%;
+  width: 0;
+  margin-inline-start: 0;
+  background: var(--accent);
+  transition: width 0.45s ease;
+}
+
+.pconn.done .pconn-fill { width: 100%; }
+
+/* "You are here" marker that walks along the path. */
+.pawn {
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 10px solid var(--accent);
+  transform: translateX(-50%);
+  transition: left 0.5s cubic-bezier(0.5, 0, 0.3, 1.3);
+  animation: pawn-bob 1.6s ease-in-out infinite;
+}
+
+@keyframes pawn-bob {
+  50% { margin-top: 3px; }
+}
+
+.node-caption {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 8px 0 12px;
+}
+
+.in-ext-room .pnode:not(.boss).done { background: var(--ext); border-color: var(--ext); }
+.in-ext-room .pnode:not(.boss).current { border-color: var(--ext); color: var(--ext); }
+.in-ext-room .pconn-fill { background: var(--ext); }
+.in-ext-room .pawn { border-top-color: var(--ext); }
+
+/* ---------------------------------------------------------------------- */
+/* Cards                                                                  */
+/* ---------------------------------------------------------------------- */
 
 .card {
   background: var(--card-bg);
@@ -66,13 +535,9 @@ h1 {
 
 .answer-hint {
   font-size: 0.8rem;
-  color: #5c564d; /* a step below the labels, but darker than --muted */
+  color: #5c564d;
   margin: -4px 0 10px;
 }
-
-/* ---------------------------------------------------------------------- */
-/* Problem card                                                           */
-/* ---------------------------------------------------------------------- */
 
 /* Houses the problem card and, during a transition, its outgoing clone -
    overflow:hidden here (not on the card itself) clips the clone as it
@@ -89,10 +554,11 @@ h1 {
 .problem-card {
   position: relative;
   text-align: center;
-  padding: 30px 20px 24px;
+  padding: 30px 16px 24px;
   border-color: var(--accent);
   background: linear-gradient(135deg, var(--card-bg), var(--accent-tint));
   box-shadow: 0 3px 12px rgba(20, 22, 30, 0.07);
+  transition: transform 0.38s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.38s ease;
 }
 
 .problem-card::before {
@@ -106,43 +572,56 @@ h1 {
   background: var(--accent);
 }
 
-.problem-card .label { text-align: left; }
+.problem-card .label { text-align: right; }
+
+/* Boss node: darker, amber-trimmed card. */
+.boss-node .problem-card {
+  border-color: var(--warn);
+  border-width: 2px;
+  background: linear-gradient(135deg, #fffaf0, #fbe9cc);
+  box-shadow: 0 4px 16px rgba(201, 138, 63, 0.25);
+}
+
+.boss-node .problem-card::before { background: var(--warn); height: 6px; }
+.boss-node .problem-card .label::before { content: "★ בוס · "; color: var(--warn); }
+
+.in-ext-room .problem-card { border-color: var(--ext); background: linear-gradient(135deg, #fff, var(--ext-tint)); }
+.in-ext-room .problem-card::before { background: var(--ext); }
 
 math-field.display-field {
   font-size: 1.8rem;
   border: none;
   background: transparent;
   padding: 4px 0;
-  direction: ltr;
+  max-width: 100%;
 }
 
-/* "Another exercise": a snapshot of the whole outgoing card is placed over
-   the live one, then slides away - the new card is already rendered
-   underneath, so it reads as revealed rather than swapped. */
+/* New card enters from the left (the direction of travel in RTL). */
+.problem-card.enter-start {
+  transform: translateX(-70px);
+  opacity: 0;
+  transition: none;
+}
+
 .problem-card-outgoing {
   position: absolute;
   margin: 0;
-  transition: transform 0.32s ease, opacity 0.32s ease, box-shadow 0.32s ease;
+  z-index: 1;
+  transition: transform 0.38s ease-in, opacity 0.38s ease-in;
   pointer-events: none;
 }
 
 .problem-card-outgoing.animate-out {
-  transform: translate(-18px, -14px);
+  transform: translateX(110%);
   opacity: 0;
-  box-shadow: 0 14px 28px rgba(20, 22, 30, 0.22);
 }
 
-/* ---------------------------------------------------------------------- */
-/* Answer card                                                            */
-/* ---------------------------------------------------------------------- */
-
-/* Soft teal border while working; a thicker, bolder green/red once graded.
-   Border-width is fixed at 2px for every state so switching between them
-   never shifts layout. */
+/* Answer card: soft teal border while working; bolder green/red once graded. */
 .answer-card {
   position: relative;
   border-width: 2px;
   border-color: var(--accent-tint-border);
+  padding-bottom: 26px; /* room for the Correct/Incorrect label */
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
@@ -156,13 +635,17 @@ math-field.display-field {
   color: var(--warn);
 }
 
+/* Long worked solutions scroll sideways on phones, starting from the left. */
+.solution-scroll { overflow-x: auto; direction: ltr; }
+
 math-field.solution-field {
-  display: block;
-  font-size: 1.3rem;
+  display: inline-block;
+  width: max-content;
+  min-width: 100%;
+  font-size: 1.2rem;
   border: none;
   background: transparent;
   padding: 0;
-  direction: ltr;
 }
 
 .answer-card.correct {
@@ -186,7 +669,7 @@ math-field.solution-field {
 .answer-badge {
   position: absolute;
   top: -15px;
-  right: 20px;
+  left: 20px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -203,20 +686,14 @@ math-field.solution-field {
   pointer-events: none;
 }
 
-.answer-badge.show {
-  opacity: 1;
-  transform: scale(1);
-}
-
+.answer-badge.show { opacity: 1; transform: scale(1); }
 .answer-badge.correct { background: var(--good); }
 .answer-badge.incorrect { background: var(--bad); }
 
-/* Small Correct/Incorrect label tucked in the bottom-right corner -
-   absolutely positioned so it can never stretch the card. */
 .answer-status-text {
   position: absolute;
-  bottom: 10px;
-  right: 20px;
+  bottom: 6px;
+  left: 20px;
   font-size: 0.8rem;
   font-weight: 700;
   opacity: 0;
@@ -246,33 +723,23 @@ math-field.input-field:focus-within {
    for phones. */
 math-field.input-field::part(menu-toggle) { display: none; }
 
+/* The read-only fields never need MathLive's own inner scrollbar. */
+math-field.solution-field::part(content),
+math-field.display-field::part(content) { overflow: visible; scrollbar-width: none; }
+math-field.solution-field::part(menu-toggle),
+math-field.display-field::part(menu-toggle),
+math-field.solution-field::part(virtual-keyboard-toggle),
+math-field.display-field::part(virtual-keyboard-toggle) { display: none; }
+
 /* ---------------------------------------------------------------------- */
 /* Buttons & feedback                                                     */
 /* ---------------------------------------------------------------------- */
 
 .buttons {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-bottom: 16px;
-}
-
-button {
-  font-size: 1rem;
-  padding: 11px 26px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-  transition: background 0.12s ease, transform 0.05s ease, box-shadow 0.12s ease;
-}
-
-button:active { transform: translateY(1px); }
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
 
 button#checkBtn {
@@ -281,37 +748,21 @@ button#checkBtn {
   box-shadow: 0 2px 6px rgba(13, 125, 114, 0.35);
 }
 
-button#checkBtn:hover:not(:disabled) {
-  background: var(--accent-hover);
-  box-shadow: 0 3px 9px rgba(13, 125, 114, 0.4);
-}
+button#checkBtn:hover:not(:disabled) { background: var(--accent-hover); }
 
-/* Show solution: amber - available, but a use-with-care reveal action */
 button#solutionBtn {
   background: var(--warn-bg);
   color: var(--warn);
   border: 1px solid var(--warn-border);
-  box-shadow: 0 1px 2px rgba(201, 138, 63, 0.12);
 }
 
-button#solutionBtn:hover {
-  background: var(--warn-bg-hover);
-  box-shadow: 0 2px 6px rgba(201, 138, 63, 0.2);
-}
+button#solutionBtn:hover { background: var(--warn-bg-hover); }
+.cost { font-weight: 500; font-size: 0.85em; }
 
-/* Another exercise: neutral while the current one is open (a quiet skip),
-   green once it is solved - the move-forward action. */
 button#nextBtn {
   background: white;
   color: var(--text);
   border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(20, 22, 30, 0.06);
-}
-
-button#nextBtn:hover {
-  background: #f2efe7;
-  border-color: #ddd6c7;
-  box-shadow: 0 2px 5px rgba(20, 22, 30, 0.08);
 }
 
 button#nextBtn.ready {
@@ -321,14 +772,10 @@ button#nextBtn.ready {
   box-shadow: 0 2px 6px rgba(79, 157, 105, 0.35);
 }
 
-button#nextBtn.ready:hover {
-  background: var(--good-hover);
-  border-color: var(--good-hover);
-  box-shadow: 0 3px 9px rgba(79, 157, 105, 0.4);
-}
+button#nextBtn.ready:hover { background: var(--good-hover); }
 
 .feedback {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: 8px;
   font-weight: 500;
   white-space: pre-line;
@@ -336,8 +783,158 @@ button#nextBtn.ready:hover {
 }
 
 .feedback:empty { display: none; }
+.feedback.wrong { background: var(--bad-bg); color: var(--bad); }
+.feedback.near { background: var(--warn-bg); color: #8a5a1e; border: 1px solid var(--warn-border); }
+.feedback.info { background: #f1efe9; color: #5c564d; }
 
-.feedback.incorrect {
-  background: var(--bad-bg);
-  color: var(--bad);
+/* ---------------------------------------------------------------------- */
+/* Conquest                                                               */
+/* ---------------------------------------------------------------------- */
+
+.conquest {
+  text-align: center;
+  padding: 24px 8px;
+  --ink: var(--good);
+}
+
+.conquest.tier-high { --ink: var(--gold); }
+.conquest.tier-mid { --ink: var(--mid); }
+.conquest.tier-low { --ink: var(--bad); }
+
+.seal-wrap { display: flex; justify-content: center; margin-bottom: 12px; }
+
+.seal {
+  width: 190px;
+  height: 190px;
+  color: var(--ink);
+  transform: rotate(-8deg);
+  animation: seal-stamp 0.7s cubic-bezier(0.3, 0, 0.4, 1) 0.15s both;
+}
+
+.seal-ring { fill: none; stroke: currentColor; stroke-width: 6; }
+.seal-ring.thin { stroke-width: 2; stroke-dasharray: 4 4; }
+.seal-arc { fill: currentColor; font-size: 15px; font-weight: 700; letter-spacing: 2px; }
+.seal-score { fill: currentColor; font-size: 64px; font-weight: 800; }
+.seal-sub { fill: currentColor; font-size: 14px; font-weight: 600; }
+
+@keyframes seal-stamp {
+  0% { transform: scale(2.6) rotate(-30deg); opacity: 0; }
+  60% { transform: scale(0.9) rotate(-8deg); opacity: 1; }
+  75% { transform: scale(1.05) rotate(-8deg); }
+  100% { transform: scale(1) rotate(-8deg); opacity: 1; }
+}
+
+/* The page jolts when the stamp lands. */
+.conquest .seal-wrap { animation: stamp-thud 0.25s ease 0.57s; }
+
+@keyframes stamp-thud {
+  30% { transform: translateY(4px); }
+  60% { transform: translateY(-2px); }
+}
+
+.conquest h2 { margin: 6px 0 2px; font-size: 1.6rem; }
+.conquest-room { font-size: 1rem; margin-bottom: 12px; }
+
+.conquest-dots { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; }
+.conquest-dots .mini-node { width: 16px; height: 16px; animation: dot-light 0.3s ease both; }
+.conquest-dots .mini-node.boss { animation-name: dot-light-boss; }
+
+@keyframes dot-light {
+  from { transform: scale(0.2); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes dot-light-boss {
+  from { transform: rotate(45deg) scale(0.2); opacity: 0; }
+  to { transform: rotate(45deg) scale(1); opacity: 1; }
+}
+
+.perfect { color: var(--gold); font-weight: 700; margin-bottom: 6px; }
+.conquest-best { margin-bottom: 4px; }
+.conquest-wins { color: var(--muted); font-size: 0.9rem; margin-bottom: 18px; }
+.conquest-next { margin-top: 12px; color: var(--muted); font-size: 0.9rem; }
+
+.conquest-best, .conquest-wins, .conquest h2, .conquest-room, .perfect, #toTowerBtn, .conquest-next {
+  animation: fade-up 0.4s ease 0.9s both;
+}
+
+@keyframes fade-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Laptops and tablets (the target devices)                               */
+/* ---------------------------------------------------------------------- */
+
+@media (min-width: 760px) {
+  body { padding: 40px 24px; }
+  .container { max-width: 820px; }
+  .map-header { text-align: center; }
+  .tower { max-width: 780px; }
+
+  /* The extension sits beside the core room, joined by a dashed branch;
+     the climb itself (prep -> core) stays one straight column. */
+  .floor-rooms {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-areas:
+      "core ext"
+      "conn ."
+      "prep .";
+    column-gap: 48px;
+    align-items: center;
+  }
+
+  .area-core { grid-area: core; }
+  .area-conn { grid-area: conn; }
+  .area-prep { grid-area: prep; }
+
+  .branch {
+    grid-area: ext;
+    width: auto;
+    margin: 0;
+    position: relative;
+  }
+
+  .branch::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    inset-inline-start: -48px;
+    width: 48px;
+    border-top: 3px dashed var(--ext-border);
+  }
+
+  .branch-conn { display: none; }
+  .floor-label { font-size: 1.05rem; margin-bottom: 16px; }
+  .tower-body { padding: 18px 22px 24px; }
+
+  /* Room: a little wider, larger math and path. */
+  #roomView, #conquestView { max-width: 760px; margin: 0 auto; }
+  .room-name { font-size: 1.3rem; }
+  .pnode { width: 36px; height: 36px; font-size: 0.95rem; }
+  .pconn { width: 72px; }
+  math-field.display-field { font-size: 2.1rem; }
+  math-field.input-field { font-size: 1.5rem; }
+  math-field.solution-field { font-size: 1.3rem; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Phones (not a target - just keep it usable)                            */
+/* ---------------------------------------------------------------------- */
+
+@media (max-width: 480px) {
+  body { padding: 18px 12px; }
+  h1 { font-size: 1.3rem; }
+  math-field.display-field { font-size: 1.35rem; }
+  .card { padding: 14px 14px; }
+  .answer-card { padding-bottom: 28px; }
+  math-field.solution-field { font-size: 1rem; }
+  .buttons button { flex: 1 1 auto; padding: 11px 14px; }
+  .branch { width: 92%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
