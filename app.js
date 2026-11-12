@@ -1083,7 +1083,7 @@ const ROOMS = [
     kind: "review",
     title: "תרגילים מעורבבים",
     en: "Mixed review",
-    tag: "לא חובה · מסגרת זהב למדליה",
+    tag: "מסגרת זהב למדליה",
     requires: ["repeated", "pf1", "irreducible"],
     nodes: [
       { gen: "review" },
@@ -1183,7 +1183,53 @@ const roomView = $("roomView");
 const conquestView = $("conquestView");
 const towerEl = $("tower");
 
+// --- going into a room and back: the map zooms in on the room, and out ---
+
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+let mapZoom = null; // the zoom-in, held at its end until the room is showing
+let lastView = null;
+
+// Point of the map (relative to the map view) at the centre of an element.
+function mapOrigin(el) {
+  const v = mapView.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  return `${r.left + r.width / 2 - v.left}px ${r.top + r.height / 2 - v.top}px`;
+}
+
+function zoomIntoRoom(id) {
+  const el = nodeEl(id);
+  if (!el || reducedMotion()) return Promise.resolve();
+  mapView.style.transformOrigin = mapOrigin(el);
+  mapZoom = mapView.animate(
+    [{ transform: "scale(1)", opacity: 1 }, { transform: "scale(2.4)", opacity: 0 }],
+    { duration: 380, easing: "cubic-bezier(0.5, 0, 0.75, 0.4)", fill: "forwards" }
+  );
+  return mapZoom.finished.catch(() => {});
+}
+
+function zoomOutOfRoom(id) {
+  if (mapZoom) {
+    mapZoom.cancel();
+    mapZoom = null;
+  }
+  const el = id && nodeEl(id);
+  if (!el || reducedMotion()) return;
+  mapView.style.transformOrigin = mapOrigin(el);
+  mapView.animate(
+    [{ transform: "scale(2.2)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }],
+    { duration: 420, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
+  );
+}
+
 function showView(view) {
+  const from = lastView;
+  lastView = view;
+  if (view === roomView && !reducedMotion()) {
+    roomView.animate(
+      [{ transform: "scale(0.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
+      { duration: from === mapView ? 300 : 0, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
+    );
+  }
   for (const v of [mapView, roomView, conquestView]) v.hidden = v !== view;
   window.scrollTo(0, 0);
 }
@@ -1231,7 +1277,10 @@ function roomCardHtml(room) {
 
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`];
   if (room.blurb) info.push(`<div>${room.blurb}</div>`);
-  if (locked) info.push(`<div class="info-note">נפתח אחרי ${quotedTitles(missingRequirements(room))}.</div>`);
+  if (locked) {
+    const nums = missingRequirements(room).map((id) => ROOM_BY_ID[id].num).join(", ");
+    info.push(`<div class="info-note">נפתח אחרי חדרים <bdi dir="ltr">${nums}</bdi>.</div>`);
+  }
   if (rec.run) info.push(`<div class="info-note">בתהליך: תרגיל ${rec.run.node + 1} מתוך ${room.nodes.length} · ניקוד כרגע: ${rec.run.score}</div>`);
   if (conquered) info.push(`<div class="info-note">ניצחתם בחדר ${rec.wins === 1 ? "פעם אחת" : `${rec.wins} פעמים`} · השיא: ${rec.best}</div>`);
 
@@ -1347,7 +1396,7 @@ function trophyHtml() {
   const caption = m.earned
     ? `<div class="medal-title">מדליית הנושא</div>
        <div class="medal-line">ממוצע חדרים <bdi dir="ltr">1, 2, 3</bdi>: <b>${m.avg}</b></div>
-       ${perk(m.gold, "מעורבבים: מסגרת זהב")}${perk(m.star, "מקדם מוביל: כוכב")}`
+       ${perk(m.gold, "מסגרת זהב")}${perk(m.star, "כוכב")}`
     : `<div class="medal-title">מדליית הנושא</div>
        <div class="medal-line">מחכה לכם אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>`;
   return `
@@ -1415,7 +1464,11 @@ function renderMap() {
       </div>
     </div>`;
   justConquered = null;
-  requestAnimationFrame(() => placeMarker(markerNode(), false));
+  // Measure once any zoom of the map has settled; positions taken mid-zoom
+  // would be scaled.
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
 }
 
 // --- the "you are here" marker ---------------------------------------------
@@ -1553,7 +1606,7 @@ function activateMarker() {
   const room = ROOM_BY_ID[id];
   if (!room) return;
   if (isLocked(room)) openGateDialog();
-  else goToRoom(id);
+  else zoomIntoRoom(id).then(() => goToRoom(id));
 }
 
 const ARROW_DIRS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
@@ -1608,7 +1661,7 @@ towerEl.addEventListener("click", (e) => {
   if (card) {
     const room = ROOM_BY_ID[card.dataset.room];
     if (isLocked(room)) openGateDialog();
-    else walkTo(room.id).then(() => goToRoom(room.id));
+    else walkTo(room.id).then(() => zoomIntoRoom(room.id)).then(() => goToRoom(room.id));
     return;
   }
   const gate = e.target.closest('[data-node="gate"]');
@@ -2113,8 +2166,14 @@ function route() {
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
   } else {
+    const fromRoom = lastView === roomView || lastView === conquestView;
     renderMap();
     showView(mapView);
+    if (fromRoom) zoomOutOfRoom(markerNode());
+    else if (mapZoom) {
+      mapZoom.cancel();
+      mapZoom = null;
+    }
   }
 }
 
@@ -2122,6 +2181,43 @@ window.addEventListener("hashchange", route);
 route();
 
 // Test hook for the preview only: ?debug exposes the exercise on screen.
+// Test panel for the lecturer only (?test in the address): answer the current
+// exercise right or wrong through the real check, and wipe all progress.
+if (new URLSearchParams(location.search).has("test")) {
+  const panel = document.createElement("div");
+  panel.className = "test-panel";
+  panel.innerHTML = `
+    <b>בדיקות</b>
+    <button type="button" data-t="right">✓ נכון</button>
+    <button type="button" data-t="wrong">✗ טעות (−1)</button>
+    <button type="button" data-t="reset">איפוס משחק</button>`;
+  document.body.appendChild(panel);
+  let wrongs = 0;
+  panel.addEventListener("click", (e) => {
+    const t = e.target.dataset.t;
+    if (!t) return;
+    if (t === "reset") {
+      if (!confirm("למחוק את כל ההתקדמות ולהתחיל מההתחלה?")) return;
+      try {
+        localStorage.removeItem(STORE_KEY);
+      } catch {
+        // nothing saved to remove
+      }
+      location.hash = "";
+      location.reload();
+      return;
+    }
+    if (roomView.hidden || !view.problem) return;
+    if (view.resolved) {
+      if (!nextBtn.hidden) nextBtn.click(); // already right: go on
+      return;
+    }
+    // A fresh wrong answer each time, so it is never the "same answer again".
+    answerField.value = t === "right" ? antiderivativeLatex(view.problem) : `${++wrongs}x`;
+    checkBtn.click();
+  });
+}
+
 if (new URLSearchParams(location.search).has("debug")) {
   window.__intapp = {
     problem: () => view.problem,

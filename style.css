@@ -1237,3 +1237,23 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 }
 .restart-btn:hover { color: var(--text); text-decoration: underline; }
 .restart-btn.confirming { color: var(--now, #f07a12); }
+
+/* The zoom between the map and a room must not open a sideways scrollbar. */
+body { overflow-x: clip; }
+
+/* Lecturer's test panel (?test) - not for students, not styled to match. */
+.test-panel {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: #fff8c5;
+  border: 2px dashed #b08900;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.test-panel button { padding: 4px 8px; font-size: 0.8rem; background: white; color: #333; border: 1px solid #999; }
