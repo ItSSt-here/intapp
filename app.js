@@ -1398,6 +1398,24 @@ function trophyHtml() {
     </div>`;
 }
 
+// A carved stone pedestal for the medal: a slab on top, a fluted column, and
+// two steps at the foot, with a pool of light on its top.
+const PEDESTAL_SVG = `
+  <svg class="pedestal" viewBox="0 0 180 130" aria-hidden="true">
+    <defs>
+      <linearGradient id="pedStone" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#7d715e"/><stop offset="0.45" stop-color="#cfc3a8"/><stop offset="1" stop-color="#6f6453"/>
+      </linearGradient>
+    </defs>
+    <ellipse class="ped-light" cx="90" cy="9" rx="60" ry="7"/>
+    <rect x="22" y="8" width="136" height="14" rx="2" fill="url(#pedStone)" stroke="#3e362c"/>
+    <rect x="34" y="22" width="112" height="6" fill="#8d806a" stroke="#3e362c"/>
+    <rect x="44" y="28" width="92" height="70" fill="url(#pedStone)" stroke="#3e362c"/>
+    <path d="M58 30V96M72 30V96M86 30V96M100 30V96M114 30V96M128 30V96" stroke="#5e5446" stroke-opacity="0.55" stroke-width="2"/>
+    <rect x="34" y="98" width="112" height="10" fill="url(#pedStone)" stroke="#3e362c"/>
+    <rect x="20" y="108" width="140" height="14" rx="2" fill="url(#pedStone)" stroke="#3e362c"/>
+  </svg>`;
+
 // 2. Inside: the topic's medal, its score, and what is still open.
 function renderMedalView() {
   const m = medalState();
@@ -1410,7 +1428,12 @@ function renderMedalView() {
   const item = (done, text) =>
     `<li class="${done ? "done" : ""}"><span class="check" aria-hidden="true">${done ? "✓" : ""}</span>${text}</li>`;
   $("medalStage").innerHTML = `
-    <div class="medal-big${isNew ? " medal-new" : ""}">${medalSvg(m)}</div>
+    <div class="medal-hall${m.earned ? " lit" : ""}">
+      ${torchHtml("l")}${torchHtml("r")}
+      <div class="medal-beam" aria-hidden="true"></div>
+      <div class="medal-big${isNew ? " medal-new" : ""}">${medalSvg(m)}</div>
+      ${PEDESTAL_SVG}
+    </div>
     <div class="medal-score">${m.earned ? `ממוצע שלושת החדרים: <b>${m.avg}</b>` : "המדליה עוד לא הושגה"}</div>
     <ul class="medal-checklist">
       ${item(m.earned, "שלושת החדרים במסדרון")}
@@ -1958,8 +1981,10 @@ function updatePath(animate) {
 
 function placePawn(animate) {
   const pawn = $("pawn");
-  const target = pathEl.querySelectorAll(".pnode")[Math.min(view.node, view.room.nodes.length - 1)];
+  const i = Math.min(view.node, view.room.nodes.length - 1);
+  const target = pathEl.querySelectorAll(".pnode")[i];
   if (!pawn || !target) return;
+  pawn.classList.toggle("over-boss", !!view.room.nodes[i].boss);
   pawn.style.transition = animate ? "" : "none";
   pawn.style.left = `${target.offsetLeft + target.offsetWidth / 2}px`;
   if (!animate) void pawn.offsetWidth;

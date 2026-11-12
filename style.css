@@ -761,7 +761,15 @@ button:disabled {
 .room-header .node-caption { color: #6b5a3c; }
 .room-header .link-btn { color: #5b4a2c; }
 .room-header .link-btn:hover { color: var(--text); }
-.room-header .path { padding-top: 18px; }
+/* Head room for the step marker: it floats clear of the node below, and
+   rises further over the boss, whose diamond reaches higher. */
+.room-header .path { padding-top: 30px; }
+.room-header .pawn {
+  top: 6px;
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 1px 0 #fff);
+  transition: left 0.5s cubic-bezier(0.5, 0, 0.3, 1.3), top 0.4s ease;
+}
+.room-header .pawn.over-boss { top: -4px; }
 .room-header .node-caption { margin: 6px 0 6px; }
 
 /* Room cleared: the walls turn gold, like the room's card on the map. */
@@ -1615,4 +1623,81 @@ body { overflow-x: clip; }
 @media (max-width: 480px) {
   .castle-wall { padding: 10px; }
   .castle-court { padding: 12px 10px; }
+}
+
+/* ---------------------------------------------------------------------- */
+/* Medal room: the medal on a stone pedestal in a dark, torch-lit alcove,  */
+/* under a beam of light from above                                       */
+/* ---------------------------------------------------------------------- */
+
+@media (min-width: 760px) {
+  #medalView { max-width: 880px; margin: 0 auto; }
+}
+
+.medal-hall {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  height: 420px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  border-radius: 10px 10px 4px 4px;
+  background:
+    radial-gradient(50% 40% at 50% 100%, rgba(255, 200, 120, 0.12), transparent),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='34' height='34'%3E%3Cpath d='M0 .5H34M.5 0V34' stroke='%23ffffff' stroke-opacity='.035' fill='none'/%3E%3C/svg%3E"),
+    #2c2721;
+  box-shadow: inset 0 0 0 4px #5a4f40, inset 0 0 60px rgba(0, 0, 0, 0.6);
+}
+
+.medal-hall .torch { top: 70px; }
+.medal-hall .torch-l { left: 22px; }
+.medal-hall .torch-r { right: 22px; }
+
+/* The beam: a soft cone of light falling on the pedestal. Dimmer while the
+   medal isn't earned yet. */
+.medal-beam {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 300px;
+  height: 330px;
+  margin-left: -150px;
+  background: linear-gradient(180deg, rgba(255, 238, 190, 0.32), rgba(255, 228, 160, 0.1) 75%, rgba(255, 228, 160, 0));
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  opacity: 0.35;
+  animation: beam-breathe 5s ease-in-out infinite;
+}
+.medal-hall.lit .medal-beam { opacity: 1; }
+@keyframes beam-breathe { 50% { filter: brightness(0.85); } }
+
+.medal-hall .medal-big {
+  position: absolute;
+  left: 50%;
+  top: 62px;
+  margin-left: -105px;
+  animation: medal-float 4s ease-in-out infinite;
+}
+.medal-hall .medal-big .medal { width: 210px; height: 203px; }
+.medal-hall.lit .medal-big .medal { filter: drop-shadow(0 0 18px rgba(255, 214, 120, 0.45)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
+@keyframes medal-float { 50% { transform: translateY(-5px); } }
+
+/* Unearned: the dashed outline and "?" read on the dark wall. */
+.medal-hall .medal.empty .medal-outline { fill: rgba(255, 255, 255, 0.05); stroke: #b9ad95; }
+.medal-hall .medal.empty .medal-q { fill: #b9ad95; }
+
+.pedestal {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 200px;
+  height: 144px;
+  margin-left: -100px;
+  overflow: visible;
+}
+.ped-light { fill: rgba(255, 232, 170, 0.12); }
+.medal-hall.lit .ped-light { fill: rgba(255, 232, 170, 0.55); filter: blur(3px); }
+
+@media (max-width: 480px) {
+  .medal-hall { height: 360px; }
+  .medal-hall .torch { display: none; }
 }
