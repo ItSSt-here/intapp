@@ -3267,16 +3267,19 @@ function syncRestart() {
   resetRestartBtn();
 }
 
+// A circular arrow back to the start.
+const RESTART_ICON = `<svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.5 3.5v4h4"/></svg>`;
+
 function resetRestartBtn() {
   clearTimeout(restartTimer);
   restartBtn.classList.remove("confirming");
-  restartBtn.textContent = "↺ מחדש";
+  restartBtn.innerHTML = `${RESTART_ICON}<span>מחדש</span>`;
 }
 
 restartBtn.addEventListener("click", () => {
   if (!restartBtn.classList.contains("confirming")) {
     restartBtn.classList.add("confirming");
-    restartBtn.textContent = "להתחיל מחדש? לחצו שוב";
+    restartBtn.innerHTML = `${RESTART_ICON}<span>לחצו שוב</span>`;
     restartTimer = setTimeout(resetRestartBtn, 4000);
     return;
   }

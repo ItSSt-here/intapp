@@ -760,8 +760,6 @@ button:disabled {
 .room-header .room-name-en,
 .room-header .score-label,
 .room-header .node-caption { color: #6b5a3c; }
-.room-header .link-btn { color: #5b4a2c; }
-.room-header .link-btn:hover { color: var(--text); }
 /* Head room for the step marker: it floats clear of the node below, and
    rises further over the boss, whose diamond reaches higher. */
 .room-header .path { padding-top: 30px; }
@@ -1501,17 +1499,29 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 }
 .pawn, .in-ext-room .pawn { border-top-color: var(--now); }
 
-/* "↺ מחדש" next to the score in a room. */
-.restart-btn {
-  background: none;
-  padding: 2px 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--muted);
+/* "למפה" and "מחדש" in a room (and "למפה" in the medal room): small
+   stone-framed buttons with an icon. */
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 14px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #4b3f2b;
   white-space: nowrap;
+  background: linear-gradient(180deg, #fbf6ea, #e8dcc2);
+  border: 2px solid var(--jamb);
+  border-radius: 8px;
+  box-shadow: 0 2px 0 #b7a682, 0 3px 6px rgba(60, 45, 20, 0.18);
+  cursor: pointer;
 }
-.restart-btn:hover { color: var(--text); text-decoration: underline; }
-.restart-btn.confirming { color: var(--now, #f07a12); }
+.nav-btn:hover { background: linear-gradient(180deg, #fffaf0, #efe4cc); border-color: #6e6048; color: var(--text); }
+.nav-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #b7a682; }
+.btn-icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.restart-btn { margin-inline-start: 6px; }
+.restart-btn .btn-icon { width: 22px; height: 22px; stroke-width: 2.6; }
+.restart-btn.confirming { color: #fff; background: var(--now, #f07a12); border-color: #b85a08; box-shadow: 0 2px 0 #b85a08; }
 
 /* The zoom between the map and a room must not open a sideways scrollbar. */
 body { overflow-x: clip; }
