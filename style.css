@@ -21,9 +21,9 @@
   --mid: #a77b06;
   --mid-bg: #fdf6d8;
   --mid-border: #ecd27a;
-  --ext: #5b4bc4;
-  --ext-tint: #f0eefc;
-  --ext-border: #b9b0ec;
+  --ext: var(--accent);
+  --ext-tint: var(--accent-tint);
+  --ext-border: var(--accent);
   --stone: #efeae0;
   --q: #d9a400;
   --q-bg: #fff8db;
@@ -286,20 +286,6 @@ button:disabled {
 .passage:not(.open):hover .gate-arch { box-shadow: inset 0 0 0 2px #e0cf9e; }
 .phone-only { display: none; }
 
-/* The topic medal, in the wing's last room. */
-.trophy-room {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 100%;
-  min-height: 74px;
-  padding: 6px 10px;
-  background: var(--tiles), var(--floor);
-  border: 4px solid var(--wall);
-  border-radius: 4px;
-  cursor: pointer;
-}
-
 .medal { flex: none; width: 92px; height: 89px; overflow: visible; }
 .medal-outline { fill: rgba(255, 255, 255, 0.35); stroke: #9c8b6c; stroke-width: 2; stroke-dasharray: 5 4; }
 .medal-q { font: 700 28px Georgia, serif; fill: #9c8b6c; }
@@ -313,15 +299,8 @@ button:disabled {
 .medal.empty .medal-ribbon { fill: #8c8270; }
 .medal-ribbon-text { font: 700 9.5px "Segoe UI", Arial, sans-serif; fill: white; }
 
-.medal-caption { min-width: 0; line-height: 1.35; }
-.medal-title { font-weight: 700; color: #5b4a2c; font-size: 0.95rem; }
-.medal-line { font-size: 0.8rem; color: var(--muted); }
-.medal-line b { color: var(--text); }
-.medal-perk { font-size: 0.75rem; color: #9c9282; }
-.medal-perk.on { color: #8a6a0a; font-weight: 600; }
-
-.trophy-room.earned { background: var(--tiles), radial-gradient(130% 150% at 30% 50%, #fffbef 0%, #fff3d2 60%, #ffe7ad 100%); }
-.trophy-room.medal-new .medal { animation: medal-shine 1.4s ease 0.3s both; }
+/* The medal appears or is upgraded. */
+.medal-big.medal-new .medal { animation: medal-shine 1.4s ease 0.3s both; }
 
 @keyframes medal-shine {
   0% { transform: scale(0.4) rotate(-20deg); opacity: 0; }
@@ -377,7 +356,7 @@ button:disabled {
 }
 
 /* The place the marker stands at is outlined. */
-.room-card.marker-here, .trophy-room.marker-here { outline: 3px solid rgba(255, 255, 255, 0.85); outline-offset: 2px; }
+.room-card.marker-here { outline: 3px solid rgba(255, 255, 255, 0.85); outline-offset: 2px; }
 
 /* The entrance: a wooden door in the outer wall. */
 .entrance { display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -521,7 +500,7 @@ button:disabled {
 .room-prep { --kind: var(--warn-border); --room-floor: #f6ebd8; }
 .room-prep .room-title { color: #8a5a1e; }
 
-.room-ext { --kind: var(--ext-border); --room-floor: #ebe8f6; }
+.room-ext { --kind: var(--ext-border); --room-floor: #e6efe9; }
 
 /* Review: the gold capstone of the floor. */
 .room-review { --kind: var(--gold); --room-floor: #f5edd3; }
@@ -597,7 +576,7 @@ button:disabled {
 .mini-conn { width: 14px; height: 2px; background: var(--accent-tint-border); flex: none; }
 .room-ext .mini-node:not(.boss) { border-color: var(--ext); }
 .room-ext .mini-node:not(.boss).done { background: var(--ext); }
-.room-ext .mini-node.current { box-shadow: 0 0 0 3px rgba(91, 75, 196, 0.25); }
+.room-ext .mini-node.current { box-shadow: 0 0 0 3px rgba(13, 125, 114, 0.25); }
 
 /* The room flips over to its conquered face when the student returns. */
 .room-card.just-conquered { animation: card-flip 0.9s ease both; }
@@ -1186,15 +1165,11 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
   .floor-map .room-title { font-size: 0.95rem; }
   .floor-map .room-card { padding: 9px 10px; }
   .floor-en { display: none; }
-  .trophy-room { flex-direction: column; gap: 2px; text-align: center; padding: 6px; }
-  .medal { width: 84px; height: 81px; }
-  .medal-perk { display: none; }
 }
 
 /* Phones: no gate drawing, so the wing's "open anyway" sits on its corridor. */
 @media (max-width: 759px) {
   .phone-only { display: inline; }
-  .trophy-room { cursor: default; }
 }
 
 /* A completed room: gold walls and a soft gold glow, unmistakable among the
@@ -1257,3 +1232,48 @@ body { overflow-x: clip; }
   font-size: 0.8rem;
 }
 .test-panel button { padding: 4px 8px; font-size: 0.8rem; background: white; color: #333; border: 1px solid #999; }
+
+/* The medal room: a gold room on the map, and its own screen. */
+.room-medals { --kind: var(--gold); --room-floor: #f5edd3; }
+.room-medals .room-title { color: #7a5a00; }
+.medal-avg-line { font-size: 0.9rem; color: #6b5a3c; }
+.medal-avg-line b { color: var(--text); font-size: 1rem; }
+
+.room-bar-spacer { width: 70px; }
+.medal-stage { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 0 28px; }
+.medal-big .medal { width: 240px; height: 232px; }
+.medal-score { font-size: 1.1rem; color: #5b4a2c; }
+.medal-score b { font-size: 1.3rem; color: var(--text); }
+.medal-checklist { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.medal-checklist li { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; color: var(--muted); }
+.medal-checklist li.done { color: var(--text); }
+.medal-checklist .check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #b9ab90;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: white;
+  background: white;
+}
+.medal-checklist li.done .check { background: var(--good); border-color: var(--good); }
+
+/* "טכניקה גבוהה": says what the extension room is, in words, not colour. */
+.room-label {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #7a3d0a;
+  background: #fde7cf;
+  border: 1px solid #f0b47a;
+}
+
+/* "חזרה": a calmer label than the technique one - nothing new here. */
+.room-review .room-label { color: #2f5d8a; background: #e1edf8; border-color: #9cc0e2; }

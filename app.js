@@ -1083,7 +1083,8 @@ const ROOMS = [
     kind: "review",
     title: "תרגילים מעורבבים",
     en: "Mixed review",
-    tag: "מסגרת זהב למדליה",
+    tag: "חזרה · כל הסוגים, בלי רמז",
+    label: "חזרה",
     requires: ["repeated", "pf1", "irreducible"],
     nodes: [
       { gen: "review" },
@@ -1096,7 +1097,8 @@ const ROOMS = [
     kind: "ext",
     title: "מכנה עם מקדם מוביל",
     en: "Non-monic",
-    tag: "הרחבה · כוכב למדליה",
+    tag: "טכניקה גבוהה",
+    label: "טכניקה גבוהה",
     stars: 2,
     requires: ["repeated", "pf1", "irreducible"],
     nodes: [
@@ -1181,6 +1183,7 @@ const $ = (id) => document.getElementById(id);
 const mapView = $("mapView");
 const roomView = $("roomView");
 const conquestView = $("conquestView");
+const medalView = $("medalView");
 const towerEl = $("tower");
 
 // --- going into a room and back: the map zooms in on the room, and out ---
@@ -1224,13 +1227,13 @@ function zoomOutOfRoom(id) {
 function showView(view) {
   const from = lastView;
   lastView = view;
-  if (view === roomView && !reducedMotion()) {
-    roomView.animate(
+  if ((view === roomView || view === medalView) && !reducedMotion()) {
+    view.animate(
       [{ transform: "scale(0.94)", opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: from === mapView ? 300 : 0, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
     );
   }
-  for (const v of [mapView, roomView, conquestView]) v.hidden = v !== view;
+  for (const v of [mapView, roomView, conquestView, medalView]) v.hidden = v !== view;
   window.scrollTo(0, 0);
 }
 
@@ -1295,6 +1298,7 @@ function roomCardHtml(room) {
           <span class="room-info" role="tooltip">${info.join("")}</span>
         </span>
       </div>
+      ${room.label ? `<div class="room-label">${room.label}</div>` : ""}
       <div class="room-progress">
         <div class="mini-path">${nodeDotsHtml(room, done, rec.run ? rec.run.node : -1)}</div>
         <div class="room-side">${side}</div>
@@ -1386,25 +1390,39 @@ function medalSvg(m) {
 
 function trophyHtml() {
   const m = medalState();
+  return `
+    <div class="room-card room-medals" data-node="trophy" role="button" tabindex="0">
+      <div class="room-head"><span class="room-title">חדר המדליות</span></div>
+      <div class="room-progress"><div class="medal-avg-line">${m.earned ? `ממוצע: <b>${m.avg}</b>` : ""}</div></div>
+    </div>`;
+}
+
+// 2. Inside: the topic's medal, its score, and what is still open.
+function renderMedalView() {
+  const m = medalState();
   const sig = m.earned ? `${m.avg}|${m.gold}|${m.star}` : "";
   const isNew = m.earned && store.medalSeen !== sig;
   if (isNew) {
     store.medalSeen = sig;
     saveStore();
   }
-  const perk = (on, text) => `<div class="medal-perk${on ? " on" : ""}">${on ? "✓" : "○"} ${text}</div>`;
-  const caption = m.earned
-    ? `<div class="medal-title">מדליית הנושא</div>
-       <div class="medal-line">ממוצע חדרים <bdi dir="ltr">1, 2, 3</bdi>: <b>${m.avg}</b></div>
-       ${perk(m.gold, "מסגרת זהב")}${perk(m.star, "כוכב")}`
-    : `<div class="medal-title">מדליית הנושא</div>
-       <div class="medal-line">מחכה לכם אחרי חדרים <bdi dir="ltr">1, 2, 3</bdi></div>`;
-  return `
-    <div class="trophy-room${m.earned ? " earned" : ""}${isNew ? " medal-new" : ""}" data-node="trophy">
-      ${medalSvg(m)}
-      <div class="medal-caption">${caption}</div>
-    </div>`;
+  const item = (done, text) =>
+    `<li class="${done ? "done" : ""}"><span class="check" aria-hidden="true">${done ? "✓" : ""}</span>${text}</li>`;
+  $("medalStage").innerHTML = `
+    <div class="medal-big${isNew ? " medal-new" : ""}">${medalSvg(m)}</div>
+    <div class="medal-score">${m.earned ? `ממוצע שלושת החדרים: <b>${m.avg}</b>` : "המדליה עוד לא הושגה"}</div>
+    <ul class="medal-checklist">
+      ${item(m.earned, "שלושת החדרים במסדרון")}
+      ${item(m.gold, "תרגילים מעורבבים")}
+      ${item(m.star, "מכנה עם מקדם מוביל")}
+    </ul>`;
 }
+
+function goToMedals() {
+  location.hash = "#/medals";
+}
+
+$("medalBackBtn").addEventListener("click", () => goToMap());
 
 // Top-down plan of floor 1. Grid columns run right to left (RTL): rooms 1-3,
 // then the gate up to the upper wing.
@@ -1540,6 +1558,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
+  if (id === "trophy") return wingOpen() ? "היכנסו ↵" : "";
   if (!ROOM_BY_ID[id]) return "";
   return isLocked(ROOM_BY_ID[id]) ? "" : "היכנסו ↵";
 }
@@ -1601,6 +1620,11 @@ function activateMarker() {
   const id = markerNode();
   if (id === "gate") {
     if (!wingOpen()) openGateDialog();
+    return;
+  }
+  if (id === "trophy") {
+    if (wingOpen()) zoomIntoRoom(id).then(goToMedals);
+    else openGateDialog();
     return;
   }
   const room = ROOM_BY_ID[id];
@@ -1671,12 +1695,16 @@ towerEl.addEventListener("click", (e) => {
     });
     return;
   }
-  const place = e.target.closest('[data-node="trophy"], [data-node="entrance"]');
-  if (place && !place.closest(".fogged")) walkTo(place.dataset.node);
+  if (e.target.closest('[data-node="trophy"]')) {
+    if (!wingOpen()) openGateDialog();
+    else walkTo("trophy").then(() => zoomIntoRoom("trophy")).then(goToMedals);
+    return;
+  }
+  if (e.target.closest('[data-node="entrance"]')) walkTo("entrance");
 });
 
 towerEl.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-room]")) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-room], [data-node="trophy"]')) {
     e.preventDefault();
     e.target.click();
   }
@@ -2135,9 +2163,9 @@ function showConquest(room, { score, prevBest, wins }) {
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next;
   if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
-  else if (CORE_IDS.includes(room.id)) next = "עברתם את שלושת החדרים! המנעולים נפתחו - מדליית הנושא מחכה באגף העליון";
-  else if (room.id === "review") next = "עברתם את התרגילים המעורבבים - המדליה קיבלה מסגרת זהב! · אפשר גם \"מכנה עם מקדם מוביל\" (הרחבה)";
-  else if (room.id === "nonmonic") next = "עברתם את ההרחבה - המדליה קיבלה כוכב!";
+  else if (CORE_IDS.includes(room.id)) next = "עברתם את שלושת החדרים! המנעולים נפתחו - המדליה שלכם מחכה בחדר המדליות";
+  else if (room.id === "review") next = "עברתם את התרגילים המעורבבים - המדליה שלכם השתדרגה! · אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
+  else if (room.id === "nonmonic") next = "עברתם את \"מכנה עם מקדם מוביל\" - המדליה שלכם השתדרגה!";
   else next = "";
 
   $("conquest").className = `conquest tier-${scoreTier(score)}`;
@@ -2165,8 +2193,13 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
+  } else if (location.hash === "#/medals" && wingOpen()) {
+    store.lastRoom = "trophy";
+    saveStore();
+    renderMedalView();
+    showView(medalView);
   } else {
-    const fromRoom = lastView === roomView || lastView === conquestView;
+    const fromRoom = lastView === roomView || lastView === conquestView || lastView === medalView;
     renderMap();
     showView(mapView);
     if (fromRoom) zoomOutOfRoom(markerNode());
