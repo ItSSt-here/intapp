@@ -1013,7 +1013,7 @@ button:disabled {
 }
 
 .boss-node .problem-card::before { background: var(--warn); height: 6px; }
-.boss-node .problem-card .label::before { content: "★ בוס · "; color: var(--warn); }
+.boss-node .problem-card .label::before { content: "★ אינטגרל בוס · "; color: var(--warn); }
 
 .in-ext-room .problem-card { border-color: var(--ext); background: linear-gradient(135deg, #fff, var(--ext-tint)); }
 .in-ext-room .problem-card::before { background: var(--ext); }

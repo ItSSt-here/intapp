@@ -2100,10 +2100,9 @@ const partsAntiderivativeLatex = (p) => partsSumLatex(p, partsTerms(p)) + "+C";
 
 // A factor after "\cdot": bracketed when it starts with a minus.
 const cdotFactor = (s) => (s.startsWith("-") ? `\\left(${s}\\right)` : s);
-const partsUdvLine = (u, dv, du, v) => `&u=${u},\\qquad dv=${dv} \\\\ &du=${du},\\qquad v=${v}`;
-const dxAfter = (s) => (s === "1" ? "dx" : s === "-1" ? "-dx" : `${s}\\,dx`);
+const partsUdvLine = (u, dv, du, v) => `&u=${u},\\qquad v^\\prime=${dv} \\\\ &u^\\prime=${du},\\qquad v=${v}`;
 
-// Worked solution: the choice of u and dv (du, v), uv − ∫v du, a second
+// Worked solution: the choice of u and v′ (u′, v), uv − ∫u′v, a second
 // application where needed, and the result.
 function partsSolutionLatex(p) {
   const lines = [];
@@ -2114,12 +2113,12 @@ function partsSolutionLatex(p) {
     const v2 = partsTermLatex(G2.c, [1], gLatex(G2.fn, p), true);
     const D1 = polyDeriv(p.P);
     const D2 = polyDeriv(D1);
-    lines.push(partsUdvLine(polyLatex(p.P), dxAfter(gLatex(p.g, p)), dxAfter(polyFactorLatex(D1)), v1));
+    lines.push(partsUdvLine(polyLatex(p.P), gLatex(p.g, p), polyFactorLatex(D1), v1));
     const uv = `${polyFactorLatex(p.P)}\\cdot ${cdotFactor(v1)}`;
     const vdu1 = `${cdotFactor(polyFactorLatex(D1))}\\cdot ${cdotFactor(v1)}`;
     lines.push(`${first} &= ${uv}-\\int ${vdu1}\\,dx`);
     if (D2.length) {
-      lines.push(partsUdvLine(polyLatex(D1), dxAfter(v1), dxAfter(polyFactorLatex(D2)), v2));
+      lines.push(partsUdvLine(polyLatex(D1), v1, polyFactorLatex(D2), v2));
       lines.push(`&= ${uv}-\\left(${polyFactorLatex(D1)}\\cdot ${cdotFactor(v2)}-\\int ${cdotFactor(polyFactorLatex(D2))}\\cdot ${cdotFactor(v2)}\\,dx\\right)`);
     }
   } else {
@@ -2127,19 +2126,19 @@ function partsSolutionLatex(p) {
     const r = p.r;
     const dv = p.c === 1 ? "" : p.c === -1 ? "-" : `${p.c}`;
     const xr = r[0] === 0 ? "" : powerLatex(r[0], r[1]);
-    const dvLatex = xr ? `${dv}${xr}\\,dx` : dxAfter(dv || "1");
+    const dvLatex = xr ? `${dv}${xr}` : `${p.c}`;
     const v = ratMul([p.c, 1], [s[1], s[0]]); // v = (c/s) x^s
     const vLatex = lnTermLatex(v, s, 0, true);
     if (p.k === 1) {
-      lines.push(partsUdvLine("\\ln x", dvLatex, "\\frac{1}{x}\\,dx", vLatex));
+      lines.push(partsUdvLine("\\ln x", dvLatex, "\\frac{1}{x}", vLatex));
       lines.push(`${first} &= ${lnTermLatex(v, s, 1, true)}-\\int ${cdotFactor(lnTermLatex(v, r, 0, true))}\\,dx`);
     } else {
-      lines.push(partsUdvLine("\\ln^2x", dvLatex, "\\frac{2\\ln x}{x}\\,dx", vLatex));
+      lines.push(partsUdvLine("\\ln^2x", dvLatex, "\\frac{2\\ln x}{x}", vLatex));
       const K = ratMul(v, [2, 1]); // ∫v·(2 ln x / x) dx = K ∫x^r ln x dx
       const inner = `\\int ${r[0] === 0 ? "" : powerLatex(r[0], r[1])}\\ln x\\,dx`;
       lines.push(`${first} &= ${lnTermLatex(v, s, 2, true)}${coefLatex(-K[0], K[1], inner, false)}`);
       const w = [s[1], s[0]]; // second application: v = x^s / s
-      lines.push(partsUdvLine("\\ln x", dxAfter(xr || "1"), "\\frac{1}{x}\\,dx", lnTermLatex(w, s, 0, true)));
+      lines.push(partsUdvLine("\\ln x", xr || "1", "\\frac{1}{x}", lnTermLatex(w, s, 0, true)));
       lines.push(
         `&= ${lnTermLatex(v, s, 2, true)}${K[1] === 1 && K[0] === 1 ? "-" : coefLatex(-K[0], K[1], "", false)}` +
           `\\left(${lnTermLatex(w, s, 1, true)}-\\int ${lnTermLatex(w, r, 0, true)}\\,dx\\right)`
@@ -2248,8 +2247,8 @@ Object.assign(GENERATORS, {
 });
 
 Object.assign(NEAR_MISS_TEXT, {
-  partsSign: `כמעט! בדקו את הסימן: ${ltr("∫u dv = uv − ∫v du")} - בין ${ltr("uv")} לאינטגרל יש מינוס.`,
-  partsSecond: `כמעט! בדקו את הסימן בהפעלה השנייה: המינוס שלפני ${ltr("∫v du")} חל על כל התוצאה שלו, ${ltr("−(uv − ∫v du)")}.`,
+  partsSign: `כמעט! בדקו את הסימן: ${ltr("∫uv′ = uv − ∫u′v")} - בין ${ltr("uv")} לאינטגרל יש מינוס.`,
+  partsSecond: `כמעט! בדקו את הסימן בהפעלה השנייה: המינוס שלפני ${ltr("∫u′v")} חל על כל התוצאה שלו, ${ltr("−(uv − ∫u′v)")}.`,
   partsDivExp: `כמעט! בחישוב ${ltr("v")} מחלקים במקדם של ${ltr("x")}: ${ltr("∫e^(ax)dx = e^(ax)/a")}.`,
   partsDivTrig: `כמעט! בחישוב ${ltr("v")} מחלקים במקדם של ${ltr("x")}: ${ltr("∫cos(ax)dx = sin(ax)/a")}, ${ltr("∫sin(ax)dx = −cos(ax)/a")}.`,
   xlnx: `כמעט! חסר איבר: ${ltr("∫ln x dx = x·ln x − x")}.`,
