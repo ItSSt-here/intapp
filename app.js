@@ -2246,6 +2246,27 @@ Object.assign(GENERATORS, {
   partsLnBoss: genPartsLnBoss,
 });
 
+// Room 3 (review): a draw from the harder forms of each family only - the
+// room 1/2 warm-ups (linear polynomial times eˣ/sin/cos, and ln x alone) are
+// skipped, since the review is for recognising which u applies, not for
+// relearning the first step. No tag says which family a draw is from.
+const PARTS_REVIEW_POLY = ["partsSquare", "partsPolyBoss"];
+const PARTS_REVIEW_LN = ["partsLnAlone", "partsLnPow", "partsLnRoot", "partsLnBoss"];
+
+function drawPartsReviewPlan(length) {
+  const plan = [];
+  while (plan.length < length) {
+    const gen = pick(chance(0.5) ? PARTS_REVIEW_POLY : PARTS_REVIEW_LN);
+    if (gen !== plan[plan.length - 1]) plan.push(gen); // never the same one twice running
+  }
+  // Both families should show up at least once.
+  if (!plan.some((g) => PARTS_REVIEW_POLY.includes(g))) plan[randInt(0, plan.length - 1)] = pick(PARTS_REVIEW_POLY);
+  if (!plan.some((g) => PARTS_REVIEW_LN.includes(g))) plan[randInt(0, plan.length - 1)] = pick(PARTS_REVIEW_LN);
+  return plan;
+}
+
+const generatePartsReviewExercise = (gen) => GENERATORS[gen]();
+
 Object.assign(NEAR_MISS_TEXT, {
   partsSign: `כמעט! בדקו את הסימן: ${ltr("∫uv′ = uv − ∫u′v")} - בין ${ltr("uv")} לאינטגרל יש מינוס.`,
   partsSecond: `כמעט! בדקו את הסימן בהפעלה השנייה: המינוס שלפני ${ltr("∫u′v")} חל על כל התוצאה שלו, ${ltr("−(uv − ∫u′v)")}.`,
@@ -2432,6 +2453,17 @@ const ROOMS = [
       { gen: "partsLnBoss", boss: true },
     ],
   },
+  {
+    id: "partsReview",
+    place: "parts",
+    kind: "review",
+    title: "תרגילים מעורבבים",
+    en: "Mixed review",
+    tag: "חזרה · שני הסוגים, בלי רמז",
+    label: "חזרה",
+    requires: ["partsLn"],
+    nodes: [{ gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }],
+  },
 ];
 
 const ROOM_BY_ID = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
@@ -2529,7 +2561,7 @@ const stairsOpen = () => exitOpen("linear");
 
 function recommendedRoomId() {
   if (currentPlace() === "ground") return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
-  if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || null;
+  if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || (isConquered("partsReview") ? null : "partsReview");
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -2953,8 +2985,9 @@ const MEDALS = [
   {
     id: "parts",
     title: "אינטגרציה בחלקים",
-    rooms: ROOMS.filter((r) => r.place === "parts").map((r) => r.id),
-    need: "כל החדרים במגדל",
+    rooms: PARTS_IDS,
+    need: "שני החדרים במגדל",
+    gold: { room: "partsReview", text: "תרגילים מעורבבים" },
   },
 ];
 
@@ -3469,7 +3502,8 @@ function renderCastleView(intro = false) {
         <rect x="360" y="194" width="100" height="100" class="cs-wall"/>
         <rect x="360" y="194" width="100" height="100" class="cs-shade"/>
         <text x="410" y="214" class="cs-label">אינטגרציה בחלקים</text>
-        ${PARTS_IDS.map((id, i) => win(id, 402, 256 - i * 36)).join("")}
+        ${win("partsPoly", 382, 228)}${win("partsLn", 422, 228)}
+        ${win("partsReview", 402, 266)}
         ${castleFlag(410, 141, "parts")}
       </g>
 
@@ -3735,9 +3769,9 @@ function renderRationalFloor() {
 }
 
 // Top-down plan of the parts tower's first floor: a line like the ground
-// floor's - the stairs down · hall · room 1 · hall · room 2.
+// floor's - the stairs down · hall · room 1 · hall · room 2 · hall · review.
 function renderPartsFloor() {
-  const [r1, r2] = PARTS_IDS.map((id) => ROOM_BY_ID[id]);
+  const [r1, r2, r3] = ["partsPoly", "partsLn", "partsReview"].map((id) => ROOM_BY_ID[id]);
   const light = floorLighting("parts", PARTS_IDS); // no big torch on this floor yet
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
@@ -3751,6 +3785,8 @@ function renderPartsFloor() {
         <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(r1)}</div>
         <div class="hall" style="grid-column:4;grid-row:1" data-spot="partsLn" aria-hidden="true"></div>
         <div class="cell" style="grid-column:5;grid-row:1">${roomCardHtml(r2)}</div>
+        <div class="hall" style="grid-column:6;grid-row:1" data-spot="partsReview" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:7;grid-row:1">${roomCardHtml(r3)}</div>
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
           <span class="marker-hint"></span>
@@ -3781,18 +3817,19 @@ const BASIC_FLOOR_NODES = {
   more: { nav: { down: "landing", left: "stairsParts", right: "linear" } },
 };
 
-// The parts tower: the way down, room 1, room 2.
+// The parts tower: the way down, room 1, room 2, the review room.
 const PARTS_FLOOR_NODES = {
   entrance: { nav: { left: "partsPoly" } },
   partsPoly: { nav: { right: "entrance", left: "partsLn" } },
-  partsLn: { nav: { right: "partsPoly" } },
+  partsLn: { nav: { right: "partsPoly", left: "partsReview" } },
+  partsReview: { nav: { right: "partsLn" } },
 };
 
 // The places of a line in walking order. On the ground floor both stairs
 // and the side room are as far along as the landing (past room 2).
 const LINE_PATHS = {
   ground: ["entrance", "basic", "linear", "landing", "stairsPf"],
-  parts: ["entrance", "partsPoly", "partsLn"],
+  parts: ["entrance", "partsPoly", "partsLn", "partsReview"],
 };
 const linePath = () => LINE_PATHS[currentPlace()];
 const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" ? "stairsPf" : id);
@@ -4250,6 +4287,7 @@ const view = { room: null, problem: null, node: 0, resolved: false, pending: nul
 function makeProblem(room, i, run) {
   const node = room.nodes[i];
   if (node.gen === "review") return generateReviewExercise(run.plan[i]);
+  if (node.gen === "partsReview") return generatePartsReviewExercise(run.plan[i]);
   return GENERATORS[node.gen]();
 }
 
@@ -4270,7 +4308,7 @@ function enterRoom(id) {
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
-    if (room.kind === "review") rec.run.plan = drawReviewPlan(room.nodes.length);
+    if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
     rec.run.problem = makeProblem(room, 0, rec.run);
     saveStore();
   }

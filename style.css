@@ -2209,12 +2209,14 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 }
 .stairs:not(.locked):hover { box-shadow: inset 0 0 0 2px #e0cf9e; }
 
-/* The parts tower's first floor: the same kind of line, two rooms long. */
+/* The parts tower's first floor: the same kind of line, three rooms long
+   (room 1, room 2, the review room). Flexible room tracks, like the ground
+   floor's fix below, so the score and wins stay inside the cards on wide
+   screens instead of the rooms being squeezed by fixed-width halls. */
 @media (min-width: 760px) {
   .floor-grid.floor-basic.floor-parts {
-    grid-template-columns: 104px 76px minmax(0, 300px) 76px minmax(0, 300px);
+    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px minmax(0, 1fr);
     grid-template-rows: auto;
-    justify-content: center;
   }
 }
 
@@ -2419,7 +2421,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .floor-grid.floor-basic { grid-template-columns: 84px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px 128px; }
   .stairs-landing { padding-inline: 2px; gap: 2px; }
   .stairs-label { font-size: 0.68rem; }
-  .floor-grid.floor-basic.floor-parts { grid-template-columns: 84px 56px minmax(0, 1fr) 56px minmax(0, 1fr); }
+  .floor-grid.floor-basic.floor-parts { grid-template-columns: 84px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px minmax(0, 1fr); }
   .floor-basic .room-progress { flex-wrap: wrap; row-gap: 6px; }
   .floor-basic .mini-conn { width: 8px; }
 }
