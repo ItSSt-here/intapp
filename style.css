@@ -2215,8 +2215,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .cs-place:hover .cs-wall, .cs-place:hover .cs-roof { filter: brightness(1.18); }
 .cs-here .cs-wall { stroke: #d9a93c; stroke-width: 2.5; }
 /* Towers not reached yet (before room 2's exit): in shadow. */
-.cs-locked { cursor: default; opacity: 0.45; }
-.cs-locked:hover .cs-wall, .cs-locked:hover .cs-roof { filter: none; }
+.cs-locked { opacity: 0.45; }
 @media (prefers-reduced-motion: reduce) {
   .cs-win.half, .cs-win.cs-new, .cs-flag.cs-new { animation: none; }
 }

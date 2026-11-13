@@ -3317,7 +3317,7 @@ function renderCastleView(intro = false) {
         <text x="180" y="366" class="cs-label">קומת הקרקע</text>
       </g>
     </svg>
-    <p class="castle-hint">${intro ? "לחצו בכל מקום כדי להמשיך" : locked ? "המגדלים נפתחים אחרי חדר 2 בקומת הקרקע" : "לחצו על מקום בטירה כדי ללכת אליו"}</p>`;
+    <p class="castle-hint">${intro ? "לחצו בכל מקום כדי להמשיך" : "לחצו על מקום בטירה כדי ללכת אליו"}</p>`;
   // What the student has now seen lit: those windows and flags won't light up again.
   const seen = ROOMS.filter((r) => isConquered(r.id)).map((r) => r.id);
   MEDALS.forEach((md) => medalState(md).earned && seen.push(`flag:${md.id}`));
@@ -3328,7 +3328,11 @@ function renderCastleView(intro = false) {
 function castleGo(place) {
   clearTimeout(castleIntroTimer);
   castleView.classList.remove("intro");
-  if (place && place !== "ground" && !stairsOpen()) return;
+  // A tower not reached yet asks first (recommending room 2), as the floor panel does.
+  if (place && place !== "ground" && !stairsOpen()) {
+    openStairsDialog(() => castleGo(place));
+    return;
+  }
   if (place && place !== currentPlace()) {
     store.place = place;
     store.lastRoom = "entrance";
