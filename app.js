@@ -3375,12 +3375,30 @@ function castleSkyHtml() {
   const stars = [[40, 40], [110, 90], [190, 30], [300, 70], [350, 24], [470, 50], [520, 130], [600, 28], [255, 115], [70, 165], [420, 100], [615, 160], [150, 140]]
     .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1.1 : 1.7}" class="cs-star${i % 4 === 1 ? " twinkle" : ""}" style="animation-delay:${-i * 0.9}s"/>`)
     .join("");
-  const cloud = (x, y, s, dur, delay) => `
-    <g class="cs-cloud" style="animation-duration:${dur}s;animation-delay:${delay}s">
-      <g transform="translate(${x} ${y}) scale(${s})">
-        <ellipse cx="0" cy="0" rx="34" ry="11"/><ellipse cx="-14" cy="-7" rx="16" ry="11"/><ellipse cx="10" cy="-10" rx="18" ry="13"/><ellipse cx="28" cy="-2" rx="14" ry="8"/>
-      </g>
-    </g>`;
+  // A puffy blob: a few overlapping ellipses, each nudged a little at random
+  // so no two clouds are quite the same shape.
+  const jit = (v, spread) => v + (Math.random() * 2 - 1) * spread;
+  const cloudShape = (s) => {
+    const blobs = [[0, 0, 34, 11], [-14, -7, 16, 11], [10, -10, 18, 13], [28, -2, 14, 8]];
+    return blobs
+      .map(([x, y, rx, ry]) => `<ellipse cx="${jit(x * s, 3)}" cy="${jit(y * s, 2)}" rx="${(rx * s * jit(1, 0.12)).toFixed(1)}" ry="${(ry * s * jit(1, 0.12)).toFixed(1)}"/>`)
+      .join("");
+  };
+  // Drifting left to right at their own height, size and speed; some low
+  // enough to pass behind the towers. A negative delay starts each one
+  // already mid-flight, so the sky looks lived-in from the first look, and a
+  // short-ish duration means the loop (both ends off-canvas) is seen again
+  // within a minute instead of once every few.
+  const cloud = (yBand) => {
+    const y = jit(yBand, 16);
+    const s = 0.55 + Math.random() * 0.65;
+    const dur = 32 + Math.random() * 30;
+    return `
+      <g class="cs-cloud" style="animation-duration:${dur.toFixed(1)}s;animation-delay:${(-Math.random() * dur).toFixed(1)}s;opacity:${(0.26 + Math.random() * 0.22).toFixed(2)}">
+        <g transform="translate(0 ${y.toFixed(0)})">${cloudShape(s)}</g>
+      </g>`;
+  };
+  const clouds = [40, 75, 115, 150, 185].map(cloud).join("");
   return `
     ${stars}
     <path pathLength="100" class="cs-integral-glow" d="M128 40C122 26 104 28 101 48L91 128C88 148 72 152 64 138"/>
@@ -3392,7 +3410,7 @@ function castleSkyHtml() {
       <path d="M553 72q7 5 14 0" class="cs-moon-face"/>
       <circle cx="547" cy="70" r="3" class="cs-cheek"/><circle cx="573" cy="70" r="3" class="cs-cheek"/>
     </g>
-    ${cloud(0, 70, 1, 140, -40)}${cloud(0, 120, 0.7, 180, -130)}${cloud(0, 44, 0.85, 160, -95)}`;
+    ${clouds}`;
 }
 
 function renderCastleView(intro = false) {

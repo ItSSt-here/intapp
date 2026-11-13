@@ -2355,8 +2355,8 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .cs-moon-face { fill: none; stroke: #a8996f; stroke-width: 1.6; stroke-linecap: round; }
 .cs-cheek { fill: #f0b49a; opacity: 0.35; }
 /* Clouds drift slowly across, past the moon. */
-.cs-cloud { fill: #4a5070; opacity: 0.4; animation: cs-drift linear infinite; }
-@keyframes cs-drift { from { transform: translateX(-120px); } to { transform: translateX(780px); } }
+.cs-cloud { fill: #4a5070; animation: cs-drift linear infinite; }
+@keyframes cs-drift { from { transform: translateX(-150px); } to { transform: translateX(790px); } }
 /* Now and then a shooting star draws an integral sign, which glows a moment. */
 .cs-integral { fill: none; stroke: #fffbe8; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 12 200; stroke-dashoffset: 12; opacity: 0; filter: drop-shadow(0 0 4px #fff2b8); animation: cs-shoot 16s ease-in 1.2s infinite; }
 .cs-integral-glow { fill: none; stroke: #ffe9a8; stroke-width: 2; stroke-linecap: round; opacity: 0; animation: cs-shoot-glow 16s ease 1.2s infinite; }
