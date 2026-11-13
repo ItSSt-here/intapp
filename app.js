@@ -2501,19 +2501,31 @@ const PARTS_IDS = ["partsPoly", "partsLn"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
-// On the ground floor and in the parts tower a room opens when the one
-// before it is won. In the partial-fractions tower the upper area opens as
-// a whole (or when forced).
+// On the ground floor and in the parts tower going into a room is always
+// free; what is barred is the way OUT of a room not won yet (an iron grate in
+// its exit), until it is won or the student opens it anyway. In the
+// partial-fractions tower the upper area opens as a whole (or when forced).
+const hasExit = (id) => ROOMS.some((r) => isLinearPlace(r.place) && r.requires && r.requires[0] === id);
+function exitForced(id) {
+  if ((store.openedExits || {})[id]) return true;
+  // Older stores: a room opened anyway, or the stairs.
+  if (id === "linear" && store.stairsOpen) return true;
+  return ROOMS.some((r) => r.requires && r.requires[0] === id && isLinearPlace(r.place) && (store.openedRooms || {})[r.id]);
+}
+const exitOpen = (id) => isConquered(id) || exitForced(id);
+const exitBlocked = (id) => !!ROOM_BY_ID[id] && hasExit(id) && !exitOpen(id);
+
+// A room the student can't reach yet: on a line, behind a barred exit.
 function isLocked(room) {
   if (!room.requires) return false;
   const rec = roomRecord(room.id);
   if (rec.run || rec.wins > 0) return false;
-  if (isLinearPlace(room.place)) return missingRequirements(room).length > 0 && !(store.openedRooms || {})[room.id];
+  if (isLinearPlace(room.place)) return !exitOpen(room.requires[0]);
   return !wingOpen();
 }
 
-// The stairs up to the towers (both): open after room 2, or when forced.
-const stairsOpen = () => isConquered("linear") || !!store.stairsOpen;
+// The stairs up to the towers (both): past room 2's exit.
+const stairsOpen = () => exitOpen("linear");
 
 function recommendedRoomId() {
   if (currentPlace() === "ground") return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
@@ -2615,7 +2627,8 @@ function nodeDotsHtml(room, doneCount, currentIndex = -1) {
 // everything else lives in the small (i) popover (hover, or tap on tablets).
 function roomCardHtml(room) {
   const rec = roomRecord(room.id);
-  const locked = isLocked(room);
+  const onLineFloor = isLinearPlace(room.place);
+  const locked = !onLineFloor && isLocked(room); // a line has grates, not locked rooms
   const conquered = rec.wins > 0;
   const recommended = recommendedRoomId() === room.id;
   const classes = ["room-card", `room-${room.kind}`];
@@ -2633,6 +2646,7 @@ function roomCardHtml(room) {
 
   const info = [`<div class="info-en" dir="ltr">${room.en}</div>`, `<div class="info-tag">${room.tag}${room.stars ? " " + "★".repeat(room.stars) : ""}</div>`];
   if (room.blurb) info.push(`<div>${room.blurb}</div>`);
+  if (onLineFloor && exitBlocked(room.id)) info.push(`<div class="info-note">היציאה נפתחת כשמסיימים את החדר.</div>`);
   if (locked) {
     const missing = missingRequirements(room);
     const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
@@ -2645,7 +2659,7 @@ function roomCardHtml(room) {
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
-      ${locked && isLinearPlace(room.place) ? `<span class="card-lock">${padlockSvg(ROOM_BY_ID[room.requires[0]].num, false)}</span>` : ""}
+      ${onLineFloor ? exitGrateHtml(room.id) : ""}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
@@ -2678,6 +2692,24 @@ const mapTorch = (col, row) =>
 
 // A doorway through the wall between two areas of the map.
 const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
+
+// The iron grate across a room's exit, on a line. Drawn while the exit is
+// barred - and, closed, once more right after the win, so playUnlock() can
+// raise it in front of the student.
+function exitGrateHtml(id) {
+  if (!hasExit(id)) return "";
+  const rising = pendingUnlock && pendingUnlock.exit === id;
+  if (exitOpen(id) && !rising) return "";
+  return `<span class="exit-grate" data-exit="${id}" aria-label="היציאה חסומה">${GRATE_SVG}</span>`;
+}
+
+const GRATE_SVG = `
+  <svg viewBox="0 0 20 58" aria-hidden="true" preserveAspectRatio="none">
+    <rect x="1.5" y="1.5" width="17" height="53" rx="1" fill="rgba(30, 26, 22, 0.35)" stroke="#2b2620" stroke-width="3"/>
+    <path d="M7.2 2V54M12.8 2V54" stroke="#2b2620" stroke-width="2.6"/>
+    <path d="M2 16H18M2 40H18" stroke="#2b2620" stroke-width="2.6"/>
+    <path d="M7.2 54v3M12.8 54v3M2.5 54v3M17.5 54v3" stroke="#2b2620" stroke-width="2.4" stroke-linecap="round"/>
+  </svg>`;
 
 // One padlock on the wing's gate, numbered after its core room.
 function padlockSvg(n, open) {
@@ -2781,8 +2813,7 @@ function medalSvg(m) {
 function trophyHtml() {
   return `
     <div class="room-card room-medals" data-node="trophy" role="button" tabindex="0">
-      <div class="room-head"><span class="room-title">חדר המדליות</span></div>
-      <div class="room-progress"><div class="medal-avg-line">החדר עוד ריק</div></div>
+      <div class="room-head"><span class="room-title">חדר ריק</span></div>
     </div>`;
 }
 
@@ -2826,11 +2857,15 @@ function renderMedalView() {
           ${PEDESTAL_SVG}
         </div>
         <div class="medal-score">${m.earned ? `ממוצע ${{ 2: "שני ", 3: "שלושת " }[n] || ""}החדרים: <b>${m.avg}</b>` : "המדליה עוד לא הושגה"}</div>
-        <ul class="medal-checklist">
-          ${item(m.earned, medal.need)}
-          ${medal.gold ? item(m.gold, medal.gold.text) : ""}
-          ${medal.star ? item(m.star, medal.star.text) : ""}
-        </ul>
+        <ul class="medal-checklist">${item(m.earned, medal.need)}</ul>
+        ${medal.gold || medal.star ? `
+          <div class="medal-extras">
+            <div class="medal-extras-head">שדרוגים · לא חובה</div>
+            <ul class="medal-checklist">
+              ${medal.gold ? item(m.gold, `<span class="extra-what">זהב</span> ${medal.gold.text}`) : ""}
+              ${medal.star ? item(m.star, `<span class="extra-what">כוכב</span> ${medal.star.text}`) : ""}
+            </ul>
+          </div>` : ""}
       </div>`;
   };
   $("medalStage").innerHTML = `
@@ -2852,8 +2887,15 @@ function playUnlock() {
   const u = pendingUnlock;
   pendingUnlock = null;
   if (!u) return;
-  const lock = towerEl.querySelectorAll(".padlock")[u.lock - 1];
   const t0 = reducedMotion() ? 0 : 750;
+  if (u.exit) {
+    // On a line: the grate across the room's exit slides up and is gone.
+    const grate = towerEl.querySelector(`.exit-grate[data-exit="${u.exit}"]`);
+    setTimeout(() => grate && grate.classList.add("rising"), t0);
+    setTimeout(() => grate && grate.remove(), t0 + 1000);
+    return;
+  }
+  const lock = towerEl.querySelectorAll(".padlock")[u.lock - 1];
   setTimeout(() => lock && lock.classList.add("unlocking"), t0);
   setTimeout(() => {
     if (!lock) return;
@@ -3068,12 +3110,12 @@ const STAIRS_DOWN_SVG = (() => {
   </svg>`;
 })();
 
-// One staircase up to a tower, on the ground floor's landing.
-function stairsHtml(id, name, full, up) {
+// One staircase up to a tower, on the ground floor's landing. Never locked
+// itself: the way to it is room 2's exit.
+function stairsHtml(id, name, full) {
   return `
-    <div class="stairs${up ? "" : " locked"}" data-node="${id}" role="button" tabindex="0" aria-label="מדרגות ל${full}${up ? "" : " - נעול"}">
-      ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
-      ${stairsSvg(!up)}
+    <div class="stairs" data-node="${id}" role="button" tabindex="0" aria-label="מדרגות ל${full}">
+      ${stairsSvg(false)}
       <span class="stairs-label">${name}</span>
     </div>`;
 }
@@ -3094,11 +3136,10 @@ const mapTipHtml = () =>
 // the room. A side hall goes up from the last hall to the extension room
 // (row 1).
 function renderBasicFloor() {
-  const up = stairsOpen();
   const stairs = `
     <div class="cell stairs-landing" style="grid-column:7;grid-row:3">
-      ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים", up)}
-      ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים", up)}
+      ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים")}
+      ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
     </div>`;
   towerEl.innerHTML = `
     <div class="floor-map">
@@ -3362,11 +3403,11 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return "";
-  if (STAIRS_PLACE[id]) return stairsOpen() ? "עולים ↵" : "נעול ↵";
+  if (STAIRS_PLACE[id]) return "עולים ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
-  if (isLocked(ROOM_BY_ID[id])) return onLine() ? "נעול ↵" : "";
-  return "היכנסו ↵";
+  if (!onLine() && isLocked(ROOM_BY_ID[id])) return "";
+  return "לתרגילים ↵";
 }
 
 function placeMarker(id, save = true) {
@@ -3432,10 +3473,9 @@ function stepMarker(dir) {
   const here = markerNode();
   const to = mapNodes()[here].nav[dir];
   if (!to) return;
-  // On a line the marker walks up to a locked door; going on from there,
-  // through the locked room, asks whether to open it.
-  if (onLine() && pathIndex(to) > pathIndex(here) && placeLocked(here)) {
-    openLockFor(here);
+  // On a line, going on from a room whose exit is barred asks first.
+  if (onLine() && pathIndex(to) > pathIndex(here) && exitBlocked(here)) {
+    openExitDialog(here, () => walkTo(to));
     return;
   }
   if (mapNodes()[to].area === "upper" && !wingOpen()) {
@@ -3446,33 +3486,22 @@ function stepMarker(dir) {
   walkTo(to);
 }
 
-// On a line: a room or stairs that aren't open yet.
-function placeLocked(id) {
-  if (STAIRS_PLACE[id]) return !stairsOpen();
-  return !!ROOM_BY_ID[id] && isLocked(ROOM_BY_ID[id]);
-}
-
-function openLockFor(id) {
-  if (STAIRS_PLACE[id]) openStairsDialog();
-  else openLockedRoomDialog(ROOM_BY_ID[id]);
-}
-
-// On a line, a click: walk towards a place - but not through a locked room;
-// the marker stops at its door. There, or at the place, a lock asks whether
-// to open it; an open place is entered.
+// On a line, a click: walk towards a place - but not out of a room whose
+// exit is barred; the marker stops in that room and asks whether to open the
+// exit (then walks on). A place reached is entered.
 function lineGo(id) {
   const path = linePath();
   const a = pathIndex(markerNode());
   const b = pathIndex(id);
   let stop = id;
-  for (let k = a; k < b; k++) {
-    if (placeLocked(path[k])) {
+  for (let k = Math.max(a, 0); k < b; k++) {
+    if (exitBlocked(path[k])) {
       stop = path[k];
       break;
     }
   }
   walkTo(stop).then(() => {
-    if (placeLocked(stop)) openLockFor(stop);
+    if (stop !== id) openExitDialog(stop, () => lineGo(id));
     else if (STAIRS_PLACE[stop]) goUpstairs(stop);
     else if (ROOM_BY_ID[stop]) zoomIntoRoom(stop).then(() => goToRoom(stop));
   });
@@ -3491,7 +3520,7 @@ function activateMarker() {
   }
   if (STAIRS_PLACE[id]) {
     if (stairsOpen()) goUpstairs(id);
-    else openStairsDialog();
+    else openExitDialog("linear", () => goUpstairs(id));
     return;
   }
   if (id === "entrance") {
@@ -3500,8 +3529,8 @@ function activateMarker() {
   }
   const room = ROOM_BY_ID[id];
   if (!room) return;
-  if (isLocked(room)) openLockedRoomDialog(room);
-  else zoomIntoRoom(id).then(() => goToRoom(id));
+  if (!onLine() && isLocked(room)) openLockedRoomDialog(room);
+  else zoomIntoRoom(id).then(() => goToRoom(id)); // on a line, going in is always free
 }
 
 const ARROW_DIRS = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
@@ -3641,7 +3670,20 @@ function openLockedRoomDialog(room) {
   });
 }
 
-// The stairs to the towers: open after room 2, or anyway.
+// On a line: the way out of a room not won yet is barred - open it anyway?
+// `then` carries on where the student was going.
+function openExitDialog(id, then) {
+  showLockDialog({
+    title: "היציאה חסומה",
+    html:
+      `עוד לא סיימתם את "${ROOM_BY_ID[id].title}". ` +
+      `מומלץ לסיים אותו לפני שממשיכים לחדר הבא - אבל אפשר לפתוח את היציאה כבר עכשיו.`,
+    anyway: `exit:${id}`,
+    then,
+  });
+}
+
+// The stairs to the towers (from the floor panel): past room 2, or anyway.
 function openStairsDialog(then) {
   const missing = FLOOR1_IDS.filter((id) => !isConquered(id));
   const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
@@ -3662,7 +3704,8 @@ function closeLockDialog() {
 $("lockBackBtn").addEventListener("click", closeLockDialog);
 $("lockAnywayBtn").addEventListener("click", () => {
   closeLockDialog();
-  if (lockDialogFor === "stairs") store.stairsOpen = true;
+  const exit = lockDialogFor === "stairs" ? "linear" : lockDialogFor.startsWith("exit:") ? lockDialogFor.slice(5) : null;
+  if (exit) store.openedExits = { ...store.openedExits, [exit]: true };
   else if (ROOM_BY_ID[lockDialogFor]) store.openedRooms = { ...store.openedRooms, [lockDialogFor]: true };
   else store.wingOpen = true;
   saveStore();
@@ -4056,7 +4099,7 @@ checkBtn.addEventListener("click", () => {
     const score = rec.run.score;
     const prevBest = rec.best;
     // The floor as it was, so the victory screen can say what this win changed.
-    const before = { firstWin: rec.wins === 0, medals: allMedalStates(), wing: wingOpen(), stairs: stairsOpen() };
+    const before = { firstWin: rec.wins === 0, medals: allMedalStates(), exitOpen: exitOpen(view.room.id), wing: wingOpen(), stairs: stairsOpen() };
     rec.best = prevBest === null ? score : Math.max(prevBest, score);
     rec.wins += 1;
     rec.run = null;
@@ -4252,12 +4295,11 @@ const GATE_ICON = `
 function victoryNews(room, before) {
   const news = [];
   if (isLinearPlace(room.place)) {
-    if (before.firstWin) {
-      const opened = ROOMS.find((r) => r.place === room.place && (r.requires || []).includes(room.id));
-      if (opened && !(store.openedRooms || {})[opened.id]) {
-        news.push({ icon: padlockSvg(room.num, true), text: opened.num ? `חדר ${opened.num} נפתח` : `"${opened.title}" נפתח` });
-      }
-      if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות למגדלים נפתחו" });
+    if (hasExit(room.id) && !before.exitOpen) {
+      news.push({
+        icon: `<span class="news-grate">${GRATE_SVG}</span>`,
+        text: room.id === "linear" ? "היציאה נפתחה - אל המדרגות למגדלים" : "היציאה מהחדר נפתחה",
+      });
     }
   } else {
     if (before.firstWin && CORE_IDS.includes(room.id)) {
@@ -4294,6 +4336,7 @@ function showConquest(room, { score, prevBest, wins, before }) {
   if (before.firstWin && CORE_IDS.includes(room.id)) {
     pendingUnlock = { lock: room.num, gate: !before.wing && wingOpen() };
   }
+  if (isLinearPlace(room.place) && hasExit(room.id) && !before.exitOpen) pendingUnlock = { exit: room.id };
 
   // Where to go next.
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));

@@ -1702,6 +1702,12 @@ body { overflow-x: clip; }
 .medal-spot .medal-score b { color: #fff3cf; }
 .medal-spot .medal-checklist li { color: #a99d86; }
 .medal-spot .medal-checklist li.done { color: #f1e6cc; }
+/* Upgrades: set apart under a dashed line, smaller, so only the first item
+   reads as what the medal needs. */
+.medal-extras { margin-top: 6px; padding-top: 8px; border-top: 1px dashed rgba(233, 220, 192, 0.3); }
+.medal-extras-head { font-size: 0.8rem; color: #a99d86; margin-bottom: 6px; text-align: center; }
+.medal-extras .medal-checklist li { font-size: 0.85rem; }
+.extra-what { color: #e2b33a; font-weight: 700; margin-left: 4px; }
 
 /* The beam: a soft cone of light falling on the pedestal. Dimmer while the
    medal isn't earned yet. */
@@ -1897,13 +1903,25 @@ body { overflow-x: clip; }
 /* Floor 1 is a line of rooms: halls between them, a padlock on a room that
    isn't open yet, and the stairs at the far end. */
 .hall { display: none; }
-.card-lock { position: absolute; top: -12px; left: -10px; z-index: 3; }
-.card-lock .padlock { width: 22px; height: 28px; }
-.floor-basic .room-card.locked { filter: saturate(0.35); opacity: 0.7; }
 .stairs { position: relative; cursor: pointer; }
-.stairs.locked .stairs-steps { filter: saturate(0.5) brightness(0.92); }
-.stairs-lock { position: absolute; bottom: 22px; left: 2px; z-index: 1; }
-.stairs-lock .padlock { width: 20px; height: 25px; }
+
+/* An iron grate lowered across the exit of a room not won yet (its left
+   side: the line runs right to left). After the win it slides up. */
+.exit-grate {
+  position: absolute;
+  left: -17px;
+  top: 50%;
+  width: 20px;
+  height: 58px;
+  transform: translateY(-50%);
+  z-index: 3;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+.exit-grate svg { display: block; width: 100%; height: 100%; }
+.exit-grate.rising { transform: translateY(-140%); opacity: 0; transition: transform 0.8s ease-in, opacity 0.4s ease 0.5s; }
+@media (prefers-reduced-motion: reduce) { .exit-grate.rising { transition: none; } }
+.news-grate svg { width: 12px; height: 36px; display: block; }
 
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
