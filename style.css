@@ -761,6 +761,9 @@ button:disabled {
 .room-header { padding-inline: 58px; }
 
 .room-header .room-label { margin-top: 3px; }
+/* How the students did here before: times won and best score. */
+.room-record { margin-top: 4px; font-size: 0.8rem; color: #6b5a3c; }
+.room-record b { color: var(--text); }
 .room-header .room-name-en,
 .room-header .score-label,
 .room-header .node-caption { color: #6b5a3c; }
@@ -1521,6 +1524,15 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 }
 .nav-btn:hover { background: linear-gradient(180deg, #fffaf0, #efe4cc); border-color: #6e6048; color: var(--text); }
 .nav-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 #b7a682; }
+/* "למפה": the way out, in the castle's teal so it stands off the stone wall. */
+#backBtn, #castleBackBtn, #medalBackBtn {
+  color: #fff8e6;
+  background: linear-gradient(180deg, #13867a, #0a635a);
+  border-color: #064a43;
+  box-shadow: 0 2px 0 #053d37, 0 3px 6px rgba(20, 40, 35, 0.3);
+}
+#backBtn:hover, #castleBackBtn:hover, #medalBackBtn:hover { background: linear-gradient(180deg, #179486, #0c7065); color: white; }
+#backBtn:active, #castleBackBtn:active, #medalBackBtn:active { box-shadow: 0 1px 0 #053d37; }
 .btn-icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .restart-btn { margin-inline-start: 6px; }
 .restart-btn .btn-icon { width: 22px; height: 22px; stroke-width: 2.6; }
@@ -1767,6 +1779,126 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .medal-hall .medal.empty .medal-outline { fill: rgba(255, 255, 255, 0.05); stroke: #b9ad95; }
 .medal-hall .medal.empty .medal-q { fill: #b9ad95; }
 
+/* A medal's pieces, one per room: won ones in a plain gold (no score colour
+   until the medal is earned), the rest a dashed gap. */
+.mp-got { fill: #d6ae55; stroke: #7d5f1a; stroke-width: 1.2; stroke-linejoin: round; }
+.mp-gap { fill: rgba(0, 0, 0, 0.04); stroke: #9c8b6c; stroke-width: 1.2; stroke-dasharray: 3 3; }
+.medal.empty .medal-outline { stroke-opacity: 0.5; }
+.medal-hall .mp-gap { fill: rgba(255, 255, 255, 0.04); stroke: #8d8270; }
+.medal-hall .mp-got { filter: drop-shadow(0 0 6px rgba(255, 214, 120, 0.35)); }
+
+/* The small medal beside the floor's name. */
+.medal-mini { width: 26px; height: 26px; margin-inline-start: 10px; vertical-align: -7px; overflow: visible; }
+.medal-mini .medal-avg { font-size: 26px; }
+.floor-label .medal-mini.earned { filter: drop-shadow(0 0 3px rgba(226, 179, 58, 0.6)); }
+
+/* ---- The medal ceremony: dims the screen, builds the medal, reveals its score. */
+.ceremony {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #f1e6cc;
+  cursor: pointer;
+  user-select: none;
+}
+.ceremony::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(50% 55% at 50% 45%, rgba(44, 35, 24, 0.95), rgba(8, 6, 4, 0.97));
+  animation: cer-in 0.45s ease both;
+  transition: opacity 0.6s ease 0.1s;
+}
+.cer-stage { position: relative; width: 300px; height: 400px; }
+.cer-stage .pedestal { animation: cer-in 0.5s ease 0.15s both; }
+.cer-stage .ped-light { fill: rgba(255, 232, 170, 0.55); filter: blur(3px); animation: cer-in 0.4s ease var(--land) both; }
+.cer-beam {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 300px;
+  height: 330px;
+  margin-left: -150px;
+  background: linear-gradient(180deg, rgba(255, 238, 190, 0.4), rgba(255, 228, 160, 0.12) 75%, rgba(255, 228, 160, 0));
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  animation: cer-in 0.5s ease calc(var(--land) - 0.15s) both;
+}
+.cer-glow {
+  position: absolute;
+  left: 50%;
+  top: 164px;
+  width: 280px;
+  height: 280px;
+  margin: -140px 0 0 -140px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 222, 140, 0.6), rgba(255, 222, 140, 0));
+  opacity: 0.35;
+  animation: cer-glow 1.3s ease var(--land) both;
+}
+.cer-medal {
+  position: absolute;
+  left: 50%;
+  top: 62px;
+  width: 210px;
+  height: 203px;
+  margin-left: -105px;
+  animation: cer-drop 0.45s cubic-bezier(0.5, 0, 0.75, 0) var(--drop) both;
+}
+.cer-medal .medal,
+.cer-pieces { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.cer-medal .medal { filter: drop-shadow(0 0 18px rgba(255, 214, 120, 0.45)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
+.cer-medal .medal > * { animation: cer-in 0.4s ease var(--land) both; }
+.cer-medal .medal > ellipse { animation: cer-leaf 0.35s ease both; }
+/* Plain gold until the score shows; then the score's colour. */
+.cer-medal .medal > circle[fill] { animation: cer-in 0.4s ease var(--land) both, cer-tint 0.6s ease calc(var(--land) + 1.1s) both; }
+@keyframes cer-tint { from { fill: #d6ae55; } }
+.cer-medal .medal-ribbon,
+.cer-medal .medal-ribbon-text { animation: cer-in 0.5s ease calc(var(--land) + 0.6s) both; }
+.cer-medal .medal-avg {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: cer-num 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) calc(var(--land) + 1.15s) both;
+}
+.cer-pieces { animation: cer-out 0.4s ease var(--land) both; }
+.cer-pieces path,
+.cer-pieces circle { transform-box: fill-box; transform-origin: center; animation: cer-piece 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.cer-caption { text-align: center; animation: cer-in 0.6s ease calc(var(--land) + 1.35s) both; }
+.cer-title { font-size: 1.7rem; font-weight: 800; color: #f2c94c; text-shadow: 0 0 18px rgba(242, 201, 76, 0.3); }
+.cer-sub { font-size: 1.05rem; color: #e8dcc0; margin-top: 4px; }
+.cer-sub b { color: #fff3cf; font-size: 1.2rem; }
+.cer-skip { position: absolute; bottom: 24px; font-size: 0.8rem; color: #8d8270; animation: cer-in 0.5s ease 1s both; }
+
+/* Leaving: everything fades but the medal, which flies to the medals button. */
+.ceremony.leaving::before { opacity: 0; }
+.ceremony.leaving .cer-stage > :not(.cer-medal),
+.ceremony.leaving .cer-caption,
+.ceremony.leaving .cer-skip { opacity: 0; transition: opacity 0.4s ease; }
+
+@keyframes cer-in { from { opacity: 0; } }
+@keyframes cer-out { to { opacity: 0; } }
+@keyframes cer-leaf { from { opacity: 0; } 60% { opacity: 1; fill: #f3d77a; } }
+@keyframes cer-piece {
+  from { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.7); }
+  35% { opacity: 1; }
+}
+@keyframes cer-drop {
+  from { transform: translateY(-120px) scale(0.85); }
+  80% { transform: translateY(5px); }
+}
+@keyframes cer-glow { from { opacity: 0; transform: scale(0.3); } 25% { opacity: 1; } }
+@keyframes cer-num { from { opacity: 0; transform: scale(0.2); } }
+
+/* No motion: the finished medal, at once. */
+.ceremony.still *,
+.ceremony.still::before { animation: none !important; }
+.ceremony.still .cer-pieces { display: none; }
+
 .pedestal {
   position: absolute;
   left: 50%;
@@ -2000,10 +2132,14 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
-    grid-template-columns: 104px 76px minmax(0, 1fr) 76px minmax(0, 1fr) 76px 176px;
+    /* Halls and stairs kept slim: a won room's progress row (dots, score,
+       wins) needs about 200px. */
+    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px 156px;
     grid-template-rows: auto 34px auto;
     gap: 0;
   }
+  /* Still too narrow: the score and wins drop under the dots, inside the room. */
+  .floor-basic .room-progress { flex-wrap: wrap; row-gap: 6px; }
   .hall {
     display: block;
     align-self: center;

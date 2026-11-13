@@ -2667,6 +2667,23 @@ const SFX = {
   wrong() {
     tone({ f: 220, f2: 185, dur: 0.22, type: "triangle", vol: 0.08, attack: 0.01 });
   },
+  // A piece of the medal clicking into place: a small bright chink.
+  piece() {
+    tone({ f: 1318.5, dur: 0.16, vol: 0.035 });
+    noise({ dur: 0.03, vol: 0.12, freq: 4200, q: 5 });
+  },
+  // The medal set on its pedestal: a deep gong, then a calm major chord as
+  // its score appears.
+  medal() {
+    noise({ dur: 0.3, vol: 0.12, freq: 220, type: "lowpass" });
+    tone({ f: 98, f2: 96, dur: 3.4, vol: 0.22, attack: 0.01 });
+    tone({ f: 147, dur: 2.8, vol: 0.06, attack: 0.02 });
+    tone({ f: 196, dur: 2.4, type: "triangle", vol: 0.06, attack: 0.02 });
+    tone({ f: 293.7, dur: 1.6, type: "triangle", vol: 0.025, attack: 0.02 });
+    [196, 246.94, 293.66, 392].forEach((f, i) =>
+      tone({ f, t: 1.15 + i * 0.07, dur: 2, type: "triangle", vol: 0.05, attack: 0.04 })
+    );
+  },
   // A boss: one deep drum beat and a low note under it.
   boss() {
     tone({ f: 82, f2: 44, dur: 0.6, vol: 0.2 });
@@ -2934,7 +2951,36 @@ function medalState(medal) {
     avg: avg === null ? null : Math.round(avg * 10) / 10,
     gold: !!medal.gold && isConquered(medal.gold.room),
     star: !!medal.star && isConquered(medal.star.room),
+    pieces: medal.rooms.map(isConquered), // one piece of the medal per room won
   };
+}
+
+// The medal's disc cut into one slice per room. Slices already won are a plain
+// gold - no colour or number, since the score isn't known until the medal is.
+function medalSlices(n, got = () => true, attrs = () => "") {
+  if (n === 1) return `<circle cx="60" cy="58" r="34" class="${got(0) ? "mp-got" : "mp-gap"}"${attrs(0)}/>`;
+  const pt = (k) => {
+    const a = ((-90 + (k * 360) / n) * Math.PI) / 180;
+    return `${(60 + 34 * Math.cos(a)).toFixed(2)} ${(58 + 34 * Math.sin(a)).toFixed(2)}`;
+  };
+  let out = "";
+  for (let i = 0; i < n; i++) {
+    out += `<path d="M60 58L${pt(i)}A34 34 0 0 1 ${pt(i + 1)}Z" class="${got(i) ? "mp-got" : "mp-gap"}"${attrs(i)}/>`;
+  }
+  return out;
+}
+
+// A small medal beside the floor's name: its pieces so far, or the earned
+// medal with its score.
+function medalMiniHtml(medalId) {
+  const m = medalState(MEDALS.find((md) => md.id === medalId));
+  const got = m.pieces.filter(Boolean).length;
+  const label = m.earned ? `מדליה: ממוצע ${m.avg}` : `המדליה: ${got} מתוך ${m.pieces.length} חלקים`;
+  const body = m.earned
+    ? `<circle cx="60" cy="58" r="35" class="medal-rim"/><circle cx="60" cy="58" r="30" fill="${MEDAL_COLORS[scoreTier(m.avg)]}"/>
+       <text x="60" y="69" text-anchor="middle" class="medal-avg">${m.avg}</text>`
+    : medalSlices(m.pieces.length, (i) => m.pieces[i]);
+  return `<svg class="medal-mini${m.earned ? " earned" : ""}${m.gold ? " gold" : ""}" viewBox="22 20 76 76" role="img" aria-label="${label}"><title>${label}</title>${body}</svg>`;
 }
 
 const allMedalStates = () => MEDALS.map(medalState);
@@ -2966,11 +3012,13 @@ function medalSvg(m) {
     <path class="medal-ribbon" d="M10 94h100l-6 9 6 9H10l6-9z"/>
     <text class="medal-ribbon-text" x="60" y="106.5" text-anchor="middle">${m.title}</text>`;
   if (!m.earned) {
+    const pieces = m.pieces || [];
+    const got = pieces.filter(Boolean).length;
     return `
-      <svg class="medal empty" viewBox="0 0 120 116" role="img" aria-label="המדליה עוד לא הושגה">
+      <svg class="medal empty" viewBox="0 0 120 116" role="img" aria-label="המדליה עוד לא הושגה: ${got} מתוך ${pieces.length} חלקים">
         <g opacity="0.3">${laurelLeaves("#8c8270")}</g>
         <circle cx="60" cy="58" r="34" class="medal-outline"/>
-        <text x="60" y="69" text-anchor="middle" class="medal-q">?</text>
+        ${pieces.length ? medalSlices(pieces.length, (i) => pieces[i]) : '<text x="60" y="69" text-anchor="middle" class="medal-q">?</text>'}
         ${ribbon}
       </svg>`;
   }
@@ -3521,7 +3569,7 @@ function renderRationalFloor() {
   const light = floorLighting("pf", CORE_IDS);
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span></div>
+      <div class="floor-label${light.label}">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span>${medalMiniHtml("pf")}</div>
       ${mapTipHtml()}
       <div class="floor-grid">
         ${mapTorch(1, 9, light.core)}${mapTorch(3, 9, light.core)}${mapTorch(4, 1, light.all)}
@@ -3572,7 +3620,7 @@ function renderPartsFloor() {
   const light = floorLighting("parts", PARTS_IDS); // no big torch on this floor yet
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">מגדל האינטגרציה בחלקים <span class="floor-en" dir="ltr">(integration by parts)</span></div>
+      <div class="floor-label${light.label}">מגדל האינטגרציה בחלקים <span class="floor-en" dir="ltr">(integration by parts)</span>${medalMiniHtml("parts")}</div>
       ${mapTipHtml()}
       <div class="floor-grid floor-basic floor-parts">
         <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
@@ -4116,6 +4164,11 @@ function enterRoom(id) {
   // The header is a patch of this room's floor, framed like its card on the map.
   $("roomHeader").className = `room-header room-${room.kind}`;
   roomView.classList.toggle("in-ext-room", room.kind === "ext");
+  // How they did here before.
+  const times = { 1: "פעם אחת", 2: "פעמיים" }[rec.wins] || `${rec.wins} פעמים`;
+  $("roomRecord").innerHTML = rec.wins
+    ? `עברתם את החדר ${times} · שיא: <b>${rec.best}</b>`
+    : "עוד לא עברתם את החדר";
   buildPath(room);
   showView(roomView);
   updatePath(false);
@@ -4647,7 +4700,8 @@ function victoryNews(room, before) {
   allMedalStates().forEach((m, i) => {
     const b = before.medals[i];
     if (m.earned && !b.earned) {
-      news.push({ icon: medalSvg(m), text: `קיבלתם מדליה · ממוצע <b>${m.avg}</b>` });
+      // Its score is revealed in the ceremony, back on the map.
+      news.push({ icon: medalSvg({ ...m, earned: false }), text: "קיבלתם מדליה!" });
     } else if (m.earned) {
       if ((m.gold && !b.gold) || (m.star && !b.star)) news.push({ icon: medalSvg(m), text: "המדליה השתדרגה" });
       else if (m.avg !== b.avg) {
@@ -4676,6 +4730,13 @@ function showConquest(room, { score, prevBest, wins, before }) {
     pendingUnlock = { lock: room.num, gate: !before.wing && wingOpen() };
   }
   if (isLinearPlace(room.place) && hasExit(room.id) && !before.exitOpen) pendingUnlock = { exit: room.id };
+  // A medal won: its ceremony plays back on the map (kept in the store, so a
+  // reload before that doesn't lose it).
+  const won = allMedalStates().filter((m, i) => m.earned && !before.medals[i].earned).map((m) => m.id);
+  if (won.length) {
+    store.ceremonyDue = [...new Set([...(store.ceremonyDue || []), ...won])];
+    saveStore();
+  }
 
   // Where to go next.
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
@@ -4745,8 +4806,121 @@ function route() {
       mapZoom.cancel();
       mapZoom = null;
     }
+    const unlocking = !!pendingUnlock;
     playUnlock();
+    // After the zoom-out (and a lock or the gate opening), the medal's moment.
+    if ((store.ceremonyDue || []).length) setTimeout(playDueCeremony, unlocking ? 3300 : fromRoom ? 900 : 300);
   }
+}
+
+// --- the medal ceremony -----------------------------------------------------
+// Once per medal, back on the map after the win that earned it: the screen
+// dims, its pieces fly in and join, the medal drops into a beam of light on a
+// pedestal, the laurel grows, and its score appears last; then it flies into
+// the medals button. Any click or key skips it.
+
+let ceremonyOn = false;
+
+function playDueCeremony() {
+  if (ceremonyOn || mapView.hidden) return;
+  const id = (store.ceremonyDue || []).shift();
+  saveStore();
+  const medal = MEDALS.find((md) => md.id === id);
+  if (!medal || !medalState(medal).earned) return playDueCeremony();
+  playMedalCeremony(medal);
+}
+
+function playMedalCeremony(medal) {
+  const m = medalState(medal);
+  const n = m.pieces.length;
+  const still = reducedMotion();
+  ceremonyOn = true;
+  // Each piece comes in from outside, away from the centre along its own angle.
+  const pieceAttrs = (i) => {
+    const a = ((-90 + ((i + 0.5) * 360) / n) * Math.PI) / 180;
+    const d = 150 + (i % 2) * 40;
+    return ` style="--dx:${(d * Math.cos(a)).toFixed(0)}px;--dy:${(d * Math.sin(a)).toFixed(0)}px;--rot:${i % 2 ? -140 : 120}deg;animation-delay:${0.35 + i * 0.28}s"`;
+  };
+  const assembled = 0.35 + (n - 1) * 0.28 + 0.7; // the last piece in place
+  const drop = assembled + 0.25; // the medal starts down
+  const land = drop + 0.45;
+  const el = document.createElement("div");
+  el.className = `ceremony${still ? " still" : ""}`;
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", `קיבלתם מדליה: ${m.title}, ממוצע ${m.avg}`);
+  el.style.setProperty("--drop", `${drop}s`);
+  el.style.setProperty("--land", `${land}s`);
+  el.innerHTML = `
+    <div class="cer-stage">
+      <div class="cer-beam" aria-hidden="true"></div>
+      ${PEDESTAL_SVG}
+      <div class="cer-glow" aria-hidden="true"></div>
+      <div class="cer-medal">
+        ${medalSvg(m)}
+        <svg class="cer-pieces" viewBox="0 0 120 116" aria-hidden="true">${medalSlices(n, () => true, pieceAttrs)}</svg>
+      </div>
+    </div>
+    <div class="cer-caption">
+      <div class="cer-title">קיבלתם מדליה</div>
+      <div class="cer-sub">${m.title} · ממוצע <b>${m.avg}</b></div>
+    </div>
+    <div class="cer-skip">לחיצה להמשך</div>`;
+  // The laurel grows up both sides, from the bottom leaf.
+  el.querySelectorAll(".cer-medal .medal > ellipse").forEach((leaf, k) => {
+    leaf.style.animationDelay = `${land + 0.15 + (k % 7) * 0.09}s`;
+  });
+  document.body.appendChild(el);
+
+  const timers = [];
+  const at = (s, fn) => timers.push(setTimeout(fn, s * 1000));
+  const reveal = land + 1.15; // the score appears
+  if (!still) {
+    for (let i = 0; i < n; i++) at(0.35 + i * 0.28 + 0.55, () => sfx("piece"));
+    at(land - 0.05, () => sfx("medal"));
+  } else sfx("medal");
+
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    timers.forEach(clearTimeout);
+    document.removeEventListener("keydown", onKey, true);
+    const close = () => {
+      el.remove();
+      ceremonyOn = false;
+      renderMedalsBtn();
+      if ((store.ceremonyDue || []).length) setTimeout(playDueCeremony, 400);
+    };
+    const btn = $("medalsBtn");
+    const b = btn.getBoundingClientRect();
+    const medalEl = el.querySelector(".cer-medal");
+    const r = medalEl.getBoundingClientRect();
+    // Skipped before the score was out, or no motion: just fade away.
+    if (still || !b.width || performance.now() - startedAt < reveal * 1000) {
+      el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: still ? 0 : 250, fill: "forwards" }).onfinish = close;
+      return;
+    }
+    el.classList.add("leaving");
+    const dx = b.left + b.width / 2 - (r.left + r.width / 2);
+    const dy = b.top + b.height / 2 - (r.top + r.height / 2);
+    medalEl.animate(
+      [{ transform: "none" }, { transform: `translate(${dx}px, ${dy}px) scale(0.13)`, opacity: 0.6 }],
+      { duration: 750, easing: "cubic-bezier(0.5, 0, 0.7, 1)", fill: "forwards" }
+    ).onfinish = () => {
+      btn.animate([{ transform: "scale(1)" }, { transform: "scale(1.15)" }, { transform: "scale(1)" }], { duration: 350 });
+      sfx("padlock");
+      close();
+    };
+  };
+  const onKey = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    finish();
+  };
+  const startedAt = performance.now();
+  el.addEventListener("click", finish);
+  document.addEventListener("keydown", onKey, true);
+  at(still ? 4 : reveal + 1.9, finish);
 }
 
 window.addEventListener("hashchange", route);
