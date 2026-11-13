@@ -1827,24 +1827,36 @@ body { overflow-x: clip; }
 .field-menu-item:hover { background: var(--accent-tint); border-color: var(--accent); }
 
 /* ---------------------------------------------------------------------- */
-/* Floor 1 map: entrance, room 1, room 2, then the stairs up               */
+/* Ground floor map: entrance, room 1, room 2, then a landing with the     */
+/* stairs up to the two towers                                             */
 /* ---------------------------------------------------------------------- */
 
-.stairs {
+.stairs-landing {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 4px;
-  padding: 10px 6px;
+  align-items: stretch;
+  justify-content: center;
+  padding: 8px 4px;
   background: var(--tiles), #e2d9c6;
   border: 4px solid var(--wall);
   border-radius: 4px;
 }
-.stairs-steps { width: 84px; height: auto; display: block; }
+/* One staircase: its tower's name over the stairwell, and a strip of floor
+   at its foot where the marker stands. */
+.stairs {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 2px 2px 24px;
+  border-radius: 4px;
+}
+.stairs-steps { width: 100%; max-width: 70px; height: auto; display: block; order: 2; }
 .stairs-bars line { stroke: #2b2722; stroke-width: 3; stroke-linecap: round; }
-.stairs-label { font-size: 0.85rem; font-weight: 600; color: #6b5a3c; }
-.stairs-soon { font-size: 0.75rem; color: var(--muted); }
+.stairs-label { order: 1; font-size: 0.74rem; font-weight: 700; line-height: 1.15; text-align: center; color: #6b5a3c; }
 
 /* Floor 1 is a line of rooms: halls between them, a padlock on a room that
    isn't open yet, and the stairs at the far end. */
@@ -1854,12 +1866,12 @@ body { overflow-x: clip; }
 .floor-basic .room-card.locked { filter: saturate(0.35); opacity: 0.7; }
 .stairs { position: relative; cursor: pointer; }
 .stairs.locked .stairs-steps { filter: saturate(0.5) brightness(0.92); }
-.stairs-lock { position: absolute; top: 6px; left: 6px; }
-.stairs-lock .padlock { width: 22px; height: 28px; }
+.stairs-lock { position: absolute; bottom: 22px; left: 2px; z-index: 1; }
+.stairs-lock .padlock { width: 20px; height: 25px; }
 
 @media (min-width: 760px) {
   .floor-grid.floor-basic {
-    grid-template-columns: 104px 76px minmax(0, 1fr) 76px minmax(0, 1fr) 76px 130px;
+    grid-template-columns: 104px 76px minmax(0, 1fr) 76px minmax(0, 1fr) 76px 176px;
     grid-template-rows: auto 34px auto;
     gap: 0;
   }
@@ -1895,8 +1907,16 @@ body { overflow-x: clip; }
   .floor-basic .entrance .torch-l { left: -2px; }
   .floor-basic .entrance .torch-r { right: -2px; }
 }
-.stairs-floor { font-size: 0.72rem; color: var(--muted); text-align: center; }
 .stairs:not(.locked):hover { box-shadow: inset 0 0 0 2px #e0cf9e; }
+
+/* The parts tower's first floor: the same kind of line, two rooms long. */
+@media (min-width: 760px) {
+  .floor-grid.floor-basic.floor-parts {
+    grid-template-columns: 104px 76px minmax(0, 300px) 76px minmax(0, 300px);
+    grid-template-rows: auto;
+    justify-content: center;
+  }
+}
 
 /* ---------------------------------------------------------------------- */
 /* The floor panel beside the map: the tower in cross-section              */
@@ -1908,20 +1928,33 @@ body { overflow-x: clip; }
 .tower-nav {
   --rock: #2c2721;
   --jamb: #8a7a5e;
-  padding: 0 8px 10px;
+  padding: 10px 8px;
   border-radius: 14px;
   background: radial-gradient(80% 50% at 50% 0%, rgba(255, 190, 110, 0.08), transparent), var(--rock);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 6px 16px rgba(0, 0, 0, 0.18);
 }
-/* A pointed roof over the stack. */
+/* The towers side by side, each under its pointed roof, on top of the
+   ground floor. */
+.tn-towers { display: flex; gap: 6px; align-items: stretch; }
+.tn-tower { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
 .tn-roof {
-  height: 26px;
-  margin: 0 -8px 8px;
-  border-radius: 14px 14px 0 0;
+  flex: none;
+  height: 22px;
+  margin: 0 -3px 4px;
   background: linear-gradient(180deg, #6d5f4a, #4e4436);
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
-.tn-floors { display: flex; flex-direction: column; gap: 6px; }
+.tn-tower .tn-floor {
+  flex: 1;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 8px 4px;
+  text-align: center;
+}
+.tn-tower .tn-text { flex: none; }
+.tn-tower .tn-name { font-size: 0.76rem; }
+.tn-ground { margin-top: 6px; padding-top: 6px; border-top: 3px solid #4e4436; }
 
 .tn-floor {
   position: relative;
@@ -1987,28 +2020,31 @@ body { overflow-x: clip; }
   .map-layout .tower { flex: 1 1 auto; min-width: 0; margin: 0; }
   .tower-nav { flex: none; width: 176px; align-self: flex-start; position: sticky; top: 16px; }
 }
-/* Tablets: a slim strip - numbers and padlocks; the names in the tooltip. */
+/* Tablets: a slim strip - marks and padlocks; the names in the tooltip. */
 @media (min-width: 760px) and (max-width: 1199px) {
   .map-layout { flex-direction: row; gap: 10px; }
   .map-layout .tower { flex: 1 1 auto; min-width: 0; margin: 0; }
-  .tower-nav { flex: none; width: 58px; align-self: flex-start; position: sticky; top: 12px; padding-inline: 6px; }
-  .tn-roof { margin-inline: -6px; }
+  .tower-nav { flex: none; width: 62px; align-self: flex-start; position: sticky; top: 12px; padding-inline: 5px; }
+  .tn-towers { gap: 3px; }
   .tn-floor { flex-direction: column; gap: 4px; padding: 7px 2px; }
+  .tn-tower .tn-floor { padding: 6px 1px; border-width: 1.5px; }
+  .tn-tower .tn-mark { width: 21px; height: 21px; font-size: 0.72rem; }
+  .tn-tower .tn-here { width: 11px; height: 11px; top: -5px; inset-inline-start: -4px; }
   .tn-text { display: none; }
   .tn-state:empty { display: none; }
 }
-/* Phones: a row of floors above the map. */
+/* Phones: the towers above the ground floor, as on wider screens. */
 @media (max-width: 759px) {
-  .tn-roof { display: none; }
-  .tower-nav { padding-top: 8px; }
-  .tn-floors { flex-direction: row-reverse; }
-  .tn-floor { flex: 1; }
+  .tn-roof { height: 14px; }
 }
 
 /* Narrower screens: slimmer entrance, halls and stairs, so the rooms keep
    their width next to the floor strip. */
 @media (min-width: 760px) and (max-width: 1199px) {
-  .floor-grid.floor-basic { grid-template-columns: 84px 56px minmax(0, 1fr) 56px minmax(0, 1fr) 56px 108px; }
+  .floor-grid.floor-basic { grid-template-columns: 84px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px 128px; }
+  .stairs-landing { padding-inline: 2px; gap: 2px; }
+  .stairs-label { font-size: 0.68rem; }
+  .floor-grid.floor-basic.floor-parts { grid-template-columns: 84px 56px minmax(0, 1fr) 56px minmax(0, 1fr); }
   .floor-basic .room-progress { flex-wrap: wrap; row-gap: 6px; }
   .floor-basic .mini-conn { width: 8px; }
 }

@@ -507,6 +507,7 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "parts") return partsProblemLatex(p);
   if (p.kind === "basic") return basicProblemLatex(p);
   if (p.kind === "nmr") return nmrProblemLatex(p);
   if (p.kind === "nmi") return nmiProblemLatex(p);
@@ -529,6 +530,7 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "parts") return partsAntiderivativeLatex(p);
   if (p.kind === "basic") return basicAntiderivativeLatex(p);
   if (p.kind === "nmr") return nmrAntiderivativeLatex(p);
   if (p.kind === "nmi") return nmiAntiderivativeLatex(p);
@@ -545,6 +547,7 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "parts") return partsSolutionLatex(p);
   if (p.kind === "basic") return basicSolutionLatex(p);
   if (p.kind === "nmr") return nmrSolutionLatex(p);
   if (p.kind === "nmi") return nmiSolutionLatex(p);
@@ -954,6 +957,7 @@ function nmiNearMissVariants(q) {
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "parts") return partsIntegrandFn(p);
   if (p.kind === "basic") return basicIntegrandFn(p);
   if (p.kind === "nmr") return nmrIntegrandFn(p);
   if (p.kind === "nmi") return nmiIntegrandFn(p);
@@ -963,6 +967,7 @@ function integrandFn(p) {
 }
 
 function sampleZones(p) {
+  if (p.kind === "parts") return partsSampleZones(p);
   if (p.kind === "basic") return basicSampleZones(p);
   if (p.kind === "nmr") return sampleZones({ kind: "rep", a: p.n / p.m });
   if (p.kind === "nmi") return irrSampleZones({ p: p.p / p.m });
@@ -987,6 +992,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "parts") return partsNearMissVariants(p);
   if (p.kind === "basic") return basicNearMissVariants(p);
   if (p.kind === "nmr") return nmrNearMissVariants(p);
   if (p.kind === "nmi") return nmiNearMissVariants(p);
@@ -1025,7 +1031,11 @@ function checkAnswer(p, latex) {
   } catch {
     return { status: "unreadable" };
   }
+  return checkAntiderivative(p, F);
+}
 
+// The same check for an answer already turned into a function.
+function checkAntiderivative(p, F) {
   const points = pickSamplePoints(p);
   const h = 1e-4;
   const derivs = points.map((x) => {
@@ -1921,6 +1931,332 @@ Object.assign(NEAR_MISS_TEXT, {
 });
 
 // ---------------------------------------------------------------------------
+// Integration by parts (the parts tower):  ∫u dv = uv − ∫v du
+//
+// Room 1, a polynomial times e^(ax+b), sin(ax) or cos(ax):
+//   { kind: "parts", fam: "poly", P: [p0, p1, p2], g: "exp" | "sin" | "cos", a, b }
+// u is the polynomial; applying the rule again and again gives
+//   ∫P g dx = Σ_j (−1)^j P^(j) G_(j+1),   G_1 = ∫g, G_(j+1) = ∫G_j.
+// Room 2, a power of x times ln x or ln² x:
+//   { kind: "parts", fam: "ln", c, r: [P, Q], k: 1 | 2 }    c x^(P/Q) ln^k x
+// u is ln^k x; with s = r + 1,
+//   ∫c x^r ln^k x dx = c x^s Σ_i (−1)^i k!/(k−i)! ln^(k−i) x / s^(i+1).
+// A slip is the same sum with a sign or a division changed. The answer is
+// kept as a list of terms: { c: [num, den], Q, fn } (room 1, c Q(x) G(x)) or
+// { c: [num, den], lnPow } (room 2, c x^s ln^lnPow x).
+// ---------------------------------------------------------------------------
+
+const ratMul = ([a, b], [c, d]) => ratio(a * c, b * d);
+const polyDeriv = (P) => P.slice(1).map((c, i) => c * (i + 1));
+const polyDegree = (P) => trimPoly(P).length - 1;
+const polyTermCount = (P) => P.filter((c) => c !== 0).length;
+const partsS = (p) => ratio(p.r[0] + p.r[1], p.r[1]); // s = r + 1
+const G_FNS = { exp: Math.exp, sin: Math.sin, cos: Math.cos };
+
+// G_1 .. G_n: g integrated again and again. A slip may get the trig signs
+// wrong (∫sin = sinTo·cos, ∫cos = cosTo·sin; right: −1, +1) or not divide
+// by a at step j (div(j) = 1).
+function partsChain(p, n, { sinTo = -1, cosTo = 1, div = () => p.a } = {}) {
+  const out = [];
+  let fn = p.g;
+  let c = [1, 1];
+  for (let j = 1; j <= n; j++) {
+    c = ratio(c[0], c[1] * div(j));
+    if (fn === "sin") {
+      c = ratMul(c, [sinTo, 1]);
+      fn = "cos";
+    } else if (fn === "cos") {
+      c = ratMul(c, [cosTo, 1]);
+      fn = "sin";
+    }
+    out.push({ fn, c });
+  }
+  return out;
+}
+
+const altSign = (j) => (j % 2 ? -1 : 1);
+
+// Room 1's answer as terms; `signs` (one per application) may slip.
+function partsPolyTerms(p, { signs, ...rules } = {}) {
+  const n = polyDegree(p.P) + 1;
+  const G = partsChain(p, n, rules);
+  const out = [];
+  let D = p.P;
+  for (let j = 0; j < n; j++) {
+    out.push({ c: ratMul(G[j].c, [signs ? signs[j] : altSign(j), 1]), Q: D, fn: G[j].fn });
+    D = polyDeriv(D);
+  }
+  return out;
+}
+
+// Room 2's answer as terms. divs[i] = false: that step forgot to divide by s.
+function partsLnTerms(p, { signs, divs } = {}) {
+  const s = partsS(p);
+  const out = [];
+  let c = [p.c, 1];
+  let f = 1; // k!/(k-i)!
+  for (let i = 0; i <= p.k; i++) {
+    if (!divs || divs[i]) c = ratMul(c, [s[1], s[0]]);
+    out.push({ c: ratMul(c, [(signs ? signs[i] : altSign(i)) * f, 1]), lnPow: p.k - i });
+    f *= p.k - i;
+  }
+  return out;
+}
+
+const partsTerms = (p) => (p.fam === "ln" ? partsLnTerms(p) : partsPolyTerms(p));
+
+function partsValue(p, terms, x) {
+  if (p.fam === "ln") {
+    const [sn, sd] = partsS(p);
+    const L = Math.log(x);
+    return terms.reduce((acc, t) => acc + (t.c[0] / t.c[1]) * x ** (sn / sd) * L ** t.lnPow, 0);
+  }
+  const v = p.a * x + p.b;
+  return terms.reduce((acc, t) => acc + (t.c[0] / t.c[1]) * polyEval(t.Q, x) * G_FNS[t.fn](v), 0);
+}
+
+function partsIntegrandFn(p) {
+  if (p.fn) return p.fn;
+  if (p.fam === "ln") return (x) => p.c * x ** (p.r[0] / p.r[1]) * Math.log(x) ** p.k;
+  return (x) => polyEval(p.P, x) * G_FNS[p.g](p.a * x + p.b);
+}
+
+// ln x only for x > 0. e^(ax+b) where |ax+b| <= 4, so no term swamps the
+// others within the checker's 1% tolerance.
+function partsSampleZones(p) {
+  if (p.fam === "ln") return [[0.2, 0.6], [0.7, 1.6], [1.8, 4]];
+  let lo = -2.5;
+  let hi = 2.5;
+  if (p.g === "exp") {
+    const e1 = (-4 - p.b) / p.a;
+    const e2 = (4 - p.b) / p.a;
+    lo = Math.max(lo, Math.min(e1, e2));
+    hi = Math.min(hi, Math.max(e1, e2));
+  }
+  const w = (hi - lo) / 4;
+  return [0, 1, 2, 3].map((i) => [lo + i * w, lo + (i + 1) * w]);
+}
+
+// --- LaTeX ---
+
+// g with its argument: "e^{2x+1}", "\sin 3x", "\cos x".
+const gLatex = (fn, p) => {
+  const t = { u: [p.a, 1, p.b] };
+  return fn === "exp" ? `e^{${argLatex(t)}}` : `\\${fn}${fnArgLatex(t)}`;
+};
+
+// A polynomial as a factor: "x^2", "3x", "\left(2x-1\right)".
+const polyFactorLatex = (Q) => (polyTermCount(Q) > 1 ? `\\left(${polyLatex(Q)}\\right)` : polyLatex(Q));
+
+// (num/den) Q(x) body: a one-term Q goes into the coefficient
+// ("\frac{3}{2}x^2e^{2x}"); a longer one into brackets, its whole common
+// factor and leading sign pulled out ("-\frac{1}{2}\left(2x-3\right)\cos x").
+function partsTermLatex([num, den], Q, body, isFirst) {
+  Q = trimPoly(Q);
+  if (polyTermCount(Q) === 1) {
+    const k = Q.length - 1;
+    const [n, d] = ratio(num * Q[k], den);
+    return coefLatex(n, d, xPower(k) + body, isFirst);
+  }
+  const g = Q.reduce((acc, c) => gcd(acc, c), 0) * Math.sign(Q[Q.length - 1]);
+  const [n, d] = ratio(num * g, den);
+  return coefLatex(n, d, `\\left(${polyLatex(Q.map((c) => c / g))}\\right)${body}`, isFirst);
+}
+
+const lnPowLatex = (k) => (k === 0 ? "" : k === 1 ? "\\ln x" : `\\ln^${k}x`);
+
+// (num/den) x^(P/Q) ln^k x: roots, and negative powers under a fraction bar
+// ("-\frac{\ln x}{x}").
+function lnTermLatex([num, den], [P, Q], k, isFirst) {
+  const ln = lnPowLatex(k);
+  if (P === 0) return coefLatex(num, den, ln, isFirst);
+  if (P > 0) return coefLatex(num, den, (Q === 2 && P === 1 ? "\\sqrt{x}" : powerLatex(P, Q)) + ln, isFirst);
+  const under = Q === 1 ? xPower(-P) : -P < Q ? rootLatex(-P, Q) : powerLatex(-P, Q);
+  const top = Math.abs(num) === 1 && ln ? ln : `${Math.abs(num)}${ln}`;
+  return `${signLatex(num, isFirst)}\\frac{${top}}{${den === 1 ? "" : den}${under}}`;
+}
+
+// x^(P/Q), P/Q > 0, as an exam writes it: "x^2", "\sqrt{x}", "x\sqrt{x}".
+function shownPowLatex(P, Q) {
+  if (Q === 1) return xPower(P);
+  return xPower(Math.floor(P / Q)) + rootLatex(P % Q, Q);
+}
+
+function partsProblemLatex(p) {
+  if (p.fam === "poly") return `\\int ${polyFactorLatex(p.P)}${gLatex(p.g, p)}\\,dx`;
+  const [P, Q] = p.r;
+  const ln = lnPowLatex(p.k);
+  if (P >= 0) return `\\int ${coefLatex(p.c, 1, shownPowLatex(P, Q) + ln, true)}\\,dx`;
+  const under = Q === 1 ? xPower(-P) : -P < Q ? rootLatex(-P, Q) : xPower(Math.floor(-P / Q)) + rootLatex(-P % Q, Q);
+  return `\\int ${p.c < 0 ? "-" : ""}\\frac{${Math.abs(p.c) === 1 ? "" : Math.abs(p.c)}${ln}}{${under}}\\,dx`;
+}
+
+const partsSumLatex = (p, terms) =>
+  terms
+    .map((t, i) => (p.fam === "ln" ? lnTermLatex(t.c, partsS(p), t.lnPow, i === 0) : partsTermLatex(t.c, t.Q, gLatex(t.fn, p), i === 0)))
+    .join("");
+
+const partsAntiderivativeLatex = (p) => partsSumLatex(p, partsTerms(p)) + "+C";
+
+// A factor after "\cdot": bracketed when it starts with a minus.
+const cdotFactor = (s) => (s.startsWith("-") ? `\\left(${s}\\right)` : s);
+const partsUdvLine = (u, dv, du, v) => `&u=${u},\\qquad dv=${dv} \\\\ &du=${du},\\qquad v=${v}`;
+const dxAfter = (s) => (s === "1" ? "dx" : s === "-1" ? "-dx" : `${s}\\,dx`);
+
+// Worked solution: the choice of u and dv (du, v), uv − ∫v du, a second
+// application where needed, and the result.
+function partsSolutionLatex(p) {
+  const lines = [];
+  const first = problemLatex(p);
+  if (p.fam === "poly") {
+    const [G1, G2] = partsChain(p, 2);
+    const v1 = partsTermLatex(G1.c, [1], gLatex(G1.fn, p), true);
+    const v2 = partsTermLatex(G2.c, [1], gLatex(G2.fn, p), true);
+    const D1 = polyDeriv(p.P);
+    const D2 = polyDeriv(D1);
+    lines.push(partsUdvLine(polyLatex(p.P), dxAfter(gLatex(p.g, p)), dxAfter(polyFactorLatex(D1)), v1));
+    const uv = `${polyFactorLatex(p.P)}\\cdot ${cdotFactor(v1)}`;
+    const vdu1 = `${cdotFactor(polyFactorLatex(D1))}\\cdot ${cdotFactor(v1)}`;
+    lines.push(`${first} &= ${uv}-\\int ${vdu1}\\,dx`);
+    if (D2.length) {
+      lines.push(partsUdvLine(polyLatex(D1), dxAfter(v1), dxAfter(polyFactorLatex(D2)), v2));
+      lines.push(`&= ${uv}-\\left(${polyFactorLatex(D1)}\\cdot ${cdotFactor(v2)}-\\int ${cdotFactor(polyFactorLatex(D2))}\\cdot ${cdotFactor(v2)}\\,dx\\right)`);
+    }
+  } else {
+    const s = partsS(p);
+    const r = p.r;
+    const dv = p.c === 1 ? "" : p.c === -1 ? "-" : `${p.c}`;
+    const xr = r[0] === 0 ? "" : powerLatex(r[0], r[1]);
+    const dvLatex = xr ? `${dv}${xr}\\,dx` : dxAfter(dv || "1");
+    const v = ratMul([p.c, 1], [s[1], s[0]]); // v = (c/s) x^s
+    const vLatex = lnTermLatex(v, s, 0, true);
+    if (p.k === 1) {
+      lines.push(partsUdvLine("\\ln x", dvLatex, "\\frac{1}{x}\\,dx", vLatex));
+      lines.push(`${first} &= ${lnTermLatex(v, s, 1, true)}-\\int ${cdotFactor(lnTermLatex(v, r, 0, true))}\\,dx`);
+    } else {
+      lines.push(partsUdvLine("\\ln^2x", dvLatex, "\\frac{2\\ln x}{x}\\,dx", vLatex));
+      const K = ratMul(v, [2, 1]); // ∫v·(2 ln x / x) dx = K ∫x^r ln x dx
+      const inner = `\\int ${r[0] === 0 ? "" : powerLatex(r[0], r[1])}\\ln x\\,dx`;
+      lines.push(`${first} &= ${lnTermLatex(v, s, 2, true)}${coefLatex(-K[0], K[1], inner, false)}`);
+      const w = [s[1], s[0]]; // second application: v = x^s / s
+      lines.push(partsUdvLine("\\ln x", dxAfter(xr || "1"), "\\frac{1}{x}\\,dx", lnTermLatex(w, s, 0, true)));
+      lines.push(
+        `&= ${lnTermLatex(v, s, 2, true)}${K[1] === 1 && K[0] === 1 ? "-" : coefLatex(-K[0], K[1], "", false)}` +
+          `\\left(${lnTermLatex(w, s, 1, true)}-\\int ${lnTermLatex(w, r, 0, true)}\\,dx\\right)`
+      );
+    }
+  }
+  lines.push(`&= ${partsAntiderivativeLatex(p)}`);
+  return `\\begin{aligned}${lines.join(" \\\\ ")}\\end{aligned}`;
+}
+
+// --- slips ---
+
+// Each slip as the problem its answer would be correct for (with the
+// slipped antiderivative F, for the tests).
+function partsNearMissVariants(p) {
+  const out = [];
+  const add = (kind, terms) => {
+    const F = (x) => partsValue(p, terms, x);
+    out.push({ kind, F, problem: { ...p, fn: numDeriv(F) } });
+  };
+  // the right signs, with those of the steps in `which` flipped
+  const flip = (n, which) => Array.from({ length: n }, (_, j) => (which(j) ? -1 : 1) * altSign(j));
+  if (p.fam === "poly") {
+    const n = polyDegree(p.P) + 1;
+    add("partsSign", partsPolyTerms(p, { signs: flip(n, (j) => j >= 1) })); // uv + ∫v du
+    if (n > 2) {
+      add("partsSign", partsPolyTerms(p, { signs: flip(n, (j) => j === 1) })); // + both times
+      add("partsSecond", partsPolyTerms(p, { signs: flip(n, (j) => j >= 2) })); // −(uv − ∫) as −uv − ∫
+    }
+    if (p.a !== 1) {
+      const kind = p.g === "exp" ? "partsDivExp" : "partsDivTrig";
+      add(kind, partsPolyTerms(p, { div: () => 1 })); // never divided by a
+      add(kind, partsPolyTerms(p, { div: (j) => (j === 1 ? p.a : 1) })); // only in v
+      add(kind, partsPolyTerms(p, { div: (j) => (j === 1 ? 1 : p.a) })); // all but v
+    }
+    if (p.g !== "exp") {
+      for (const [sinTo, cosTo] of [[1, 1], [-1, -1], [1, -1]]) add("trigSign", partsPolyTerms(p, { sinTo, cosTo }));
+    }
+  } else {
+    const n = p.k + 1;
+    add("partsSign", partsLnTerms(p, { signs: flip(n, (i) => i >= 1) }));
+    if (n > 2) {
+      add("partsSign", partsLnTerms(p, { signs: flip(n, (i) => i === 1) }));
+      add("partsSecond", partsLnTerms(p, { signs: flip(n, (i) => i >= 2) }));
+    }
+    if (p.r[0] === 0) add("xlnx", partsLnTerms(p).slice(0, -1)); // ∫ln x dx = x ln x, the −x lost
+    const s = partsS(p);
+    if (s[0] !== s[1]) {
+      add("partsPowV", partsLnTerms(p, { divs: [false, ...Array(p.k).fill(true)] })); // v = c x^s
+      add("partsPowV", partsLnTerms(p, { divs: Array(n).fill(false) }));
+    }
+  }
+  return out;
+}
+
+// --- generators ---
+
+const partsPoly = (P, g, a, b = 0) => ({ kind: "parts", fam: "poly", P, g, a, b });
+const partsLn = (c, r, k = 1) => ({ kind: "parts", fam: "ln", c, r, k });
+const expA = () => pick([1, 1, 2, 3, -1, -2, -3]);
+const trigK = () => pick([1, 2, 2, 3]);
+// m x + n with no common factor, not both negative: "2x-1", "-x+3", "4x".
+function linPoly() {
+  for (;;) {
+    const m = nonZero(-4, 4);
+    const n = chance(0.85) ? nonZero(-5, 5) : 0;
+    if ((n === 0 || gcd(m, n) === 1) && (m > 0 || n > 0)) return [n, m];
+  }
+}
+
+// Room 1: 1. (mx+n) e^(ax+b)  2. (mx+n) sin/cos kx  3. x^2 times either
+// (twice)  4. boss: a full quadratic times either.
+const genPartsLinExp = () => partsPoly(linPoly(), "exp", expA(), chance(0.6) ? 0 : nonZero(-3, 3));
+const genPartsLinTrig = () => partsPoly(linPoly(), pick(["sin", "cos"]), trigK());
+function genPartsSquare() {
+  const g = pick(["exp", "sin", "cos"]);
+  return partsPoly([0, 0, pick([1, 1, 1, -1, 2, 3])], g, g === "exp" ? expA() : trigK());
+}
+function genPartsPolyBoss() {
+  const g = pick(["exp", "sin", "cos"]);
+  let P;
+  do P = [randInt(-5, 5), nonZero(-5, 5), pick([1, 1, 1, -1, 2])];
+  while (gcd(gcd(P[0], P[1]), P[2]) !== 1 || (P[2] < 0 && P[0] <= 0));
+  return partsPoly(P, g, g === "exp" ? expA() : trigK());
+}
+
+// Room 2: 1. ln x  2. x^n ln x  3. x^r ln x, r a fraction or negative
+// (√x ln x, ln x / x², ln x / √x ...)  4. boss: ln² x, x ln² x, √x ln² x.
+const genPartsLnAlone = () => partsLn(pick([1, 1, 2, 3, 5, -1, -2]), [0, 1]);
+function genPartsLnPow() {
+  const n = randInt(1, 3);
+  return partsLn(pick([1, 1, n + 1, -(n + 1)]), [n, 1]);
+}
+const genPartsLnRoot = () => partsLn(1, pick([[1, 2], [1, 2], [-2, 1], [-1, 2], [-1, 2], [-3, 1], [3, 2], [1, 3]]));
+const genPartsLnBoss = () => partsLn(1, pick([[0, 1], [1, 1], [1, 2]]), 2);
+
+Object.assign(GENERATORS, {
+  partsLinExp: genPartsLinExp,
+  partsLinTrig: genPartsLinTrig,
+  partsSquare: genPartsSquare,
+  partsPolyBoss: genPartsPolyBoss,
+  partsLnAlone: genPartsLnAlone,
+  partsLnPow: genPartsLnPow,
+  partsLnRoot: genPartsLnRoot,
+  partsLnBoss: genPartsLnBoss,
+});
+
+Object.assign(NEAR_MISS_TEXT, {
+  partsSign: `כמעט! בדקו את הסימן: ${ltr("∫u dv = uv − ∫v du")} - בין ${ltr("uv")} לאינטגרל יש מינוס.`,
+  partsSecond: `כמעט! בדקו את הסימן בהפעלה השנייה: המינוס שלפני ${ltr("∫v du")} חל על כל התוצאה שלו, ${ltr("−(uv − ∫v du)")}.`,
+  partsDivExp: `כמעט! בחישוב ${ltr("v")} מחלקים במקדם של ${ltr("x")}: ${ltr("∫e^(ax)dx = e^(ax)/a")}.`,
+  partsDivTrig: `כמעט! בחישוב ${ltr("v")} מחלקים במקדם של ${ltr("x")}: ${ltr("∫cos(ax)dx = sin(ax)/a")}, ${ltr("∫sin(ax)dx = −cos(ax)/a")}.`,
+  xlnx: `כמעט! חסר איבר: ${ltr("∫ln x dx = x·ln x − x")}.`,
+  partsPowV: `כמעט! בדקו את ${ltr("v")}: ${ltr("∫xⁿdx = xⁿ⁺¹/(n+1)")} - מחלקים בחזקה החדשה.`,
+});
+
+// ---------------------------------------------------------------------------
 // The tower: floor 1
 // ---------------------------------------------------------------------------
 
@@ -1928,7 +2264,7 @@ Object.assign(NEAR_MISS_TEXT, {
 const ROOMS = [
   {
     id: "basic",
-    floor: 1,
+    place: "ground",
     kind: "core",
     num: 1,
     title: "אינטגרלים מיידיים",
@@ -1945,7 +2281,7 @@ const ROOMS = [
   },
   {
     id: "linear",
-    floor: 1,
+    place: "ground",
     kind: "core",
     num: 2,
     title: "שינוי לינארי",
@@ -1962,7 +2298,7 @@ const ROOMS = [
   },
   {
     id: "more",
-    floor: 1,
+    place: "ground",
     kind: "ext",
     title: "אינטגרלים נוספים",
     en: "More basic integrals",
@@ -1980,6 +2316,7 @@ const ROOMS = [
   },
   {
     id: "division",
+    place: "pf",
     kind: "prep",
     title: "חילוק פולינומים",
     en: "Polynomial division",
@@ -1993,6 +2330,7 @@ const ROOMS = [
   },
   {
     id: "repeated",
+    place: "pf",
     kind: "core",
     num: 1,
     title: "שורש כפול",
@@ -2006,6 +2344,7 @@ const ROOMS = [
   },
   {
     id: "pf1",
+    place: "pf",
     kind: "core",
     num: 2,
     title: "שני שורשים שונים",
@@ -2020,6 +2359,7 @@ const ROOMS = [
   },
   {
     id: "irreducible",
+    place: "pf",
     kind: "core",
     num: 3,
     title: "מכנה שלא מתפרק",
@@ -2033,6 +2373,7 @@ const ROOMS = [
   },
   {
     id: "review",
+    place: "pf",
     kind: "review",
     title: "תרגילים מעורבבים",
     en: "Mixed review",
@@ -2047,6 +2388,7 @@ const ROOMS = [
   },
   {
     id: "nonmonic",
+    place: "pf",
     kind: "ext",
     title: "מכנה עם מקדם מוביל",
     en: "Non-monic",
@@ -2058,6 +2400,37 @@ const ROOMS = [
       { gen: "nmExpanded" },
       { gen: "nmRepeated" },
       { gen: "nmIrreducible" },
+    ],
+  },
+  {
+    id: "partsPoly",
+    place: "parts",
+    kind: "core",
+    num: 1,
+    title: "פולינום כפול eˣ / טריגו",
+    en: "Polynomial × eˣ, sin, cos",
+    tag: "u = הפולינום",
+    nodes: [
+      { gen: "partsLinExp" },
+      { gen: "partsLinTrig" },
+      { gen: "partsSquare" },
+      { gen: "partsPolyBoss", boss: true },
+    ],
+  },
+  {
+    id: "partsLn",
+    place: "parts",
+    kind: "core",
+    num: 2,
+    title: "חלקים עם ln",
+    en: "Parts with ln x",
+    tag: "u = ln",
+    requires: ["partsPoly"],
+    nodes: [
+      { gen: "partsLnAlone" },
+      { gen: "partsLnPow" },
+      { gen: "partsLnRoot" },
+      { gen: "partsLnBoss", boss: true },
     ],
   },
 ];
@@ -2083,6 +2456,14 @@ function loadStore() {
 
 let store = loadStore();
 
+// Where the map is: the ground floor or one of the towers above it.
+// Saves from before the towers kept store.floor (2: partial fractions) and
+// a single "stairs".
+const PLACES = ["ground", "pf", "parts"];
+if (!PLACES.includes(store.place)) store.place = store.floor === 2 ? "pf" : "ground";
+delete store.floor;
+if (store.lastRoom === "stairs") store.lastRoom = "stairsPf";
+
 function saveStore() {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
@@ -2098,9 +2479,13 @@ function roomRecord(id) {
 
 const isConquered = (id) => roomRecord(id).wins > 0;
 
-// The floor the map shows: 1 (basic integrals) unless the student has gone
-// up the stairs (or is in a floor-2 room).
-const currentFloor = () => (store.floor === 2 ? 2 : 1);
+// The place the map shows: the ground floor (basic integrals) unless the
+// student has gone up into a tower (or is in one of its rooms).
+const currentPlace = () => (PLACES.includes(store.place) ? store.place : "ground");
+
+// The ground floor and the parts tower are lines of rooms, each opening
+// after the one before it; the partial-fractions tower has its own gate.
+const isLinearPlace = (place) => place !== "pf";
 
 // The rooms this one builds on that aren't conquered yet.
 function missingRequirements(room) {
@@ -2113,24 +2498,27 @@ const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(
 // rooms are conquered - or earlier, if the student opens its gate anyway.
 const CORE_IDS = ["repeated", "pf1", "irreducible"];
 const FLOOR1_IDS = ["basic", "linear"];
+const PARTS_IDS = ["partsPoly", "partsLn"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
-// Floor 1 is one room after the other: a room opens when the one before it
-// is won. On floor 2 the upper wing opens as a whole (or when forced).
+// On the ground floor and in the parts tower a room opens when the one
+// before it is won. In the partial-fractions tower the upper area opens as
+// a whole (or when forced).
 function isLocked(room) {
   if (!room.requires) return false;
   const rec = roomRecord(room.id);
   if (rec.run || rec.wins > 0) return false;
-  if (room.floor === 1) return missingRequirements(room).length > 0 && !(store.openedRooms || {})[room.id];
+  if (isLinearPlace(room.place)) return missingRequirements(room).length > 0 && !(store.openedRooms || {})[room.id];
   return !wingOpen();
 }
 
-// The stairs up from floor 1: open after room 2, or when forced.
+// The stairs up to the towers (both): open after room 2, or when forced.
 const stairsOpen = () => isConquered("linear") || !!store.stairsOpen;
 
 function recommendedRoomId() {
-  if (currentFloor() === 1) return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
+  if (currentPlace() === "ground") return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
+  if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || null;
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -2258,7 +2646,7 @@ function roomCardHtml(room) {
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
-      ${locked && room.floor === 1 ? `<span class="card-lock">${padlockSvg(ROOM_BY_ID[room.requires[0]].num, false)}</span>` : ""}
+      ${locked && isLinearPlace(room.place) ? `<span class="card-lock">${padlockSvg(ROOM_BY_ID[room.requires[0]].num, false)}</span>` : ""}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
@@ -2444,12 +2832,17 @@ function goToMedals() {
 
 $("medalBackBtn").addEventListener("click", () => goToMap());
 
-// Up or down the stairs: the map of the other floor comes in, with the
-// marker standing where the stairs arrive (floor 2's door at the bottom, or
-// floor 1's stairs) - or, from the floor panel, at `at`.
-function goToFloor(n, at) {
-  store.floor = n;
-  store.lastRoom = at || (n === 2 ? "entrance" : "stairs");
+// The stairs on the ground floor, one per tower.
+const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts" };
+const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts" };
+
+// Up or down the stairs: the map of the other place comes in, with the
+// marker standing where the stairs arrive (a tower's way down, or that
+// tower's stairs on the ground floor) - or, from the floor panel, at `at`.
+function goToPlace(place, at) {
+  const from = currentPlace();
+  store.place = place;
+  store.lastRoom = at || (place === "ground" ? STAIRS_TO[from] || "entrance" : "entrance");
   saveStore();
   if (mapZoom) {
     mapZoom.cancel();
@@ -2459,85 +2852,100 @@ function goToFloor(n, at) {
   window.scrollTo(0, 0);
   if (!reducedMotion()) {
     mapView.animate(
-      [{ transform: `translateY(${n === 2 ? 24 : -24}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      [{ transform: `translateY(${place === "ground" ? -24 : 24}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: 380, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
     );
   }
 }
 
-const goUpstairs = () => zoomIntoRoom("stairs").then(() => goToFloor(2));
-const goDownstairs = () => goToFloor(1);
+const goUpstairs = (stairs) => zoomIntoRoom(stairs).then(() => goToPlace(STAIRS_PLACE[stairs]));
+const goDownstairs = () => goToPlace("ground");
 
 function renderMap() {
-  if (currentFloor() === 1) renderBasicFloor();
+  const place = currentPlace();
+  if (place === "ground") renderBasicFloor();
+  else if (place === "parts") renderPartsFloor();
   else renderRationalFloor();
   renderTowerNav();
 }
 
-// --- the floor panel: the tower in cross-section -----------------------------
-// Beside the map: the floors stacked as in the tower. A click goes straight
-// to a floor; a locked floor asks, with "open anyway". Floor 2's gate to its
-// upper wing is not here: it is opened on the map, by hand.
+// --- the floor panel: the castle in cross-section ----------------------------
+// Beside the map: the ground floor at the bottom, the towers side by side
+// above it. A click goes straight to a place; a locked tower asks, with
+// "open anyway". The partial-fractions tower's gate to its upper area is not
+// here: it is opened on the map, by hand.
 
 const towerNavEl = $("towerNav");
 
 function towerNavItems() {
-  return [
+  const place = currentPlace();
+  const towers = [
     {
-      go: "2",
-      mark: "2",
-      name: "קומה 2",
-      sub: "פונקציות רציונליות",
+      go: "pf",
+      mark: "½",
+      name: "שברים חלקיים",
+      full: "מגדל השברים החלקיים",
       locked: !stairsOpen(),
       done: coreDone(),
-      here: currentFloor() === 2,
+      here: place === "pf",
     },
     {
-      go: "1",
-      mark: "1",
-      name: "קומה 1",
-      sub: "אינטגרלים בסיסיים",
-      locked: false,
-      done: FLOOR1_IDS.every(isConquered),
-      here: currentFloor() === 1,
+      go: "parts",
+      mark: "uv",
+      name: "אינטגרציה בחלקים",
+      full: "מגדל האינטגרציה בחלקים",
+      locked: !stairsOpen(),
+      done: PARTS_IDS.every(isConquered),
+      here: place === "parts",
     },
   ];
+  const ground = {
+    go: "ground",
+    mark: "∫",
+    name: "קומת הקרקע",
+    sub: "אינטגרלים בסיסיים",
+    full: "קומת הקרקע · אינטגרלים בסיסיים",
+    locked: false,
+    done: FLOOR1_IDS.every(isConquered),
+    here: place === "ground",
+  };
+  return { towers, ground };
+}
+
+function towerNavButton(f) {
+  const cls = ["tn-floor"];
+  if (f.here) cls.push("here");
+  if (f.locked) cls.push("locked");
+  if (f.done) cls.push("done");
+  const state = f.locked ? padlockSvg("", false) : f.done ? '<span class="tn-done" title="הושלם">✓</span>' : "";
+  const label = `${f.full}${f.locked ? " - נעול" : ""}${f.here ? " - אתם כאן" : ""}`;
+  return `
+    <button type="button" class="${cls.join(" ")}" data-go="${f.go}" title="${label}" aria-label="${label}"${f.here ? ' aria-current="location"' : ""}>
+      <span class="tn-mark" dir="ltr">${f.mark}</span>
+      <span class="tn-text"><span class="tn-name">${f.name}</span>${f.sub ? `<span class="tn-sub">${f.sub}</span>` : ""}</span>
+      <span class="tn-state">${state}</span>
+      ${f.here ? '<span class="tn-here" aria-hidden="true"></span>' : ""}
+    </button>`;
 }
 
 function renderTowerNav() {
+  const { towers, ground } = towerNavItems();
   towerNavEl.innerHTML = `
-    <div class="tn-roof" aria-hidden="true"></div>
-    <div class="tn-floors">
-      ${towerNavItems()
-        .map((f) => {
-          const cls = ["tn-floor"];
-          if (f.here) cls.push("here");
-          if (f.locked) cls.push("locked");
-          if (f.done) cls.push("done");
-          const state = f.locked ? padlockSvg("", false) : f.done ? '<span class="tn-done" title="הושלם">✓</span>' : "";
-          const label = `${f.name} · ${f.sub}${f.locked ? " - נעול" : ""}${f.here ? " - אתם כאן" : ""}`;
-          return `
-            <button type="button" class="${cls.join(" ")}" data-go="${f.go}" title="${label}" aria-label="${label}"${f.here ? ' aria-current="location"' : ""}>
-              <span class="tn-mark">${f.mark}</span>
-              <span class="tn-text"><span class="tn-name">${f.name}</span><span class="tn-sub">${f.sub}</span></span>
-              <span class="tn-state">${state}</span>
-              ${f.here ? '<span class="tn-here" aria-hidden="true"></span>' : ""}
-            </button>`;
-        })
-        .join("")}
-    </div>`;
+    <div class="tn-towers">
+      ${towers.map((t) => `<div class="tn-tower"><div class="tn-roof" aria-hidden="true"></div>${towerNavButton(t)}</div>`).join("")}
+    </div>
+    <div class="tn-ground">${towerNavButton(ground)}</div>`;
 }
 
-// Go to a floor from the panel - or ask, if it's locked.
-function towerNavGo(go) {
-  if (markerBusy) return;
+// Go to a place from the panel - or ask, if its stairs are locked.
+function towerNavGo(place) {
+  if (markerBusy || !PLACES.includes(place)) return;
   dismissMapTip();
-  const n = Number(go);
-  if (n === 2 && !stairsOpen()) {
-    openStairsDialog(() => goToFloor(2, "entrance"));
+  if (place !== "ground" && !stairsOpen()) {
+    openStairsDialog(() => goToPlace(place, "entrance"));
     return;
   }
-  if (n !== currentFloor()) goToFloor(n, "entrance");
+  if (place !== currentPlace()) goToPlace(place, place === "ground" ? "entrance" : undefined);
 }
 
 towerNavEl.addEventListener("click", (e) => {
@@ -2616,29 +3024,42 @@ const STAIRS_DOWN_SVG = (() => {
   </svg>`;
 })();
 
-// Top-down plan of floor 1 (basic integrals): one room after the other.
-// One line, right to left (RTL): entrance · hall · room 1 · hall · room 2 ·
-// hall · the stairs up (row 3). The marker stands in the hall in front of a
-// door; the way on goes through the room. A side hall goes up from the last
-// hall to the extension room (row 1).
-function renderBasicFloor() {
-  const up = stairsOpen();
-  const stairs = `
-    <div class="cell stairs${up ? "" : " locked"}" style="grid-column:7;grid-row:3" data-node="stairs"
-         role="button" tabindex="0" aria-label="מדרגות לקומה 2${up ? "" : " - נעול"}">
+// One staircase up to a tower, on the ground floor's landing.
+function stairsHtml(id, name, full, up) {
+  return `
+    <div class="stairs${up ? "" : " locked"}" data-node="${id}" role="button" tabindex="0" aria-label="מדרגות ל${full}${up ? "" : " - נעול"}">
       ${up ? "" : `<span class="stairs-lock">${padlockSvg(2, false)}</span>`}
       ${stairsSvg(!up)}
-      <span class="stairs-label">לקומה 2</span>
-      <span class="stairs-floor">פונקציות רציונליות</span>
+      <span class="stairs-label">${name}</span>
     </div>`;
-  towerEl.innerHTML = `
-    <div class="floor-map">
-      <div class="floor-label">קומה 1 · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
-      ${store.mapTipSeen ? "" : `
+}
+
+const mapTipHtml = () =>
+  store.mapTipSeen
+    ? ""
+    : `
         <div class="map-tip" role="note">
           <span>לוחצים על חדר כדי להיכנס, או זזים בחיצים ונכנסים ב-<kbd dir="ltr">Enter</kbd></span>
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
-        </div>`}
+        </div>`;
+
+// Top-down plan of the ground floor (basic integrals): one room after the
+// other. One line, right to left (RTL): entrance · hall · room 1 · hall ·
+// room 2 · hall · a landing with the stairs up to the two towers (row 3).
+// The marker stands in the hall in front of a door; the way on goes through
+// the room. A side hall goes up from the last hall to the extension room
+// (row 1).
+function renderBasicFloor() {
+  const up = stairsOpen();
+  const stairs = `
+    <div class="cell stairs-landing" style="grid-column:7;grid-row:3">
+      ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים", up)}
+      ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים", up)}
+    </div>`;
+  towerEl.innerHTML = `
+    <div class="floor-map">
+      <div class="floor-label">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
+      ${mapTipHtml()}
       <div class="floor-grid floor-basic">
         ${mapTorch(3, 1)}
         <div class="cell ext-cell" style="grid-column:6;grid-row:1">${roomCardHtml(ROOM_BY_ID.more)}</div>
@@ -2651,7 +3072,7 @@ function renderBasicFloor() {
         <div class="cell" style="grid-column:5;grid-row:3">${roomCardHtml(ROOM_BY_ID.linear)}</div>
         <div class="hall-branch" style="grid-column:6;grid-row:2 / 4" aria-hidden="true">
           <div class="hall hall-v" data-spot="more"></div>
-          <div class="hall" data-spot="stairs"></div>
+          <div class="hall" data-spot="landing"></div>
         </div>
         ${stairs}
         <div class="map-marker" aria-hidden="true">
@@ -2693,12 +3114,8 @@ function renderRationalFloor() {
 
   towerEl.innerHTML = `
     <div class="floor-map">
-      <div class="floor-label">קומה 2 · פונקציות רציונליות <span class="floor-en" dir="ltr">(rational functions)</span></div>
-      ${store.mapTipSeen ? "" : `
-        <div class="map-tip" role="note">
-          <span>לוחצים על חדר כדי להיכנס, או זזים בחיצים ונכנסים ב-<kbd dir="ltr">Enter</kbd></span>
-          <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
-        </div>`}
+      <div class="floor-label">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span></div>
+      ${mapTipHtml()}
       <div class="floor-grid">
         ${mapTorch(1, 9)}${mapTorch(3, 9)}${mapTorch(4, 1)}
         <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
@@ -2706,7 +3123,7 @@ function renderRationalFloor() {
         <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${trophyHtml()}</div>
         ${doorway(1, 2)}${doorway(2, 2)}${doorway(3, 2)}
         <div class="cell corridor upper wing${wingCls}" style="grid-column:1 / 5;grid-row:3">
-          <div class="corridor-label">אגף עליון</div>
+          <div class="corridor-label">מסדרון עליון</div>
           ${shownOpen ? "" : '<button type="button" class="open-anyway phone-only" data-open-wing>לפתוח בכל זאת</button>'}
         </div>
         <div class="cell" style="grid-column:1;grid-row:5">${roomCardHtml(rep)}</div>
@@ -2725,7 +3142,7 @@ function renderRationalFloor() {
         <div class="cell" style="grid-column:2;grid-row:9">${roomCardHtml(prep)}</div>
         ${doorway(2, 10)}
         <div class="cell entrance" style="grid-column:2;grid-row:11" data-node="entrance">
-          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומה 1</span>
+          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומת הקרקע</span>
         </div>
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
@@ -2741,23 +3158,65 @@ function renderRationalFloor() {
   );
 }
 
+// Top-down plan of the parts tower's first floor: a line like the ground
+// floor's - the stairs down · hall · room 1 · hall · room 2.
+function renderPartsFloor() {
+  const [r1, r2] = PARTS_IDS.map((id) => ROOM_BY_ID[id]);
+  towerEl.innerHTML = `
+    <div class="floor-map">
+      <div class="floor-label">מגדל האינטגרציה בחלקים <span class="floor-en" dir="ltr">(integration by parts)</span></div>
+      ${mapTipHtml()}
+      <div class="floor-grid floor-basic floor-parts">
+        <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
+          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומת הקרקע</span>
+        </div>
+        <div class="hall" style="grid-column:2;grid-row:1" data-spot="partsPoly" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(r1)}</div>
+        <div class="hall" style="grid-column:4;grid-row:1" data-spot="partsLn" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:5;grid-row:1">${roomCardHtml(r2)}</div>
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
+        </div>
+      </div>
+    </div>`;
+  justConquered = null;
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
+}
+
 // --- the "you are here" marker ---------------------------------------------
 // It stands at the doorway of a room (or the entrance, or the gate). Arrow
 // keys step it between neighbouring places; Enter goes in. A click on a room
 // walks it there along the corridors, then goes in.
 
+// The ground floor: a line, then a landing with the stairs to the two
+// towers; the extension room up a side hall from the last hall.
 const BASIC_FLOOR_NODES = {
   entrance: { nav: { left: "basic" } },
   basic: { nav: { left: "linear", right: "entrance" } },
-  linear: { nav: { right: "basic", left: "stairs" } },
-  stairs: { nav: { right: "linear", up: "more" } },
-  more: { nav: { down: "stairs", left: "stairs", right: "linear" } },
+  linear: { nav: { right: "basic", left: "stairsPf" } },
+  stairsPf: { nav: { right: "linear", left: "stairsParts", up: "more" } },
+  stairsParts: { nav: { right: "stairsPf", up: "more" } },
+  more: { nav: { down: "stairsPf", left: "stairsParts", right: "linear" } },
 };
 
-// Floor 1's places in walking order; the side room is as far along as the
-// stairs (past room 2).
-const BASIC_FLOOR_PATH = ["entrance", "basic", "linear", "stairs"];
-const pathIndex = (id) => BASIC_FLOOR_PATH.indexOf(id === "more" ? "stairs" : id);
+// The parts tower: the way down, room 1, room 2.
+const PARTS_FLOOR_NODES = {
+  entrance: { nav: { left: "partsPoly" } },
+  partsPoly: { nav: { right: "entrance", left: "partsLn" } },
+  partsLn: { nav: { right: "partsPoly" } },
+};
+
+// The places of a line in walking order. On the ground floor both stairs
+// and the side room are as far along as the landing (past room 2).
+const LINE_PATHS = {
+  ground: ["entrance", "basic", "linear", "stairsPf"],
+  parts: ["entrance", "partsPoly", "partsLn"],
+};
+const linePath = () => LINE_PATHS[currentPlace()];
+const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" ? "stairsPf" : id);
 
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
@@ -2771,7 +3230,9 @@ const RATIONAL_FLOOR_NODES = {
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
 
-const mapNodes = () => (currentFloor() === 1 ? BASIC_FLOOR_NODES : RATIONAL_FLOOR_NODES);
+const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES };
+const mapNodes = () => PLACE_NODES[currentPlace()];
+const onLine = () => isLinearPlace(currentPlace());
 
 const markerNode = () => (mapNodes()[store.lastRoom] ? store.lastRoom : "entrance");
 let markerBusy = false;
@@ -2780,12 +3241,23 @@ function nodeEl(id) {
   return ROOM_BY_ID[id] ? towerEl.querySelector(`[data-room="${id}"]`) : towerEl.querySelector(`[data-node="${id}"]`);
 }
 
+// The line's halls are showing (laptops and tablets; not the phone layout).
+const hallsShown = () => {
+  const hall = towerEl.querySelector(".hall");
+  return !!(hall && hall.offsetWidth);
+};
+
 // A point relative to the floor grid.
 function nodePoint(id) {
   const grid = towerEl.querySelector(".floor-grid").getBoundingClientRect();
-  if (currentFloor() === 1) {
+  if (onLine()) {
+    if (STAIRS_PLACE[id] && hallsShown()) {
+      // On the landing, at the foot of the stairs.
+      const s = nodeEl(id).querySelector(".stairs-steps").getBoundingClientRect();
+      return { x: s.left + s.width / 2 - grid.left, y: s.bottom + 6 - grid.top };
+    }
     // In the hall in front of the door; the entrance's spot is its threshold.
-    const hall = towerEl.querySelector(`.hall[data-spot="${id === "entrance" ? "basic" : id}"]`);
+    const hall = towerEl.querySelector(`.hall[data-spot="${id === "entrance" ? linePath()[1] : id}"]`);
     if (hall && hall.offsetWidth) {
       const h = hall.getBoundingClientRect();
       return { x: (id === "entrance" ? h.right - 6 : h.left + h.width / 2) - grid.left, y: h.top + h.height / 2 - grid.top };
@@ -2805,24 +3277,25 @@ function corridorY(which) {
   return r.top + r.height / 2 - grid.top;
 }
 
+const dropRepeats = (pts) => pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
+
 // The way between two places: out into the corridor, along it, and in -
-// through the gate when going between the lower floor and the upper wing.
+// through the gate when going between the lower floor and the upper area.
 function routePoints(from, to) {
   const a = nodePoint(from);
   const b = nodePoint(to);
-  if (currentFloor() === 1) {
-    // Along the line, through the rooms; the side hall goes straight up.
-    if (to === "more") return [a, { x: b.x, y: a.y }, b];
-    if (from === "more") return [a, { x: a.x, y: b.y }, b];
-    return [a, b];
+  if (onLine()) {
+    // Along the line, through the rooms; off it (the side hall, the
+    // landing's stairs) straight up or down from the line.
+    if (!hallsShown()) return [a, b];
+    const y = nodePoint(linePath()[1]).y;
+    return dropRepeats([a, { x: a.x, y }, { x: b.x, y }, b]);
   }
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
   const fa = mapNodes()[from].area;
   const ta = mapNodes()[to].area;
   const lowY = corridorY("main");
-  if (fa === "lower" && ta === "lower") {
-    return [a, { x: a.x, y: lowY }, { x: b.x, y: lowY }, b].filter((p, i, pts) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
-  }
+  if (fa === "lower" && ta === "lower") return dropRepeats([a, { x: a.x, y: lowY }, { x: b.x, y: lowY }, b]);
   const upY = corridorY("upper");
   const g = nodePoint("gate");
   const pts = [a];
@@ -2837,7 +3310,7 @@ function routePoints(from, to) {
   if (ta === "lower") pts.push({ x: b.x, y: lowY });
   if (ta === "upper") pts.push({ x: b.x, y: upY });
   pts.push(b);
-  return pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
+  return dropRepeats(pts);
 }
 
 const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
@@ -2845,10 +3318,10 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return wingOpen() ? "היכנסו ↵" : "";
-  if (id === "stairs") return stairsOpen() ? "עולים ↵" : "נעול ↵";
-  if (id === "entrance" && currentFloor() === 2) return "לקומה 1 ↵";
+  if (STAIRS_PLACE[id]) return stairsOpen() ? "עולים ↵" : "נעול ↵";
+  if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
-  if (isLocked(ROOM_BY_ID[id])) return currentFloor() === 1 ? "נעול ↵" : "";
+  if (isLocked(ROOM_BY_ID[id])) return onLine() ? "נעול ↵" : "";
   return "היכנסו ↵";
 }
 
@@ -2915,9 +3388,9 @@ function stepMarker(dir) {
   const here = markerNode();
   const to = mapNodes()[here].nav[dir];
   if (!to) return;
-  // Floor 1: the marker walks up to a locked door; going on from there,
+  // On a line the marker walks up to a locked door; going on from there,
   // through the locked room, asks whether to open it.
-  if (currentFloor() === 1 && pathIndex(to) > pathIndex(here) && placeLocked(here)) {
+  if (onLine() && pathIndex(to) > pathIndex(here) && placeLocked(here)) {
     openLockFor(here);
     return;
   }
@@ -2929,33 +3402,34 @@ function stepMarker(dir) {
   walkTo(to);
 }
 
-// Floor 1: a room or the stairs that aren't open yet.
+// On a line: a room or stairs that aren't open yet.
 function placeLocked(id) {
-  if (id === "stairs") return !stairsOpen();
+  if (STAIRS_PLACE[id]) return !stairsOpen();
   return !!ROOM_BY_ID[id] && isLocked(ROOM_BY_ID[id]);
 }
 
 function openLockFor(id) {
-  if (id === "stairs") openStairsDialog();
+  if (STAIRS_PLACE[id]) openStairsDialog();
   else openLockedRoomDialog(ROOM_BY_ID[id]);
 }
 
-// Floor 1, a click: walk towards a place - but not through a locked room;
+// On a line, a click: walk towards a place - but not through a locked room;
 // the marker stops at its door. There, or at the place, a lock asks whether
 // to open it; an open place is entered.
-function basicFloorGo(id) {
+function lineGo(id) {
+  const path = linePath();
   const a = pathIndex(markerNode());
   const b = pathIndex(id);
   let stop = id;
   for (let k = a; k < b; k++) {
-    if (placeLocked(BASIC_FLOOR_PATH[k])) {
-      stop = BASIC_FLOOR_PATH[k];
+    if (placeLocked(path[k])) {
+      stop = path[k];
       break;
     }
   }
   walkTo(stop).then(() => {
     if (placeLocked(stop)) openLockFor(stop);
-    else if (stop === "stairs") goUpstairs();
+    else if (STAIRS_PLACE[stop]) goUpstairs(stop);
     else if (ROOM_BY_ID[stop]) zoomIntoRoom(stop).then(() => goToRoom(stop));
   });
 }
@@ -2972,13 +3446,13 @@ function activateMarker() {
     else openGateDialog();
     return;
   }
-  if (id === "stairs") {
-    if (stairsOpen()) goUpstairs();
+  if (STAIRS_PLACE[id]) {
+    if (stairsOpen()) goUpstairs(id);
     else openStairsDialog();
     return;
   }
   if (id === "entrance") {
-    if (currentFloor() === 2) goDownstairs();
+    if (currentPlace() !== "ground") goDownstairs();
     return;
   }
   const room = ROOM_BY_ID[id];
@@ -2995,7 +3469,7 @@ document.addEventListener("keydown", (e) => {
   if (ARROW_DIRS[e.key]) {
     e.preventDefault();
     stepMarker(ARROW_DIRS[e.key]);
-  } else if (e.key === "Enter" && !e.target.closest("button, [data-room], .passage, [data-node=\"stairs\"]")) {
+  } else if (e.key === "Enter" && !e.target.closest("button, [data-room], .passage, .stairs")) {
     e.preventDefault();
     activateMarker();
   }
@@ -3038,13 +3512,14 @@ towerEl.addEventListener("click", (e) => {
   const card = e.target.closest("[data-room]");
   if (card) {
     const room = ROOM_BY_ID[card.dataset.room];
-    if (currentFloor() === 1) basicFloorGo(room.id);
+    if (onLine()) lineGo(room.id);
     else if (isLocked(room)) openLockedRoomDialog(room);
     else walkTo(room.id).then(() => zoomIntoRoom(room.id)).then(() => goToRoom(room.id));
     return;
   }
-  if (e.target.closest('[data-node="stairs"]')) {
-    basicFloorGo("stairs");
+  const stairs = e.target.closest(".stairs[data-node]");
+  if (stairs) {
+    lineGo(stairs.dataset.node);
     return;
   }
   const gate = e.target.closest('[data-node="gate"]');
@@ -3060,15 +3535,15 @@ towerEl.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest('[data-node="entrance"]')) {
-    // Floor 2's door is the way back down to floor 1.
+    // A tower's way in is the way back down to the ground floor.
     walkTo("entrance").then(() => {
-      if (currentFloor() === 2) goDownstairs();
+      if (currentPlace() !== "ground") goDownstairs();
     });
   }
 });
 
 towerEl.addEventListener("keydown", (e) => {
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-room], [data-node="trophy"], [data-node="stairs"]')) {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[data-room], [data-node="trophy"], .stairs[data-node]')) {
     e.preventDefault();
     e.target.click();
   }
@@ -3079,8 +3554,9 @@ towerEl.addEventListener("keydown", (e) => {
 // One gate for the whole upper wing, not one per room.
 const lockDialog = $("lockDialog");
 
-// What "open anyway" opens: floor 2's upper wing, or floor 1's stairs - and
-// where to go then (from the floor panel: to the floor just opened).
+// What "open anyway" opens: the upper area of the partial-fractions tower,
+// a room, or the stairs to the towers - and where to go then (from the floor
+// panel: to the tower just opened).
 let lockDialogFor = "wing";
 let lockDialogThen = null;
 
@@ -3105,15 +3581,15 @@ function openGateDialog() {
   showLockDialog({
     title: "לא מומלץ עדיין",
     html:
-      `האגף העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
+      `האזור העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
       `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`,
     anyway: "wing",
   });
 }
 
-// Floor 1: a room opens after the one before it - or anyway.
+// On a line: a room opens after the one before it - or anyway.
 function openLockedRoomDialog(room) {
-  if (room.floor !== 1) return openGateDialog();
+  if (!isLinearPlace(room.place)) return openGateDialog();
   const before = ROOM_BY_ID[missingRequirements(room)[0]];
   showLockDialog({
     title: "לא מומלץ עדיין",
@@ -3122,14 +3598,14 @@ function openLockedRoomDialog(room) {
   });
 }
 
-// Floor 1's stairs: open after room 2, or anyway.
+// The stairs to the towers: open after room 2, or anyway.
 function openStairsDialog(then) {
   const missing = FLOOR1_IDS.filter((id) => !isConquered(id));
   const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
   showLockDialog({
     title: "לא מומלץ עדיין",
     html:
-      `המדרגות לקומה 2 נפתחות אחרי חדר 2. מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi>` +
+      `המדרגות למגדלים נפתחות אחרי חדר 2. מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi>` +
       ` - אבל אפשר לפתוח אותן כבר עכשיו.`,
     anyway: "stairs",
     then,
@@ -3201,7 +3677,7 @@ function enterRoom(id) {
   const room = ROOM_BY_ID[id];
   const rec = roomRecord(id);
   store.lastRoom = id;
-  store.floor = room.floor === 1 ? 1 : 2; // back out onto this room's floor
+  store.place = room.place; // back out onto this room's floor
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
@@ -3732,19 +4208,19 @@ const GATE_ICON = `
 // What this win changed on the floor: a lock, the gate, the medal.
 function victoryNews(room, before) {
   const news = [];
-  if (room.floor === 1) {
+  if (isLinearPlace(room.place)) {
     if (!before.firstWin) return news;
-    const opened = ROOMS.find((r) => r.floor === 1 && (r.requires || []).includes(room.id));
+    const opened = ROOMS.find((r) => r.place === room.place && (r.requires || []).includes(room.id));
     if (opened && !(store.openedRooms || {})[opened.id]) {
       news.push({ icon: padlockSvg(room.num, true), text: opened.num ? `חדר ${opened.num} נפתח` : `"${opened.title}" נפתח` });
     }
-    if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות לקומה 2 נפתחו" });
+    if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות למגדלים נפתחו" });
     return news;
   }
   if (before.firstWin && CORE_IDS.includes(room.id)) {
     news.push({ icon: padlockSvg(room.num, true), text: `מנעול ${room.num} נפתח` });
   }
-  if (!before.wing && wingOpen()) news.push({ icon: GATE_ICON, text: "השער לאגף העליון נפתח" });
+  if (!before.wing && wingOpen()) news.push({ icon: GATE_ICON, text: "השער לאזור העליון נפתח" });
   const m = medalState();
   const b = before.medal;
   if (m.earned && !b.earned) {
@@ -3778,9 +4254,12 @@ function showConquest(room, { score, prevBest, wins, before }) {
   const coreLeft = CORE_IDS.filter((id) => !isConquered(id));
   let next = "";
   const floor1Left = FLOOR1_IDS.filter((id) => !isConquered(id));
-  if (room.floor === 1) {
+  const partsLeft = PARTS_IDS.filter((id) => !isConquered(id));
+  if (room.place === "ground") {
     if (floor1Left.length) next = `החדר הבא: "${ROOM_BY_ID[floor1Left[0]].title}"`;
-    else if (!isConquered("more")) next = `אפשר גם "${ROOM_BY_ID.more.title}" (הרחבה), או לעלות לקומה 2`;
+    else if (!isConquered("more")) next = `אפשר גם "${ROOM_BY_ID.more.title}" (הרחבה), או לעלות לאחד המגדלים`;
+  } else if (room.place === "parts") {
+    if (partsLeft.length) next = `החדר הבא: "${ROOM_BY_ID[partsLeft[0]].title}"`;
   }
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
@@ -3820,7 +4299,7 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
-  } else if (location.hash === "#/medals" && currentFloor() === 2 && wingOpen()) {
+  } else if (location.hash === "#/medals" && currentPlace() === "pf" && wingOpen()) {
     store.lastRoom = "trophy";
     saveStore();
     renderMedalView();
