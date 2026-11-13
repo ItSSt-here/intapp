@@ -2860,7 +2860,7 @@ function renderMedalView() {
         <ul class="medal-checklist">${item(m.earned, medal.need)}</ul>
         ${medal.gold || medal.star ? `
           <div class="medal-extras">
-            <div class="medal-extras-head">שדרוגים · לא חובה</div>
+            <div class="medal-extras-head">שדרוגים</div>
             <ul class="medal-checklist">
               ${medal.gold ? item(m.gold, `<span class="extra-what">זהב</span> ${medal.gold.text}`) : ""}
               ${medal.star ? item(m.star, `<span class="extra-what">כוכב</span> ${medal.star.text}`) : ""}
