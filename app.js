@@ -3209,8 +3209,8 @@ function towerNavItems() {
     {
       go: "pf",
       mark: "½",
-      name: "שברים חלקיים",
-      full: "מגדל השברים החלקיים",
+      name: "פונקציות רציונליות",
+      full: "מגדל הפונקציות הרציונליות",
       locked: !stairsOpen(),
       done: coreDone(),
       here: place === "pf",
@@ -3337,13 +3337,13 @@ function renderCastleView(intro = false) {
       <path d="M0 382Q320 352 640 382V400H0z" class="cs-hill"/>
 
       <g class="${towerCls("pf")}" data-go="pf">
-        <title>מגדל השברים החלקיים</title>
+        <title>מגדל הפונקציות הרציונליות</title>
         <polygon points="138,124 302,124 220,54" class="cs-roof"/>
         <rect x="150" y="124" width="140" height="170" class="cs-wall"/>
         ${win("review", 184, 150)}${win("nonmonic", 240, 150)}
         ${win("repeated", 166, 200)}${win("pf1", 212, 200)}${win("irreducible", 258, 200)}
         ${win("division", 212, 248)}
-        <text x="220" y="140" class="cs-label">שברים חלקיים</text>
+        <text x="220" y="140" class="cs-label">פונקציות רציונליות</text>
         ${castleFlag(220, 54, "pf")}
       </g>
 
@@ -3503,7 +3503,7 @@ const mapTipHtml = () =>
 function renderBasicFloor() {
   const stairs = `
     <div class="cell stairs-landing" style="grid-column:7;grid-row:3">
-      ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים")}
+      ${stairsHtml("stairsPf", "פונקציות רציונליות", "מגדל הפונקציות הרציונליות")}
       ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
     </div>`;
   // The floor waking up (see floorLighting): the big torch after rooms 1-2.
@@ -3569,7 +3569,7 @@ function renderRationalFloor() {
   const light = floorLighting("pf", CORE_IDS);
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span>${medalMiniHtml("pf")}</div>
+      <div class="floor-label${light.label}">מגדל הפונקציות הרציונליות <span class="floor-en" dir="ltr">(rational functions)</span>${medalMiniHtml("pf")}</div>
       ${mapTipHtml()}
       <div class="floor-grid">
         ${mapTorch(1, 9, light.core)}${mapTorch(3, 9, light.core)}${mapTorch(4, 1, light.all)}
