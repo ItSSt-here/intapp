@@ -1648,6 +1648,30 @@ body { overflow-x: clip; }
   #medalView { max-width: 880px; margin: 0 auto; }
 }
 
+/* The sound button: a small round button in the bottom left corner, on
+   every screen. Off (muted) on every load. */
+.sound-btn {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 50;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #8d806a;
+  border-radius: 50%;
+  background: rgba(251, 247, 238, 0.92);
+  color: #5a4f40;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+.sound-btn:hover { background: #f3ead6; }
+.sound-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.sound-btn svg path:first-child { fill: currentColor; }
+.sound-btn[aria-pressed="true"] { color: #0a635a; border-color: #0a635a; }
+
 /* The medals button: top left of the map, beside the title. */
 .map-header { position: relative; }
 .medals-btn {

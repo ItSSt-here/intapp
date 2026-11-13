@@ -2551,6 +2551,154 @@ const conquestView = $("conquestView");
 const medalView = $("medalView");
 const towerEl = $("tower");
 
+// --- sound -------------------------------------------------------------------
+// A few short, quiet effects, synthesized with Web Audio (no sound files).
+// Off on every load: the student turns it on with the button in the corner,
+// and the choice is deliberately not saved.
+
+let soundOn = false;
+let audioCtx = null;
+let masterGain = null;
+
+function audio() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.7;
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+
+// One note: a pitch (sliding to f2), a quick rise and a fade.
+function tone({ f, f2 = f, t = 0, dur = 0.2, type = "sine", vol = 0.1, attack = 0.005 }) {
+  const c = audioCtx;
+  const t0 = c.currentTime + t;
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f, t0);
+  if (f2 !== f) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(masterGain);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+}
+
+// A burst of filtered noise: steps, clicks, iron, a rumble.
+let noiseBuf = null;
+function noise({ t = 0, dur = 0.1, vol = 0.1, freq = 1000, q = 1, type = "bandpass", attack = 0.003 }) {
+  const c = audioCtx;
+  if (!noiseBuf) {
+    noiseBuf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const t0 = c.currentTime + t;
+  const src = c.createBufferSource();
+  src.buffer = noiseBuf;
+  const filter = c.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.value = freq;
+  filter.Q.value = q;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol, t0 + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(filter).connect(g).connect(masterGain);
+  src.start(t0, Math.random() * 0.5);
+  src.stop(t0 + dur + 0.05);
+}
+
+const SFX = {
+  // Soft footsteps for a walk of `ms` milliseconds.
+  steps(ms) {
+    const n = Math.max(1, Math.round(ms / 170));
+    for (let i = 0; i < n; i++) noise({ t: i * 0.17, dur: 0.06, vol: 0.2, freq: 420 + (i % 2) * 90, type: "lowpass" });
+  },
+  // Into a room: a heavy door, low and short.
+  door() {
+    tone({ f: 120, f2: 70, dur: 0.3, type: "triangle", vol: 0.14 });
+    noise({ dur: 0.2, vol: 0.05, freq: 600, type: "lowpass" });
+  },
+  // Up (or down) the stairs: steps rising (or falling) in pitch.
+  stairs(up) {
+    for (let i = 0; i < 5; i++) {
+      const k = up ? i : 4 - i;
+      noise({ t: i * 0.13, dur: 0.06, vol: 0.28, freq: 380 * 1.18 ** k, q: 2 });
+    }
+  },
+  // An iron grate drawn up: a chain's rattle, then a clunk at the top.
+  grate() {
+    for (let i = 0; i < 9; i++) noise({ t: i * 0.07, dur: 0.035, vol: 0.05, freq: 2400 + (i % 3) * 300, q: 9 });
+    tone({ f: 95, f2: 60, t: 0.68, dur: 0.3, type: "triangle", vol: 0.12 });
+  },
+  // A padlock springing open: two small clicks.
+  padlock() {
+    noise({ dur: 0.03, vol: 0.35, freq: 3200, q: 6 });
+    noise({ t: 0.11, dur: 0.04, vol: 0.3, freq: 2600, q: 6 });
+  },
+  // The gate's doors swinging open: a slow low rumble.
+  gate() {
+    noise({ dur: 1.3, vol: 0.09, freq: 170, type: "lowpass", attack: 0.35 });
+    tone({ f: 58, f2: 46, dur: 1.3, type: "triangle", vol: 0.08, attack: 0.35 });
+  },
+  // A room won: a soft rising chord; a perfect run adds the octave.
+  win(perfect) {
+    const notes = [261.63, 329.63, 392, 523.25];
+    if (perfect) notes.push(659.25);
+    notes.forEach((f, i) => tone({ f, t: i * 0.1, dur: 1.4, type: "triangle", vol: 0.06, attack: 0.02 }));
+  },
+  // An answer: right - two small high notes up; wrong - one soft low note down.
+  correct() {
+    tone({ f: 659.25, dur: 0.14, vol: 0.05 });
+    tone({ f: 880, t: 0.08, dur: 0.22, vol: 0.05 });
+  },
+  wrong() {
+    tone({ f: 220, f2: 185, dur: 0.22, type: "triangle", vol: 0.08, attack: 0.01 });
+  },
+  // A boss: one deep drum beat and a low note under it.
+  boss() {
+    tone({ f: 82, f2: 44, dur: 0.6, vol: 0.2 });
+    tone({ f: 110, t: 0.05, dur: 1.2, type: "triangle", vol: 0.05, attack: 0.25 });
+    tone({ f: 116.5, t: 0.05, dur: 1.2, type: "triangle", vol: 0.03, attack: 0.25 });
+  },
+};
+
+function sfx(name, ...args) {
+  if (!soundOn || document.hidden || !audio()) return;
+  try {
+    SFX[name](...args);
+  } catch {
+    // no sound is fine
+  }
+}
+
+const SOUND_ICON_OFF =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 9.5l5 5M21.5 9.5l-5 5"/></svg>';
+const SOUND_ICON_ON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
+
+function renderSoundBtn() {
+  const btn = $("soundBtn");
+  btn.innerHTML = soundOn ? SOUND_ICON_ON : SOUND_ICON_OFF;
+  btn.setAttribute("aria-pressed", String(soundOn));
+  btn.title = soundOn ? "השתקה" : "הפעלת צלילים";
+  btn.setAttribute("aria-label", btn.title);
+}
+
+$("soundBtn").addEventListener("click", () => {
+  soundOn = !soundOn;
+  renderSoundBtn();
+  if (soundOn) sfx("padlock"); // a small click: sound is on
+});
+renderSoundBtn();
+
 // --- going into a room and back: the map zooms in on the room, and out ---
 
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2565,6 +2713,7 @@ function mapOrigin(el) {
 }
 
 function zoomIntoRoom(id) {
+  if (ROOM_BY_ID[id]) sfx("door");
   const el = nodeEl(id);
   if (!el || reducedMotion()) return Promise.resolve();
   mapView.style.transformOrigin = mapOrigin(el);
@@ -2891,7 +3040,11 @@ function playUnlock() {
   if (u.exit) {
     // On a line: the grate across the room's exit slides up and is gone.
     const grate = towerEl.querySelector(`.exit-grate[data-exit="${u.exit}"]`);
-    setTimeout(() => grate && grate.classList.add("rising"), t0);
+    setTimeout(() => {
+      if (!grate) return;
+      grate.classList.add("rising");
+      sfx("grate");
+    }, t0);
     setTimeout(() => grate && grate.remove(), t0 + 1000);
     return;
   }
@@ -2899,6 +3052,7 @@ function playUnlock() {
   setTimeout(() => lock && lock.classList.add("unlocking"), t0);
   setTimeout(() => {
     if (!lock) return;
+    sfx("padlock");
     lock.classList.add("open");
     lock.setAttribute("aria-label", `מנעול ${u.lock} - פתוח`);
   }, t0 + 420);
@@ -2906,6 +3060,7 @@ function playUnlock() {
   setTimeout(() => {
     const passage = towerEl.querySelector(".passage");
     if (passage) passage.classList.add("open");
+    sfx("gate");
     towerEl.querySelectorAll("[data-open-wing]").forEach((b) => b.remove());
     towerEl.querySelectorAll(".wing.fogged").forEach((c) => c.classList.replace("fogged", "wing-reveal"));
   }, t0 + 1300);
@@ -2944,8 +3099,14 @@ function goToPlace(place, at) {
   }
 }
 
-const goUpstairs = (stairs) => zoomIntoRoom(stairs).then(() => goToPlace(STAIRS_PLACE[stairs]));
-const goDownstairs = () => goToPlace("ground");
+const goUpstairs = (stairs) => {
+  sfx("stairs", true);
+  return zoomIntoRoom(stairs).then(() => goToPlace(STAIRS_PLACE[stairs]));
+};
+const goDownstairs = () => {
+  sfx("stairs", false);
+  goToPlace("ground");
+};
 
 function renderMap() {
   const place = currentPlace();
@@ -3469,6 +3630,7 @@ function walkTo(id) {
   markerBusy = true;
   marker.classList.add("walking");
   const duration = Math.min(700, Math.max(180, total * 1.1));
+  sfx("steps", duration);
   const anim = marker.animate(frames, { duration, easing: "ease-in-out" });
   return anim.finished.catch(() => {}).then(() => {
     markerBusy = false;
@@ -3717,6 +3879,7 @@ $("lockAnywayBtn").addEventListener("click", () => {
   if (exit) store.openedExits = { ...store.openedExits, [exit]: true };
   else if (ROOM_BY_ID[lockDialogFor]) store.openedRooms = { ...store.openedRooms, [lockDialogFor]: true };
   else store.wingOpen = true;
+  sfx(exit ? "grate" : "gate");
   saveStore();
   renderMap(); // the fog lifts, or the stairs open
   if (lockDialogThen) lockDialogThen();
@@ -4031,6 +4194,7 @@ function slideInCurrentCard(arriving) {
 // down into place a moment later, its amber bar draws across, and the two
 // torches on the room's walls flare once.
 function bossEntrance() {
+  sfx("boss");
   problemCardEl.classList.remove("boss-enter");
   roomView.classList.remove("boss-entering");
   void problemCardEl.offsetWidth;
@@ -4092,6 +4256,7 @@ checkBtn.addEventListener("click", () => {
     saveStore();
     renderScore(rec.run.score, WRONG_COST);
     setAnswerState("incorrect");
+    sfx("wrong");
     if (result.nearMiss) setFeedback(`${NEAR_MISS_TEXT[result.nearMiss]} ${ltr(`(−${WRONG_COST})`)}`, "near");
     else setFeedback(`לא נכון - הנגזרת של התשובה לא שווה לפונקציה שבאינטגרל. ${ltr(`(−${WRONG_COST})`)}`, "wrong");
     return;
@@ -4100,6 +4265,7 @@ checkBtn.addEventListener("click", () => {
   // Correct: the node is cleared. Save the step forward right away.
   view.resolved = true;
   setAnswerState("correct");
+  sfx("correct");
   setFeedback("");
   checkBtn.disabled = true;
   solutionBtn.hidden = true;
@@ -4341,6 +4507,7 @@ function showConquest(room, { score, prevBest, wins, before }) {
   else if (score > prevBest) bestLine = `שיא חדש! <span class="dim">(קודם: ${prevBest})</span>`;
   else bestLine = `השיא שלכם: <b>${prevBest}</b>`;
 
+  sfx("win", score === 10);
   const news = victoryNews(room, before);
   if (before.firstWin && CORE_IDS.includes(room.id)) {
     pendingUnlock = { lock: room.num, gate: !before.wing && wingOpen() };
