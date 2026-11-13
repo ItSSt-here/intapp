@@ -1832,6 +1832,8 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .room-torches .torch { top: -92px; transform: scale(0.4); transform-origin: 50% 100%; }
   .room-torches .torch-l { left: 4px; right: auto; }
   .room-torches .torch-r { right: 4px; left: auto; }
+  /* The parts tower's rooms sit right under the floor's name: room for the torches. */
+  .floor-map:has(.floor-parts) .floor-label { margin-bottom: 40px; }
 }
 
 /* Cold: the iron bracket only, and the faintest curl of smoke. */

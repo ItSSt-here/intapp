@@ -2762,6 +2762,7 @@ function showView(view) {
 // --- map --------------------------------------------------------------------
 
 let justConquered = null; // room id whose card flips on the next map render
+let justLit = null; // ...and whose torches catch fire then (its first win only)
 
 
 // A gold victory banner hanging on a completed room.
@@ -2817,7 +2818,7 @@ function roomCardHtml(room) {
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
       ${onLineFloor ? exitGrateHtml(room.id) : ""}
-      ${room.place === "ground" ? roomTorchesHtml(conquered, justConquered === room.id) : ""}
+      ${roomTorchesHtml(conquered, justLit === room.id)}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
@@ -2848,13 +2849,26 @@ const DOOR_SVG = `
 const mapTorch = (col, row, cls = "") =>
   `<div class="cell map-torch${cls}" style="grid-column:${col};grid-row:${row}" aria-hidden="true">${torchHtml(col < 3 ? "l" : "r")}</div>`;
 
-// The ground floor wakes up as it is won: each room has two small torches on
-// the wall above it, cold until the room is won; they catch fire once, right
-// after the win (`lighting`). The floor's big torch lights when rooms 1-2 are
-// won, and the floor's name gets a gold frame when every room is.
+// Every floor wakes up as it is won: each room has two small torches on the
+// wall above it, cold until the room is won; they catch fire once, right
+// after the win (`lighting`). A floor's big torches light when its main rooms
+// are won (`core`), the last ones when all are, and the floor's name gets a
+// gold frame when every room is.
 const roomTorchesHtml = (lit, lighting) =>
   `<span class="room-torches${lit ? " lit" : ""}${lighting ? " lighting" : ""}" aria-hidden="true">${torchHtml("l")}${torchHtml("r")}</span>`;
-const GROUND_IDS = () => ROOMS.filter((r) => r.place === "ground").map((r) => r.id);
+
+function floorLighting(place, coreIds) {
+  const ids = ROOMS.filter((r) => r.place === place).map((r) => r.id);
+  const fresh = !!justLit && ids.includes(justLit);
+  if (fresh && !reducedMotion()) setTimeout(() => sfx("ignite"), 1000);
+  const done = ids.every(isConquered);
+  const lit = (on, byThisWin) => (on ? (fresh && byThisWin ? " lit lighting" : " lit") : "");
+  return {
+    core: lit(coreIds.every(isConquered), coreIds.includes(justLit)),
+    all: lit(done, true),
+    label: done ? " floor-done" : "",
+  };
+}
 
 // A doorway through the wall between two areas of the map.
 const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
@@ -3319,19 +3333,14 @@ function renderBasicFloor() {
       ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים")}
       ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
     </div>`;
-  // The floor waking up (see roomTorchesHtml): a room just won lights its
-  // torches; if that finished rooms 1-2, the big torch catches too.
-  const fresh = justConquered && ROOM_BY_ID[justConquered] && ROOM_BY_ID[justConquered].place === "ground";
-  const coreLit = FLOOR1_IDS.every(isConquered);
-  const torchCls = coreLit ? (fresh && FLOOR1_IDS.includes(justConquered) ? " lit lighting" : " lit") : "";
-  const floorDone = GROUND_IDS().every(isConquered);
-  if (fresh && !reducedMotion()) setTimeout(() => sfx("ignite"), 1000);
+  // The floor waking up (see floorLighting): the big torch after rooms 1-2.
+  const light = floorLighting("ground", FLOOR1_IDS);
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${floorDone ? " floor-done" : ""}">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
+      <div class="floor-label${light.label}">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
       ${mapTipHtml()}
       <div class="floor-grid floor-basic">
-        ${mapTorch(3, 1, torchCls)}
+        ${mapTorch(3, 1, light.core)}
         <div class="cell ext-cell" style="grid-column:6;grid-row:1">${roomCardHtml(ROOM_BY_ID.more)}</div>
         <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
@@ -3351,7 +3360,7 @@ function renderBasicFloor() {
         </div>
       </div>
     </div>`;
-  justConquered = null;
+  justConquered = justLit = null;
   requestAnimationFrame(() =>
     Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
   );
@@ -3382,12 +3391,15 @@ function renderRationalFloor() {
   const gateCls = shownOpen ? (coreDone() ? " open" : " open forced") : "";
   const locks = CORE_IDS.map((id, i) => padlockSvg(i + 1, isConquered(id) && !(unlockNow && unlockNow.lock === i + 1))).join("");
 
+  // The floor waking up (see floorLighting): the two torches by the main
+  // corridor after rooms 1-3, the one up by the wing when every room is won.
+  const light = floorLighting("pf", CORE_IDS);
   towerEl.innerHTML = `
-    <div class="floor-map">
-      <div class="floor-label">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span></div>
+    <div class="floor-map floor-alive">
+      <div class="floor-label${light.label}">מגדל השברים החלקיים <span class="floor-en" dir="ltr">(partial fractions)</span></div>
       ${mapTipHtml()}
       <div class="floor-grid">
-        ${mapTorch(1, 9)}${mapTorch(3, 9)}${mapTorch(4, 1)}
+        ${mapTorch(1, 9, light.core)}${mapTorch(3, 9, light.core)}${mapTorch(4, 1, light.all)}
         <div class="cell wing${wingCls}" style="grid-column:1;grid-row:1">${roomCardHtml(review)}</div>
         <div class="cell wing${wingCls}" style="grid-column:2;grid-row:1">${roomCardHtml(ext)}</div>
         <div class="cell wing${wingCls}" style="grid-column:3;grid-row:1">${trophyHtml()}</div>
@@ -3420,7 +3432,7 @@ function renderRationalFloor() {
         </div>
       </div>
     </div>`;
-  justConquered = null;
+  justConquered = justLit = null;
   // Measure once any zoom of the map has settled; positions taken mid-zoom
   // would be scaled.
   requestAnimationFrame(() =>
@@ -3432,9 +3444,10 @@ function renderRationalFloor() {
 // floor's - the stairs down · hall · room 1 · hall · room 2.
 function renderPartsFloor() {
   const [r1, r2] = PARTS_IDS.map((id) => ROOM_BY_ID[id]);
+  const light = floorLighting("parts", PARTS_IDS); // no big torch on this floor yet
   towerEl.innerHTML = `
-    <div class="floor-map">
-      <div class="floor-label">מגדל האינטגרציה בחלקים <span class="floor-en" dir="ltr">(integration by parts)</span></div>
+    <div class="floor-map floor-alive">
+      <div class="floor-label${light.label}">מגדל האינטגרציה בחלקים <span class="floor-en" dir="ltr">(integration by parts)</span></div>
       ${mapTipHtml()}
       <div class="floor-grid floor-basic floor-parts">
         <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
@@ -3450,7 +3463,7 @@ function renderPartsFloor() {
         </div>
       </div>
     </div>`;
-  justConquered = null;
+  justConquered = justLit = null;
   requestAnimationFrame(() =>
     Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
   );
@@ -4526,6 +4539,7 @@ let pendingUnlock = null;
 
 function showConquest(room, { score, prevBest, wins, before }) {
   justConquered = room.id;
+  justLit = before.firstWin ? room.id : null;
   let bestLine;
   if (prevBest === null) bestLine = `ציון ראשון בחדר`;
   else if (score > prevBest) bestLine = `שיא חדש! <span class="dim">(קודם: ${prevBest})</span>`;
