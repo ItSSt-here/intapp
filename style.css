@@ -1554,7 +1554,15 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 #backBtn:hover, #castleBackBtn:hover, #medalBackBtn:hover { background: linear-gradient(180deg, #179486, #0c7065); color: white; }
 #backBtn:active, #castleBackBtn:active, #medalBackBtn:active { box-shadow: 0 1px 0 #053d37; }
 .btn-icon { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-.restart-btn { margin-inline-start: 6px; }
+/* Slate blue: apart from the stone wall, the teal "למפה" and its orange confirm. */
+.restart-btn {
+  margin-inline-start: 6px;
+  color: #f2f5fa;
+  background: linear-gradient(180deg, #62779c, #475a7c);
+  border-color: #33425d;
+  box-shadow: 0 2px 0 #2b3850, 0 3px 6px rgba(30, 40, 60, 0.3);
+}
+.restart-btn:hover { background: linear-gradient(180deg, #6d84ab, #50658a); border-color: #33425d; color: white; }
 .restart-btn .btn-icon { width: 22px; height: 22px; stroke-width: 2.6; }
 .restart-btn.confirming { color: #fff; background: var(--now, #f07a12); border-color: #b85a08; box-shadow: 0 2px 0 #b85a08; }
 
@@ -2340,11 +2348,40 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .castle-hint { text-align: center; color: var(--muted); font-size: 0.9rem; margin: 10px 0 0; }
 
 .cs-star { fill: #fff6d8; opacity: 0.7; }
+.cs-star.twinkle { animation: cs-twinkle 5s ease-in-out infinite; }
+@keyframes cs-twinkle { 50% { opacity: 0.15; } }
 .cs-moon { fill: #f3ecd2; filter: drop-shadow(0 0 10px rgba(255, 245, 210, 0.5)); }
+.cs-crater { fill: #e2d8b8; }
+.cs-moon-face { fill: none; stroke: #a8996f; stroke-width: 1.6; stroke-linecap: round; }
+.cs-cheek { fill: #f0b49a; opacity: 0.35; }
+/* Clouds drift slowly across, past the moon. */
+.cs-cloud { fill: #4a5070; opacity: 0.4; animation: cs-drift linear infinite; }
+@keyframes cs-drift { from { transform: translateX(-120px); } to { transform: translateX(780px); } }
+/* Now and then a shooting star draws an integral sign, which glows a moment. */
+.cs-integral { fill: none; stroke: #fffbe8; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 12 200; stroke-dashoffset: 12; opacity: 0; filter: drop-shadow(0 0 4px #fff2b8); animation: cs-shoot 16s ease-in 1.2s infinite; }
+.cs-integral-glow { fill: none; stroke: #ffe9a8; stroke-width: 2; stroke-linecap: round; opacity: 0; animation: cs-shoot-glow 16s ease 1.2s infinite; }
+@keyframes cs-shoot {
+  0% { stroke-dashoffset: 12; opacity: 1; }
+  9% { stroke-dashoffset: -100; opacity: 1; }
+  10%, 100% { stroke-dashoffset: -100; opacity: 0; }
+}
+@keyframes cs-shoot-glow { 0%, 6% { opacity: 0; } 11% { opacity: 0.35; } 24%, 100% { opacity: 0; } }
+.cs-far-hill { fill: #1c2030; }
 .cs-hill { fill: #1a1d17; }
-.cs-wall { fill: #4a4238; stroke: #2b2620; stroke-width: 2; }
+.cs-path { fill: #2c2b26; }
+.cs-bushes { fill: #12150f; }
+.cs-wall { fill: url(#csBlocks); stroke: #2b2620; stroke-width: 2; }
+.cs-shade { fill: url(#csShade); pointer-events: none; }
 .cs-stone { fill: #4a4238; stroke: #2b2620; stroke-width: 1.5; }
 .cs-roof { fill: #3a3129; stroke: #241f1a; stroke-width: 2; }
+.cs-tiles { fill: none; stroke: #2a231d; stroke-width: 1.2; }
+.cs-finial { fill: #8d806a; }
+.cs-slit { fill: #15121a; }
+.cs-portcullis { stroke: #3d352c; stroke-width: 2.2; fill: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cs-cloud, .cs-star.twinkle { animation: none; }
+  .cs-integral, .cs-integral-glow { display: none; }
+}
 .cs-gate { fill: #1a1410; stroke: #2b2620; stroke-width: 2; }
 .cs-label { font: 700 11px "Segoe UI", Arial, sans-serif; fill: #d9cdb1; text-anchor: middle; pointer-events: none; }
 .cs-pole { stroke: #8d806a; stroke-width: 2; }

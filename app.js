@@ -3335,49 +3335,135 @@ const castleMerlons = (x1, x2, y) => {
   return s;
 };
 
+// A tower's top: a parapet that juts out on a row of corbels, crenellated,
+// with a tiled roof (its sides flared a little) rising behind it.
+function castleTop(cx, bodyW, y, roofH) {
+  const half = bodyW / 2 + 8;
+  const x1 = cx - half;
+  const x2 = cx + half;
+  let corbels = "";
+  for (let x = cx - bodyW / 2 + 2; x + 5 <= cx + bodyW / 2; x += 10) corbels += `<rect x="${x}" y="${y}" width="5" height="7" class="cs-stone"/>`;
+  const apex = y - 12 - roofH;
+  const tiles = [0.35, 0.65]
+    .map((k) => {
+      const yy = y - 12 - roofH * (1 - k);
+      const w = half * k;
+      return `<path d="M${cx - w} ${yy}Q${cx} ${yy + 5} ${cx + w} ${yy}" class="cs-tiles"/>`;
+    })
+    .join("");
+  return `
+    <path d="M${x1 - 4} ${y - 12}Q${cx - half * 0.45} ${y - 22} ${cx} ${apex}Q${cx + half * 0.45} ${y - 22} ${x2 + 4} ${y - 12}z" class="cs-roof"/>
+    ${tiles}
+    <circle cx="${cx}" cy="${apex}" r="3" class="cs-finial"/>
+    ${corbels}
+    <rect x="${x1}" y="${y - 12}" width="${half * 2}" height="12" class="cs-stone"/>
+    ${castleMerlons(x1 + 2, x2, y - 12)}`;
+}
+
+// A corner turret on the outer wall, with an arrow slit and battlements.
+function castleTurret(x, y, w, h) {
+  return `
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" class="cs-wall"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" class="cs-shade"/>
+    ${castleMerlons(x, x + w + 1, y)}
+    <rect x="${x + w / 2 - 2}" y="${y + 22}" width="4" height="16" rx="2" class="cs-slit"/>`;
+}
+
+// The night sky: twinkling stars, drifting clouds, a sleepy moon, and now and
+// then a shooting star that draws an integral sign.
+function castleSkyHtml() {
+  const stars = [[40, 40], [110, 90], [190, 30], [300, 70], [350, 24], [470, 50], [520, 130], [600, 28], [255, 115], [70, 165], [420, 100], [615, 160], [150, 140]]
+    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1.1 : 1.7}" class="cs-star${i % 4 === 1 ? " twinkle" : ""}" style="animation-delay:${-i * 0.9}s"/>`)
+    .join("");
+  const cloud = (x, y, s, dur, delay) => `
+    <g class="cs-cloud" style="animation-duration:${dur}s;animation-delay:${delay}s">
+      <g transform="translate(${x} ${y}) scale(${s})">
+        <ellipse cx="0" cy="0" rx="34" ry="11"/><ellipse cx="-14" cy="-7" rx="16" ry="11"/><ellipse cx="10" cy="-10" rx="18" ry="13"/><ellipse cx="28" cy="-2" rx="14" ry="8"/>
+      </g>
+    </g>`;
+  return `
+    ${stars}
+    <path pathLength="100" class="cs-integral-glow" d="M128 40C122 26 104 28 101 48L91 128C88 148 72 152 64 138"/>
+    <path pathLength="100" class="cs-integral" d="M128 40C122 26 104 28 101 48L91 128C88 148 72 152 64 138"/>
+    <g class="cs-moon-g">
+      <circle cx="560" cy="64" r="25" class="cs-moon"/>
+      <circle cx="548" cy="52" r="4" class="cs-crater"/><circle cx="574" cy="76" r="3" class="cs-crater"/><circle cx="571" cy="49" r="2.2" class="cs-crater"/>
+      <path d="M548 63q4 3.5 8 0M564 63q4 3.5 8 0" class="cs-moon-face"/>
+      <path d="M553 72q7 5 14 0" class="cs-moon-face"/>
+      <circle cx="547" cy="70" r="3" class="cs-cheek"/><circle cx="573" cy="70" r="3" class="cs-cheek"/>
+    </g>
+    ${cloud(0, 70, 1, 140, -40)}${cloud(0, 120, 0.7, 180, -130)}${cloud(0, 44, 0.85, 160, -95)}`;
+}
+
 function renderCastleView(intro = false) {
   const locked = !stairsOpen();
   let n = 0; // order in which new windows light up
   const win = (id, x, y) => castleWindow(id, x, y, n++);
   const towerCls = (place) => `cs-place${locked ? " cs-locked" : ""}${currentPlace() === place ? " cs-here" : ""}`;
-  const stars = [[40, 40], [110, 90], [190, 30], [300, 70], [350, 24], [470, 50], [560, 95], [600, 30], [520, 140], [70, 160]]
-    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1.2 : 1.8}" class="cs-star"/>`)
-    .join("");
+  // The gate: an arch of voussoirs round a dark doorway, the portcullis half up.
+  let gateStones = "";
+  for (let i = 0; i <= 6; i++) {
+    const a = Math.PI - (i * Math.PI) / 6;
+    const x = 320 + 25 * Math.cos(a);
+    const y = 344 - 25 * Math.sin(a);
+    gateStones += `<rect x="${(x - 4).toFixed(1)}" y="${(y - 3).toFixed(1)}" width="8" height="6" transform="rotate(${(90 - (a * 180) / Math.PI).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" class="cs-stone"/>`;
+  }
   $("castleStage").innerHTML = `
     <svg class="castle-svg" viewBox="0 0 640 400" role="img" aria-label="הטירה">
       <defs>
-        <linearGradient id="csSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1424"/><stop offset="1" stop-color="#2a2a3a"/></linearGradient>
+        <linearGradient id="csSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c1122"/><stop offset="0.7" stop-color="#232741"/><stop offset="1" stop-color="#3a3548"/></linearGradient>
+        <radialGradient id="csHalo"><stop offset="0" stop-color="#fff4cf" stop-opacity="0.28"/><stop offset="1" stop-color="#fff4cf" stop-opacity="0"/></radialGradient>
+        <pattern id="csBlocks" width="24" height="12" patternUnits="userSpaceOnUse">
+          <rect width="24" height="12" fill="#4a4238"/>
+          <path d="M0 .5H24M0 6.5H24M.5 0V6M12.5 6V12" stroke="#3a332b" stroke-width="1"/>
+        </pattern>
+        <!-- The moon is up on the right: lit faces right, shadow left. -->
+        <linearGradient id="csShade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#000" stop-opacity="0.38"/><stop offset="0.55" stop-color="#000" stop-opacity="0.05"/><stop offset="1" stop-color="#fff2c8" stop-opacity="0.1"/>
+        </linearGradient>
       </defs>
       <rect width="640" height="400" fill="url(#csSky)"/>
-      ${stars}
-      <circle cx="560" cy="62" r="18" class="cs-moon"/>
+      <circle cx="560" cy="64" r="90" fill="url(#csHalo)"/>
+      ${castleSkyHtml()}
+      <path d="M0 330Q90 300 190 326T400 318T640 312V400H0z" class="cs-far-hill"/>
       <path d="M0 382Q320 352 640 382V400H0z" class="cs-hill"/>
+      <path d="M302 374L282 400H358L338 374z" class="cs-path"/>
+      <g class="cs-bushes">
+        <ellipse cx="40" cy="382" rx="30" ry="14"/><ellipse cx="72" cy="386" rx="22" ry="10"/>
+        <ellipse cx="600" cy="380" rx="34" ry="15"/><ellipse cx="566" cy="387" rx="20" ry="9"/>
+      </g>
 
       <g class="${towerCls("pf")}" data-go="pf">
         <title>מגדל הפונקציות הרציונליות</title>
-        <polygon points="138,124 302,124 220,54" class="cs-roof"/>
+        ${castleTop(220, 140, 124, 52)}
         <rect x="150" y="124" width="140" height="170" class="cs-wall"/>
+        <rect x="150" y="124" width="140" height="170" class="cs-shade"/>
         ${win("review", 184, 150)}${win("nonmonic", 240, 150)}
         ${win("repeated", 166, 200)}${win("pf1", 212, 200)}${win("irreducible", 258, 200)}
         ${win("division", 212, 248)}
-        <text x="220" y="140" class="cs-label">פונקציות רציונליות</text>
-        ${castleFlag(220, 54, "pf")}
+        <text x="220" y="145" class="cs-label">פונקציות רציונליות</text>
+        ${castleFlag(220, 57, "pf")}
       </g>
 
       <g class="${towerCls("parts")}" data-go="parts">
         <title>מגדל האינטגרציה בחלקים</title>
-        <polygon points="350,194 470,194 410,134" class="cs-roof"/>
+        ${castleTop(410, 100, 194, 38)}
         <rect x="360" y="194" width="100" height="100" class="cs-wall"/>
-        <text x="410" y="210" class="cs-label">אינטגרציה בחלקים</text>
+        <rect x="360" y="194" width="100" height="100" class="cs-shade"/>
+        <text x="410" y="214" class="cs-label">אינטגרציה בחלקים</text>
         ${PARTS_IDS.map((id, i) => win(id, 402, 256 - i * 36)).join("")}
-        ${castleFlag(410, 134, "parts")}
+        ${castleFlag(410, 141, "parts")}
       </g>
 
       <g class="cs-place${currentPlace() === "ground" ? " cs-here" : ""}" data-go="ground">
         <title>קומת הקרקע</title>
         <rect x="110" y="294" width="420" height="80" class="cs-wall"/>
-        ${castleMerlons(112, 530, 294)}
-        <path d="M300 374V344a20 20 0 0 1 40 0V374z" class="cs-gate"/>
+        <rect x="110" y="294" width="420" height="80" class="cs-shade"/>
+        ${castleMerlons(130, 512, 294)}
+        ${castleTurret(96, 272, 36, 102)}${castleTurret(508, 272, 36, 102)}
+        <path d="M296 374V344a24 24 0 0 1 48 0V374z" class="cs-gate"/>
+        <path d="M300 352H340M300 344H340M308 330V352M320 322V352M332 330V352" class="cs-portcullis"/>
+        ${gateStones}
         ${win("basic", 420, 324)}${win("linear", 370, 324)}${win("more", 222, 324)}
         <text x="180" y="366" class="cs-label">קומת הקרקע</text>
       </g>
