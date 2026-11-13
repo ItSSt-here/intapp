@@ -3157,7 +3157,7 @@ function renderBasicFloor() {
         <div class="cell" style="grid-column:5;grid-row:3">${roomCardHtml(ROOM_BY_ID.linear)}</div>
         <div class="hall-branch" style="grid-column:6;grid-row:2 / 4" aria-hidden="true">
           <div class="hall hall-v" data-spot="more"></div>
-          <div class="hall" data-spot="landing"></div>
+          <div class="hall" data-spot="landing" data-node="landing"></div>
         </div>
         ${stairs}
         <div class="map-marker" aria-hidden="true">
@@ -3281,10 +3281,12 @@ function renderPartsFloor() {
 const BASIC_FLOOR_NODES = {
   entrance: { nav: { left: "basic" } },
   basic: { nav: { left: "linear", right: "entrance" } },
-  linear: { nav: { right: "basic", left: "stairsPf" } },
-  stairsPf: { nav: { right: "linear", left: "stairsParts", up: "more" } },
+  linear: { nav: { right: "basic", left: "landing" } },
+  // The hall past room 2: up to the extension room, on to the stairs.
+  landing: { nav: { right: "linear", left: "stairsPf", up: "more" } },
+  stairsPf: { nav: { right: "landing", left: "stairsParts", up: "more" } },
   stairsParts: { nav: { right: "stairsPf", up: "more" } },
-  more: { nav: { down: "stairsPf", left: "stairsParts", right: "linear" } },
+  more: { nav: { down: "landing", left: "stairsParts", right: "linear" } },
 };
 
 // The parts tower: the way down, room 1, room 2.
@@ -3297,7 +3299,7 @@ const PARTS_FLOOR_NODES = {
 // The places of a line in walking order. On the ground floor both stairs
 // and the side room are as far along as the landing (past room 2).
 const LINE_PATHS = {
-  ground: ["entrance", "basic", "linear", "stairsPf"],
+  ground: ["entrance", "basic", "linear", "landing", "stairsPf"],
   parts: ["entrance", "partsPoly", "partsLn"],
 };
 const linePath = () => LINE_PATHS[currentPlace()];
@@ -3341,7 +3343,17 @@ function nodePoint(id) {
       const s = nodeEl(id).querySelector(".stairs-steps").getBoundingClientRect();
       return { x: s.left + s.width / 2 - grid.left, y: s.bottom + 6 - grid.top };
     }
-    // In the hall in front of the door; the entrance's spot is its threshold.
+    // A room's spot is inside it, in the middle of the room, level with the
+    // halls (the side room: up in its floor); so the marker is already in the
+    // room when a barred exit stops it.
+    const lineHall = towerEl.querySelector(`.hall[data-spot="${linePath()[1]}"]`);
+    if (ROOM_BY_ID[id] && hallsShown()) {
+      const r = nodeEl(id).getBoundingClientRect();
+      const h = lineHall.getBoundingClientRect();
+      const onRow = r.top < h.top + h.height / 2 && r.bottom > h.top + h.height / 2;
+      return { x: r.left + r.width / 2 - grid.left, y: (onRow ? h.top + h.height / 2 : r.top + r.height * 0.62) - grid.top };
+    }
+    // The entrance's spot is its threshold.
     const hall = towerEl.querySelector(`.hall[data-spot="${id === "entrance" ? linePath()[1] : id}"]`);
     if (hall && hall.offsetWidth) {
       const h = hall.getBoundingClientRect();
