@@ -2069,28 +2069,26 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   background: radial-gradient(80% 50% at 50% 0%, rgba(255, 190, 110, 0.08), transparent), var(--rock);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 6px 16px rgba(0, 0, 0, 0.18);
 }
-/* The towers side by side, each under its pointed roof, on top of the
-   ground floor. */
-.tn-towers { display: flex; gap: 6px; align-items: stretch; }
-.tn-tower { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
-.tn-roof {
-  flex: none;
-  height: 22px;
-  margin: 0 -3px 4px;
-  background: linear-gradient(180deg, #6d5f4a, #4e4436);
-  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+/* A plain list of the places, under a button to the castle seen from outside. */
+.tn-list { display: flex; flex-direction: column; gap: 6px; }
+.tn-castle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 6px;
+  border: 2px solid #c9a227;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #3a3329, #2a251f);
+  color: #f2d27a;
+  font: inherit;
+  cursor: pointer;
 }
-.tn-tower .tn-floor {
-  flex: 1;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 5px;
-  padding: 8px 4px;
-  text-align: center;
-}
-.tn-tower .tn-text { flex: none; }
-.tn-tower .tn-name { font-size: 0.76rem; }
-.tn-ground { margin-top: 6px; padding-top: 6px; border-top: 3px solid #4e4436; }
+.tn-castle:hover { background: linear-gradient(180deg, #4a4135, #332d25); }
+.tn-castle svg { width: 22px; height: 22px; flex: none; }
+.tn-castle svg path:first-child { fill: currentColor; }
 
 .tn-floor {
   position: relative;
@@ -2161,17 +2159,66 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .map-layout { flex-direction: row; gap: 10px; }
   .map-layout .tower { flex: 1 1 auto; min-width: 0; margin: 0; }
   .tower-nav { flex: none; width: 62px; align-self: flex-start; position: sticky; top: 12px; padding-inline: 5px; }
-  .tn-towers { gap: 3px; }
   .tn-floor { flex-direction: column; gap: 4px; padding: 7px 2px; }
-  .tn-tower .tn-floor { padding: 6px 1px; border-width: 1.5px; }
-  .tn-tower .tn-mark { width: 21px; height: 21px; font-size: 0.72rem; }
-  .tn-tower .tn-here { width: 11px; height: 11px; top: -5px; inset-inline-start: -4px; }
   .tn-text { display: none; }
   .tn-state:empty { display: none; }
+  .tn-castle .tn-name { display: none; }
 }
-/* Phones: the towers above the ground floor, as on wider screens. */
-@media (max-width: 759px) {
-  .tn-roof { height: 14px; }
+
+/* ---------------------------------------------------------------------- */
+/* The castle from outside, at night                                       */
+/* ---------------------------------------------------------------------- */
+
+.castle-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.castle-bar h1 { margin: 0; }
+#castleView.intro .castle-bar .nav-btn { visibility: hidden; }
+#castleView.intro { cursor: pointer; }
+.castle-stage { max-width: 760px; margin: 0 auto; }
+.castle-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.castle-hint { text-align: center; color: var(--muted); font-size: 0.9rem; margin: 10px 0 0; }
+
+.cs-star { fill: #fff6d8; opacity: 0.7; }
+.cs-moon { fill: #f3ecd2; filter: drop-shadow(0 0 10px rgba(255, 245, 210, 0.5)); }
+.cs-hill { fill: #1a1d17; }
+.cs-wall { fill: #4a4238; stroke: #2b2620; stroke-width: 2; }
+.cs-stone { fill: #4a4238; stroke: #2b2620; stroke-width: 1.5; }
+.cs-roof { fill: #3a3129; stroke: #241f1a; stroke-width: 2; }
+.cs-gate { fill: #1a1410; stroke: #2b2620; stroke-width: 2; }
+.cs-label { font: 700 11px "Segoe UI", Arial, sans-serif; fill: #d9cdb1; text-anchor: middle; pointer-events: none; }
+.cs-pole { stroke: #8d806a; stroke-width: 2; }
+.cs-flag { fill: #d9a520; stroke: #9c7414; stroke-width: 1; }
+
+/* Windows: dark; flickering while a room is under way; lit once won. */
+.cs-win { stroke: #2b2620; stroke-width: 1.5; }
+.cs-win.dark { fill: #15121a; }
+.cs-win.half { fill: #a8652a; animation: cs-flicker 2.4s ease-in-out infinite; }
+.cs-win.lit { fill: #ffcf6b; filter: drop-shadow(0 0 5px rgba(255, 190, 80, 0.85)); }
+@keyframes cs-flicker { 50% { fill: #7a4a22; } }
+/* Lit since the last look: it lights up now, once. */
+.cs-win.cs-new { animation: cs-light 1.1s ease both; }
+@keyframes cs-light {
+  0% { fill: #15121a; filter: none; }
+  60% { fill: #fff0b8; }
+  100% { fill: #ffcf6b; }
+}
+.cs-flag.cs-new { animation: cs-raise 1s cubic-bezier(0.2, 0.8, 0.3, 1) 1s both; }
+@keyframes cs-raise { from { transform: translateY(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* A place: a click goes there; the one the student is on is outlined. */
+.cs-place { cursor: pointer; }
+.cs-place:hover .cs-wall, .cs-place:hover .cs-roof { filter: brightness(1.18); }
+.cs-here .cs-wall { stroke: #d9a93c; stroke-width: 2.5; }
+/* Towers not reached yet (before room 2's exit): in shadow. */
+.cs-locked { cursor: default; opacity: 0.45; }
+.cs-locked:hover .cs-wall, .cs-locked:hover .cs-roof { filter: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cs-win.half, .cs-win.cs-new, .cs-flag.cs-new { animation: none; }
 }
 
 /* Narrower screens: slimmer entrance, halls and stairs, so the rooms keep

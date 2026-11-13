@@ -2755,7 +2755,7 @@ function showView(view) {
       { duration: from === mapView ? 300 : 0, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
     );
   }
-  for (const v of [mapView, roomView, conquestView, medalView]) v.hidden = v !== view;
+  for (const v of [mapView, roomView, conquestView, medalView, castleView]) v.hidden = v !== view;
   window.scrollTo(0, 0);
 }
 
@@ -3206,13 +3206,15 @@ function towerNavButton(f) {
     </button>`;
 }
 
+// A plain list of the places, with the castle (the big picture) on top.
 function renderTowerNav() {
   const { towers, ground } = towerNavItems();
   towerNavEl.innerHTML = `
-    <div class="tn-towers">
-      ${towers.map((t) => `<div class="tn-tower"><div class="tn-roof" aria-hidden="true"></div>${towerNavButton(t)}</div>`).join("")}
-    </div>
-    <div class="tn-ground">${towerNavButton(ground)}</div>`;
+    <button type="button" class="tn-castle" data-castle title="הטירה" aria-label="הטירה">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9h3v3h2V6h3v3h2V6h3v6h2V9h3v12z"/><path d="M10 21v-4a2 2 0 0 1 4 0v4" fill="#2c2721"/></svg>
+      <span class="tn-name">הטירה</span>
+    </button>
+    <div class="tn-list">${[ground, ...towers].map(towerNavButton).join("")}</div>`;
 }
 
 // Go to a place from the panel - or ask, if its stairs are locked.
@@ -3227,9 +3229,128 @@ function towerNavGo(place) {
 }
 
 towerNavEl.addEventListener("click", (e) => {
+  if (e.target.closest("[data-castle]")) {
+    location.hash = "#/castle";
+    return;
+  }
   const b = e.target.closest("[data-go]");
   if (b) towerNavGo(b.dataset.go);
 });
+
+// --- the castle from outside -------------------------------------------------
+// At night: the ground floor as the base, the towers side by side on it. A
+// window per room - dark, flickering (in progress) or lit (won) - and a flag
+// on a tower whose medal is earned. A window lit since the last look lights
+// up in front of the student, once. A click on a place goes there.
+
+const castleView = $("castleView");
+const CASTLE_INTRO = true; // a short look at the castle when the game opens
+let castleIntroTimer = null;
+
+function castleWindow(id, x, y, i) {
+  const rec = roomRecord(id);
+  const state = rec.wins > 0 ? "lit" : rec.run ? "half" : "dark";
+  const isNew = state === "lit" && !(store.castleSeen || []).includes(id);
+  const tip = `${ROOM_BY_ID[id].title}${rec.wins > 0 ? ` · ${rec.best}` : ""}`;
+  return `<path class="cs-win ${state}${isNew ? " cs-new" : ""}"${isNew ? ` style="animation-delay:${0.5 + i * 0.25}s"` : ""} d="M${x} ${y + 24}V${y + 8}a8 8 0 0 1 16 0V${y + 24}z"><title>${tip}</title></path>`;
+}
+
+function castleFlag(x, y, medalId) {
+  const m = medalState(MEDALS.find((md) => md.id === medalId));
+  const isNew = m.earned && !(store.castleSeen || []).includes(`flag:${medalId}`);
+  return `
+    <line x1="${x}" y1="${y}" x2="${x}" y2="${y - 34}" class="cs-pole"/>
+    ${m.earned ? `<path class="cs-flag${isNew ? " cs-new" : ""}" d="M${x} ${y - 34}h22l-5 7 5 7h-22z"><title>מדליה · ${m.avg}</title></path>` : ""}`;
+}
+
+// Crenellations along a wall's top edge.
+const castleMerlons = (x1, x2, y) => {
+  let s = "";
+  for (let x = x1; x + 10 <= x2; x += 18) s += `<rect x="${x}" y="${y - 9}" width="10" height="9" class="cs-stone"/>`;
+  return s;
+};
+
+function renderCastleView(intro = false) {
+  const locked = !stairsOpen();
+  let n = 0; // order in which new windows light up
+  const win = (id, x, y) => castleWindow(id, x, y, n++);
+  const towerCls = (place) => `cs-place${locked ? " cs-locked" : ""}${currentPlace() === place ? " cs-here" : ""}`;
+  const stars = [[40, 40], [110, 90], [190, 30], [300, 70], [350, 24], [470, 50], [560, 95], [600, 30], [520, 140], [70, 160]]
+    .map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 1.2 : 1.8}" class="cs-star"/>`)
+    .join("");
+  $("castleStage").innerHTML = `
+    <svg class="castle-svg" viewBox="0 0 640 400" role="img" aria-label="הטירה">
+      <defs>
+        <linearGradient id="csSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1424"/><stop offset="1" stop-color="#2a2a3a"/></linearGradient>
+      </defs>
+      <rect width="640" height="400" fill="url(#csSky)"/>
+      ${stars}
+      <circle cx="560" cy="62" r="18" class="cs-moon"/>
+      <path d="M0 382Q320 352 640 382V400H0z" class="cs-hill"/>
+
+      <g class="${towerCls("pf")}" data-go="pf">
+        <title>מגדל השברים החלקיים</title>
+        <polygon points="138,124 302,124 220,54" class="cs-roof"/>
+        <rect x="150" y="124" width="140" height="170" class="cs-wall"/>
+        ${win("review", 184, 150)}${win("nonmonic", 240, 150)}
+        ${win("repeated", 166, 200)}${win("pf1", 212, 200)}${win("irreducible", 258, 200)}
+        ${win("division", 212, 248)}
+        <text x="220" y="140" class="cs-label">שברים חלקיים</text>
+        ${castleFlag(220, 54, "pf")}
+      </g>
+
+      <g class="${towerCls("parts")}" data-go="parts">
+        <title>מגדל האינטגרציה בחלקים</title>
+        <polygon points="350,194 470,194 410,134" class="cs-roof"/>
+        <rect x="360" y="194" width="100" height="100" class="cs-wall"/>
+        <text x="410" y="210" class="cs-label">אינטגרציה בחלקים</text>
+        ${PARTS_IDS.map((id, i) => win(id, 402, 256 - i * 36)).join("")}
+        ${castleFlag(410, 134, "parts")}
+      </g>
+
+      <g class="cs-place${currentPlace() === "ground" ? " cs-here" : ""}" data-go="ground">
+        <title>קומת הקרקע</title>
+        <rect x="110" y="294" width="420" height="80" class="cs-wall"/>
+        ${castleMerlons(112, 530, 294)}
+        <path d="M300 374V344a20 20 0 0 1 40 0V374z" class="cs-gate"/>
+        ${win("basic", 420, 324)}${win("linear", 370, 324)}${win("more", 222, 324)}
+        <text x="180" y="366" class="cs-label">קומת הקרקע</text>
+      </g>
+    </svg>
+    <p class="castle-hint">${intro ? "לחצו בכל מקום כדי להמשיך" : locked ? "המגדלים נפתחים אחרי חדר 2 בקומת הקרקע" : "לחצו על מקום בטירה כדי ללכת אליו"}</p>`;
+  // What the student has now seen lit: those windows and flags won't light up again.
+  const seen = ROOMS.filter((r) => isConquered(r.id)).map((r) => r.id);
+  MEDALS.forEach((md) => medalState(md).earned && seen.push(`flag:${md.id}`));
+  store.castleSeen = seen;
+  saveStore();
+}
+
+function castleGo(place) {
+  clearTimeout(castleIntroTimer);
+  castleView.classList.remove("intro");
+  if (place && place !== "ground" && !stairsOpen()) return;
+  if (place && place !== currentPlace()) {
+    store.place = place;
+    store.lastRoom = "entrance";
+    saveStore();
+  }
+  if (location.hash === "#/" || location.hash === "") route();
+  else location.hash = "#/";
+}
+
+castleView.addEventListener("click", (e) => {
+  const place = e.target.closest("[data-go]");
+  if (place) castleGo(place.dataset.go);
+  else if (castleView.classList.contains("intro") || e.target.closest("#castleBackBtn")) castleGo(null);
+});
+
+// When the game opens: the castle for a moment, then on to the map.
+function showCastleIntro() {
+  renderCastleView(true);
+  castleView.classList.add("intro");
+  showView(castleView);
+  castleIntroTimer = setTimeout(() => castleGo(null), 2600);
+}
 
 // The way up: stone steps climbing into a dark arched stairwell, lit from
 // the corridor and fading into the dark. Locked, an iron grille closes it.
@@ -4602,6 +4723,11 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
+  } else if (location.hash === "#/castle") {
+    clearTimeout(castleIntroTimer);
+    castleView.classList.remove("intro");
+    renderCastleView();
+    showView(castleView);
   } else if (location.hash === "#/medals") {
     renderMedalView();
     showView(medalView);
@@ -4620,7 +4746,12 @@ function route() {
 }
 
 window.addEventListener("hashchange", route);
-route();
+if (CASTLE_INTRO && (!location.hash || location.hash === "#/")) showCastleIntro();
+else route();
+// During the opening look at the castle, any key goes on to the map.
+document.addEventListener("keydown", () => {
+  if (castleView.classList.contains("intro") && !castleView.hidden) castleGo(null);
+});
 
 // Test hook for the preview only: ?debug exposes the exercise on screen.
 // Test panel for the lecturer only (?test in the address): answer the current
