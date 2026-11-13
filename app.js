@@ -2689,20 +2689,48 @@ function padlockSvg(n, open) {
     </svg>`;
 }
 
-// --- the topic medal: earned by rooms 1-3, upgraded by the optional rooms ---
+// --- medals: one per topic, shown in the medals room (the button beside the map) ---
+// A medal is earned by winning its rooms; its score is their average best.
+// Upgrades (rational functions only): a gold rim and a star for optional rooms.
 
 const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
 
-function medalState() {
-  const earned = coreDone();
-  const avg = earned ? CORE_IDS.reduce((s, id) => s + roomRecord(id).best, 0) / CORE_IDS.length : null;
+const MEDALS = [
+  {
+    id: "pf",
+    title: "פונקציות רציונליות",
+    rooms: CORE_IDS,
+    need: "שלושת החדרים במסדרון",
+    gold: { room: "review", text: "תרגילים מעורבבים" },
+    star: { room: "nonmonic", text: "מכנה עם מקדם מוביל" },
+  },
+  {
+    id: "parts",
+    title: "אינטגרציה בחלקים",
+    rooms: ROOMS.filter((r) => r.place === "parts").map((r) => r.id),
+    need: "כל החדרים במגדל",
+  },
+];
+
+function medalState(medal) {
+  const earned = medal.rooms.every(isConquered);
+  const avg = earned ? medal.rooms.reduce((s, id) => s + roomRecord(id).best, 0) / medal.rooms.length : null;
   return {
+    id: medal.id,
+    title: medal.title,
     earned,
     avg: avg === null ? null : Math.round(avg * 10) / 10,
-    gold: isConquered("review"),
-    star: isConquered("nonmonic"),
+    gold: !!medal.gold && isConquered(medal.gold.room),
+    star: !!medal.star && isConquered(medal.star.room),
   };
 }
+
+const allMedalStates = () => MEDALS.map(medalState);
+const medalSig = (m) => (m.earned ? `${m.avg}|${m.gold}|${m.star}` : "");
+// Earned (or changed) since the student last looked at the medals room.
+// (Older stores kept one string, store.medalSeen, for the rational medal.)
+const medalsSeen = () => store.medalsSeen || { pf: store.medalSeen };
+const medalIsNew = (m) => m.earned && medalsSeen()[m.id] !== medalSig(m);
 
 // Two laurel branches curving up either side of the medal.
 function laurelLeaves(color) {
@@ -2724,7 +2752,7 @@ function medalSvg(m) {
   const star = '<path class="medal-star" d="M60 4l3.8 7.8 8.6 1.2-6.2 6 1.5 8.6L60 23.5l-7.7 4.1 1.5-8.6-6.2-6 8.6-1.2z"/>';
   const ribbon = `
     <path class="medal-ribbon" d="M10 94h100l-6 9 6 9H10l6-9z"/>
-    <text class="medal-ribbon-text" x="60" y="106.5" text-anchor="middle">פונקציות רציונליות</text>`;
+    <text class="medal-ribbon-text" x="60" y="106.5" text-anchor="middle">${m.title}</text>`;
   if (!m.earned) {
     return `
       <svg class="medal empty" viewBox="0 0 120 116" role="img" aria-label="המדליה עוד לא הושגה">
@@ -2748,12 +2776,13 @@ function medalSvg(m) {
     </svg>`;
 }
 
+// The old medal room on the rational floor: kept in its place, empty for now
+// (the medals moved to their own room, opened from the button by the map).
 function trophyHtml() {
-  const m = medalState();
   return `
     <div class="room-card room-medals" data-node="trophy" role="button" tabindex="0">
       <div class="room-head"><span class="room-title">חדר המדליות</span></div>
-      <div class="room-progress"><div class="medal-avg-line">${m.earned ? `ממוצע: <b>${m.avg}</b>` : ""}</div></div>
+      <div class="room-progress"><div class="medal-avg-line">החדר עוד ריק</div></div>
     </div>`;
 }
 
@@ -2775,30 +2804,45 @@ const PEDESTAL_SVG = `
     <rect x="20" y="108" width="140" height="14" rx="2" fill="url(#pedStone)" stroke="#3e362c"/>
   </svg>`;
 
-// 2. Inside: the topic's medal, its score, and what is still open.
+// The medals room: a torch-lit hall with a pedestal per medal, each with its
+// score and what is still open. A medal seen here for the first time shines.
 function renderMedalView() {
-  const m = medalState();
-  const sig = m.earned ? `${m.avg}|${m.gold}|${m.star}` : "";
-  const isNew = m.earned && store.medalSeen !== sig;
-  if (isNew) {
-    store.medalSeen = sig;
+  const states = allMedalStates();
+  const fresh = states.map(medalIsNew);
+  if (fresh.some(Boolean)) {
+    store.medalsSeen = Object.fromEntries(states.map((m) => [m.id, medalSig(m)]));
     saveStore();
   }
   const item = (done, text) =>
     `<li class="${done ? "done" : ""}"><span class="check" aria-hidden="true">${done ? "✓" : ""}</span>${text}</li>`;
+  const spot = (m, i) => {
+    const medal = MEDALS[i];
+    const n = medal.rooms.length;
+    return `
+      <div class="medal-spot${m.earned ? " lit" : ""}">
+        <div class="medal-alcove">
+          <div class="medal-beam" aria-hidden="true"></div>
+          <div class="medal-big${fresh[i] ? " medal-new" : ""}">${medalSvg(m)}</div>
+          ${PEDESTAL_SVG}
+        </div>
+        <div class="medal-score">${m.earned ? `ממוצע ${{ 2: "שני ", 3: "שלושת " }[n] || ""}החדרים: <b>${m.avg}</b>` : "המדליה עוד לא הושגה"}</div>
+        <ul class="medal-checklist">
+          ${item(m.earned, medal.need)}
+          ${medal.gold ? item(m.gold, medal.gold.text) : ""}
+          ${medal.star ? item(m.star, medal.star.text) : ""}
+        </ul>
+      </div>`;
+  };
   $("medalStage").innerHTML = `
-    <div class="medal-hall${m.earned ? " lit" : ""}">
+    <div class="medal-hall">
       ${torchHtml("l")}${torchHtml("r")}
-      <div class="medal-beam" aria-hidden="true"></div>
-      <div class="medal-big${isNew ? " medal-new" : ""}">${medalSvg(m)}</div>
-      ${PEDESTAL_SVG}
-    </div>
-    <div class="medal-score">${m.earned ? `ממוצע שלושת החדרים: <b>${m.avg}</b>` : "המדליה עוד לא הושגה"}</div>
-    <ul class="medal-checklist">
-      ${item(m.earned, "שלושת החדרים במסדרון")}
-      ${item(m.gold, "תרגילים מעורבבים")}
-      ${item(m.star, "מכנה עם מקדם מוביל")}
-    </ul>`;
+      ${states.map(spot).join("")}
+    </div>`;
+}
+
+// The medals button beside the map: glows while a medal waits unseen.
+function renderMedalsBtn() {
+  $("medalsBtn").classList.toggle("has-new", allMedalStates().some(medalIsNew));
 }
 
 // Back on the map after a first win in a core room: once the zoom-out has
@@ -2830,6 +2874,7 @@ function goToMedals() {
 }
 
 $("medalBackBtn").addEventListener("click", () => goToMap());
+$("medalsBtn").addEventListener("click", () => goToMedals());
 
 // The stairs on the ground floor, one per tower.
 const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts" };
@@ -3316,7 +3361,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
-  if (id === "trophy") return wingOpen() ? "היכנסו ↵" : "";
+  if (id === "trophy") return "";
   if (STAIRS_PLACE[id]) return stairsOpen() ? "עולים ↵" : "נעול ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
@@ -3441,8 +3486,7 @@ function activateMarker() {
     return;
   }
   if (id === "trophy") {
-    if (wingOpen()) zoomIntoRoom(id).then(goToMedals);
-    else openGateDialog();
+    if (!wingOpen()) openGateDialog(); // open, it is empty for now
     return;
   }
   if (STAIRS_PLACE[id]) {
@@ -3530,7 +3574,7 @@ towerEl.addEventListener("click", (e) => {
   }
   if (e.target.closest('[data-node="trophy"]')) {
     if (!wingOpen()) openGateDialog();
-    else walkTo("trophy").then(() => zoomIntoRoom("trophy")).then(goToMedals);
+    else walkTo("trophy"); // empty for now: the pawn just walks there
     return;
   }
   if (e.target.closest('[data-node="entrance"]')) {
@@ -4012,7 +4056,7 @@ checkBtn.addEventListener("click", () => {
     const score = rec.run.score;
     const prevBest = rec.best;
     // The floor as it was, so the victory screen can say what this win changed.
-    const before = { firstWin: rec.wins === 0, medal: medalState(), wing: wingOpen(), stairs: stairsOpen() };
+    const before = { firstWin: rec.wins === 0, medals: allMedalStates(), wing: wingOpen(), stairs: stairsOpen() };
     rec.best = prevBest === null ? score : Math.max(prevBest, score);
     rec.wins += 1;
     rec.run = null;
@@ -4204,32 +4248,34 @@ const GATE_ICON = `
     <path d="M12 29V18a3 3 0 0 1 6 0v11z" fill="#f2c94c" opacity="0.8"/>
   </svg>`;
 
-// What this win changed on the floor: a lock, the gate, the medal.
+// What this win changed: a lock, the gate, a medal.
 function victoryNews(room, before) {
   const news = [];
   if (isLinearPlace(room.place)) {
-    if (!before.firstWin) return news;
-    const opened = ROOMS.find((r) => r.place === room.place && (r.requires || []).includes(room.id));
-    if (opened && !(store.openedRooms || {})[opened.id]) {
-      news.push({ icon: padlockSvg(room.num, true), text: opened.num ? `חדר ${opened.num} נפתח` : `"${opened.title}" נפתח` });
+    if (before.firstWin) {
+      const opened = ROOMS.find((r) => r.place === room.place && (r.requires || []).includes(room.id));
+      if (opened && !(store.openedRooms || {})[opened.id]) {
+        news.push({ icon: padlockSvg(room.num, true), text: opened.num ? `חדר ${opened.num} נפתח` : `"${opened.title}" נפתח` });
+      }
+      if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות למגדלים נפתחו" });
     }
-    if (room.id === "linear" && !before.stairs) news.push({ icon: GATE_ICON, text: "המדרגות למגדלים נפתחו" });
-    return news;
-  }
-  if (before.firstWin && CORE_IDS.includes(room.id)) {
-    news.push({ icon: padlockSvg(room.num, true), text: `מנעול ${room.num} נפתח` });
-  }
-  if (!before.wing && wingOpen()) news.push({ icon: GATE_ICON, text: "השער לאזור העליון נפתח" });
-  const m = medalState();
-  const b = before.medal;
-  if (m.earned && !b.earned) {
-    news.push({ icon: medalSvg(m), text: `קיבלתם מדליה · ממוצע <b>${m.avg}</b>` });
-  } else if (m.earned) {
-    if ((m.gold && !b.gold) || (m.star && !b.star)) news.push({ icon: medalSvg(m), text: "המדליה השתדרגה" });
-    else if (m.avg !== b.avg) {
-      news.push({ icon: medalSvg(m), text: `ממוצע המדליה עלה: <bdi dir="ltr">${b.avg} → ${m.avg}</bdi>` });
+  } else {
+    if (before.firstWin && CORE_IDS.includes(room.id)) {
+      news.push({ icon: padlockSvg(room.num, true), text: `מנעול ${room.num} נפתח` });
     }
+    if (!before.wing && wingOpen()) news.push({ icon: GATE_ICON, text: "השער לאזור העליון נפתח" });
   }
+  allMedalStates().forEach((m, i) => {
+    const b = before.medals[i];
+    if (m.earned && !b.earned) {
+      news.push({ icon: medalSvg(m), text: `קיבלתם מדליה · ממוצע <b>${m.avg}</b>` });
+    } else if (m.earned) {
+      if ((m.gold && !b.gold) || (m.star && !b.star)) news.push({ icon: medalSvg(m), text: "המדליה השתדרגה" });
+      else if (m.avg !== b.avg) {
+        news.push({ icon: medalSvg(m), text: `ממוצע המדליה עלה: <bdi dir="ltr">${b.avg} → ${m.avg}</bdi>` });
+      }
+    }
+  });
   return news;
 }
 
@@ -4259,9 +4305,10 @@ function showConquest(room, { score, prevBest, wins, before }) {
     else if (!isConquered("more")) next = `אפשר גם "${ROOM_BY_ID.more.title}" (הרחבה), או לעלות לאחד המגדלים`;
   } else if (room.place === "parts") {
     if (partsLeft.length) next = `החדר הבא: "${ROOM_BY_ID[partsLeft[0]].title}"`;
+    else if (!before.medals.find((m) => m.id === "parts").earned) next = "המדליה מחכה בחדר המדליות";
   }
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
-  else if (!before.medal.earned) next = "המדליה מחכה בחדר המדליות";
+  else if (!before.medals.find((m) => m.id === "pf").earned) next = "המדליה מחכה בחדר המדליות";
   else if (room.id === "review" && !isConquered("nonmonic")) next = "אפשר גם \"מכנה עם מקדם מוביל\" (טכניקה גבוהה)";
 
   const newsHtml = news.length
@@ -4298,14 +4345,13 @@ function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
   if (m && ROOM_BY_ID[m[1]]) {
     enterRoom(m[1]);
-  } else if (location.hash === "#/medals" && currentPlace() === "pf" && wingOpen()) {
-    store.lastRoom = "trophy";
-    saveStore();
+  } else if (location.hash === "#/medals") {
     renderMedalView();
     showView(medalView);
   } else {
-    const fromRoom = lastView === roomView || lastView === conquestView || lastView === medalView;
+    const fromRoom = lastView === roomView || lastView === conquestView;
     renderMap();
+    renderMedalsBtn();
     showView(mapView);
     if (fromRoom) zoomOutOfRoom(markerNode());
     else if (mapZoom) {

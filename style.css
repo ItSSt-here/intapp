@@ -1648,11 +1648,40 @@ body { overflow-x: clip; }
   #medalView { max-width: 880px; margin: 0 auto; }
 }
 
+/* The medals button: top left of the map, beside the title. */
+.map-header { position: relative; }
+.medals-btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px 6px 10px;
+  border: 1.5px solid #c9a227;
+  border-radius: 8px;
+  background: #fbf4dc;
+  color: #7a5a00;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.medals-btn:hover { background: #f6e9bd; }
+.medals-btn svg { width: 22px; height: 26px; }
+.medals-btn.has-new { animation: medals-btn-glow 2.2s ease-in-out infinite; }
+@keyframes medals-btn-glow { 50% { box-shadow: 0 0 0 4px rgba(226, 179, 58, 0.35), 0 0 14px rgba(226, 179, 58, 0.55); } }
+@media (prefers-reduced-motion: reduce) { .medals-btn.has-new { animation: none; box-shadow: 0 0 0 3px rgba(226, 179, 58, 0.45); } }
+
+/* The hall: one dark room, a lit alcove per medal side by side. */
 .medal-hall {
   position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
   width: 100%;
-  max-width: 560px;
-  height: 420px;
+  padding: 0 70px 22px;
+  box-sizing: border-box;
   margin-bottom: 6px;
   overflow: hidden;
   border-radius: 10px 10px 4px 4px;
@@ -1666,6 +1695,13 @@ body { overflow-x: clip; }
 .medal-hall .torch { top: 70px; }
 .medal-hall .torch-l { left: 22px; }
 .medal-hall .torch-r { right: 22px; }
+
+.medal-spot { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 300px; }
+.medal-alcove { position: relative; width: 300px; height: 400px; }
+.medal-spot .medal-score { color: #e8dcc0; }
+.medal-spot .medal-score b { color: #fff3cf; }
+.medal-spot .medal-checklist li { color: #a99d86; }
+.medal-spot .medal-checklist li.done { color: #f1e6cc; }
 
 /* The beam: a soft cone of light falling on the pedestal. Dimmer while the
    medal isn't earned yet. */
@@ -1681,7 +1717,7 @@ body { overflow-x: clip; }
   opacity: 0.35;
   animation: beam-breathe 5s ease-in-out infinite;
 }
-.medal-hall.lit .medal-beam { opacity: 1; }
+.medal-spot.lit .medal-beam { opacity: 1; }
 @keyframes beam-breathe { 50% { filter: brightness(0.85); } }
 
 .medal-hall .medal-big {
@@ -1692,7 +1728,7 @@ body { overflow-x: clip; }
   animation: medal-float 4s ease-in-out infinite;
 }
 .medal-hall .medal-big .medal { width: 210px; height: 203px; }
-.medal-hall.lit .medal-big .medal { filter: drop-shadow(0 0 18px rgba(255, 214, 120, 0.45)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
+.medal-spot.lit .medal-big .medal { filter: drop-shadow(0 0 18px rgba(255, 214, 120, 0.45)) drop-shadow(0 6px 8px rgba(0, 0, 0, 0.5)); }
 @keyframes medal-float { 50% { transform: translateY(-5px); } }
 
 /* Unearned: the dashed outline and "?" read on the dark wall. */
@@ -1709,10 +1745,10 @@ body { overflow-x: clip; }
   overflow: visible;
 }
 .ped-light { fill: rgba(255, 232, 170, 0.12); }
-.medal-hall.lit .ped-light { fill: rgba(255, 232, 170, 0.55); filter: blur(3px); }
+.medal-spot.lit .ped-light { fill: rgba(255, 232, 170, 0.55); filter: blur(3px); }
 
 @media (max-width: 480px) {
-  .medal-hall { height: 360px; }
+  .medal-hall { padding: 0 0 22px; }
   .medal-hall .torch { display: none; }
 }
 
