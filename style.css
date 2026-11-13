@@ -568,6 +568,22 @@ button:disabled {
 
 /* The suggested next room: a torch glow that breathes. */
 .room-card.recommended { animation: torch 2.6s ease-in-out infinite; }
+/* Its small tag on the top wall: "הבא", or "אפשר לשפר" on a won room. */
+.next-tag {
+  position: absolute;
+  top: -12px;
+  right: 14px;
+  z-index: 2;
+  padding: 1px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: white;
+  background: var(--accent);
+  border: 1.5px solid #064a43;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(20, 40, 35, 0.3);
+  pointer-events: none;
+}
 
 @keyframes torch {
   0%, 100% { box-shadow: var(--frame), 0 0 8px 4px rgba(93, 202, 165, 0.25); }
@@ -1332,6 +1348,10 @@ button#nextBtn.ready:hover { background: var(--good-hover); }
 }
 
 .victory-end { animation: fade-up 0.4s ease both; }
+.victory-btns { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.conquest-improve { margin-bottom: 10px; color: #e8dcc0; font-size: 0.92rem; }
+.retry-btn { background: transparent; color: #f1e6cc; border: 1.5px solid #b9ad95; }
+.retry-btn:hover { background: rgba(255, 255, 255, 0.08); }
 
 .seal-wrap { display: flex; justify-content: center; margin-bottom: 12px; }
 

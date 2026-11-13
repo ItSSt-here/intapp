@@ -2538,6 +2538,18 @@ function recommendedRoomId() {
   return null;
 }
 
+// Every room on this floor won: the won room with the lowest best score below
+// 10 (the prep room aside), worth coming back to.
+function improveRoomId() {
+  let pick = null;
+  for (const r of ROOMS) {
+    if (r.place !== currentPlace() || r.kind === "prep" || !isConquered(r.id)) continue;
+    const best = roomRecord(r.id).best;
+    if (best < 10 && (!pick || best < roomRecord(pick).best)) pick = r.id;
+  }
+  return pick;
+}
+
 const scoreTier = (s) => (s >= 9 ? "high" : s >= 7 ? "mid" : "low");
 
 // ---------------------------------------------------------------------------
@@ -2805,7 +2817,11 @@ function roomCardHtml(room) {
   const onLineFloor = isLinearPlace(room.place);
   const locked = !onLineFloor && isLocked(room); // a line has grates, not locked rooms
   const conquered = rec.wins > 0;
-  const recommended = recommendedRoomId() === room.id;
+  // The room to do next - or, once every room here is won, the one with the
+  // lowest best score, to come back to.
+  const nextId = recommendedRoomId();
+  const recommended = nextId === room.id || (!nextId && improveRoomId() === room.id);
+  const tag = !recommended || locked ? "" : conquered ? "אפשר לשפר" : "הבא";
   const classes = ["room-card", `room-${room.kind}`];
   if (locked) classes.push("locked");
   if (conquered) classes.push("conquered");
@@ -2834,6 +2850,7 @@ function roomCardHtml(room) {
   return `
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
+      ${tag ? `<span class="next-tag">${tag}</span>` : ""}
       ${onLineFloor ? exitGrateHtml(room.id) : ""}
       ${roomTorchesHtml(conquered, justLit === room.id)}
       <div class="room-head">
@@ -4723,6 +4740,12 @@ function showConquest(room, { score, prevBest, wins, before }) {
   if (prevBest === null) bestLine = `ציון ראשון בחדר`;
   else if (score > prevBest) bestLine = `שיא חדש! <span class="dim">(קודם: ${prevBest})</span>`;
   else bestLine = `השיא שלכם: <b>${prevBest}</b>`;
+  // Below 10: another go can raise the best score (and a medal's average).
+  const best = Math.max(score, prevBest ?? 0);
+  const inMedal = MEDALS.some((md) => md.rooms.includes(room.id));
+  const improveLine = best < 10
+    ? `<div class="conquest-improve">אפשר לנסות שוב ולשפר את השיא${inMedal ? " ואת ממוצע המדליה" : ""}</div>`
+    : "";
 
   sfx("win", score === 10);
   const news = victoryNews(room, before);
@@ -4773,10 +4796,15 @@ function showConquest(room, { score, prevBest, wins, before }) {
     <div class="conquest-best">${bestLine} · <span class="dim">ניצחונות בחדר: ${wins}</span></div>
     ${newsHtml}
     <div class="victory-end" style="animation-delay:${1.3 + news.length * 0.35}s">
-      <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
+      ${improveLine}
+      <div class="victory-btns">
+        <button type="button" id="toTowerBtn" class="primary-btn">חזרה למפה</button>
+        ${best < 10 ? '<button type="button" id="retryBtn" class="retry-btn">לנסות שוב</button>' : ""}
+      </div>
       ${next ? `<div class="conquest-next">${next}</div>` : ""}
     </div>`;
   $("toTowerBtn").addEventListener("click", goToMap);
+  $("retryBtn")?.addEventListener("click", () => (location.hash = `#/room/${room.id}`));
   // The run is over; drop the room from history so Back/reload lands on the map.
   history.replaceState(null, "", "#/");
   showView(conquestView);
