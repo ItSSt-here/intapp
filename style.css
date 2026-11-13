@@ -1816,6 +1816,53 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .map-torch .torch { position: relative; }
 }
 
+/* ---------------------------------------------------------------------- */
+/* The ground floor wakes up: cold torches and dim rooms until won         */
+/* ---------------------------------------------------------------------- */
+
+/* A room not won yet is dim; won, it is lit gold (.conquered). */
+.floor-alive .room-card:not(.conquered):not(.in-progress) {
+  box-shadow: var(--frame), inset 0 0 0 999px rgba(28, 24, 20, 0.2), inset 0 0 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Two small torches on the wall above each room. */
+.room-torches { display: none; }
+@media (min-width: 760px) {
+  .room-torches { display: block; position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+  .room-torches .torch { top: -92px; transform: scale(0.4); transform-origin: 50% 100%; }
+  .room-torches .torch-l { left: 4px; right: auto; }
+  .room-torches .torch-r { right: 4px; left: auto; }
+}
+
+/* Cold: the iron bracket only, and the faintest curl of smoke. */
+.floor-alive .room-torches:not(.lit) .torch-fire,
+.floor-alive .map-torch:not(.lit) .torch-fire { visibility: hidden; }
+.floor-alive .map-torch:not(.lit)::before { opacity: 0; }
+.floor-alive .room-torches:not(.lit) .torch-mount,
+.floor-alive .map-torch:not(.lit) .torch-mount { filter: brightness(0.75) saturate(0.6); }
+
+/* Right after the win: the flames catch, one side a beat after the other. */
+.room-torches.lighting .torch-fire,
+.map-torch.lighting .torch-fire { animation: torch-catch 0.8s cubic-bezier(0.2, 0.8, 0.3, 1.2) 1s both; transform-origin: 50% 90%; }
+.room-torches.lighting .torch-r .torch-fire { animation-delay: 1.25s; }
+.map-torch.lighting .torch-fire { animation-delay: 1.6s; }
+.map-torch.lighting::before { animation: torch-pool 1s ease 1.6s both; }
+@keyframes torch-catch {
+  0% { transform: scale(0.1); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes torch-pool { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .room-torches.lighting .torch-fire, .map-torch.lighting .torch-fire, .map-torch.lighting::before { animation: none; }
+}
+
+/* Every room on the floor won: its name in a gold frame. */
+.floor-label.floor-done {
+  border-color: #c9971c;
+  box-shadow: 0 0 0 2px #f2c94c, 0 0 14px rgba(240, 180, 40, 0.5);
+}
+
 /* A smaller pair either side of the entrance door. */
 .entrance { position: relative; }
 .entrance .torch { top: -8px; transform: scale(0.62); transform-origin: top center; }

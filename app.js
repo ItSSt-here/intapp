@@ -2654,6 +2654,11 @@ const SFX = {
     if (perfect) notes.push(659.25);
     notes.forEach((f, i) => tone({ f, t: i * 0.1, dur: 1.4, type: "triangle", vol: 0.06, attack: 0.02 }));
   },
+  // Torches catching fire: a soft rising whoosh.
+  ignite() {
+    noise({ dur: 0.55, vol: 0.07, freq: 700, q: 0.8, attack: 0.18 });
+    noise({ t: 0.1, dur: 0.5, vol: 0.05, freq: 1500, q: 0.8, attack: 0.2 });
+  },
   // An answer: right - two small high notes up; wrong - one soft low note down.
   correct() {
     tone({ f: 659.25, dur: 0.14, vol: 0.05 });
@@ -2692,9 +2697,12 @@ function renderSoundBtn() {
   btn.setAttribute("aria-label", btn.title);
 }
 
-$("soundBtn").addEventListener("click", () => {
+$("soundBtn").addEventListener("click", (e) => {
   soundOn = !soundOn;
   renderSoundBtn();
+  // Let go of the focus, so Enter goes back to the map (into the room the
+  // marker stands in) instead of toggling the sound again.
+  e.currentTarget.blur();
   if (soundOn) sfx("padlock"); // a small click: sound is on
 });
 renderSoundBtn();
@@ -2809,6 +2817,7 @@ function roomCardHtml(room) {
     <div class="${classes.join(" ")}" data-room="${room.id}" role="button" tabindex="0">
       ${conquered ? PENNANT_SVG : ""}
       ${onLineFloor ? exitGrateHtml(room.id) : ""}
+      ${room.place === "ground" ? roomTorchesHtml(conquered, justConquered === room.id) : ""}
       <div class="room-head">
         ${room.num ? `<span class="room-num" title="הסדר המומלץ">${room.num}</span>` : ""}<span class="room-title">${room.title}</span>
         <span class="info-wrap">
@@ -2836,8 +2845,16 @@ const DOOR_SVG = `
 
 // A torch on the bare rock of an empty map cell, with a pool of warm light
 // around it (laptops and tablets only - the phone layout has no empty cells).
-const mapTorch = (col, row) =>
-  `<div class="cell map-torch" style="grid-column:${col};grid-row:${row}" aria-hidden="true">${torchHtml(col < 3 ? "l" : "r")}</div>`;
+const mapTorch = (col, row, cls = "") =>
+  `<div class="cell map-torch${cls}" style="grid-column:${col};grid-row:${row}" aria-hidden="true">${torchHtml(col < 3 ? "l" : "r")}</div>`;
+
+// The ground floor wakes up as it is won: each room has two small torches on
+// the wall above it, cold until the room is won; they catch fire once, right
+// after the win (`lighting`). The floor's big torch lights when rooms 1-2 are
+// won, and the floor's name gets a gold frame when every room is.
+const roomTorchesHtml = (lit, lighting) =>
+  `<span class="room-torches${lit ? " lit" : ""}${lighting ? " lighting" : ""}" aria-hidden="true">${torchHtml("l")}${torchHtml("r")}</span>`;
+const GROUND_IDS = () => ROOMS.filter((r) => r.place === "ground").map((r) => r.id);
 
 // A doorway through the wall between two areas of the map.
 const doorway = (col, row) => `<div class="doorway" style="grid-column:${col};grid-row:${row}" aria-hidden="true"></div>`;
@@ -3302,12 +3319,19 @@ function renderBasicFloor() {
       ${stairsHtml("stairsPf", "שברים חלקיים", "מגדל השברים החלקיים")}
       ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
     </div>`;
+  // The floor waking up (see roomTorchesHtml): a room just won lights its
+  // torches; if that finished rooms 1-2, the big torch catches too.
+  const fresh = justConquered && ROOM_BY_ID[justConquered] && ROOM_BY_ID[justConquered].place === "ground";
+  const coreLit = FLOOR1_IDS.every(isConquered);
+  const torchCls = coreLit ? (fresh && FLOOR1_IDS.includes(justConquered) ? " lit lighting" : " lit") : "";
+  const floorDone = GROUND_IDS().every(isConquered);
+  if (fresh && !reducedMotion()) setTimeout(() => sfx("ignite"), 1000);
   towerEl.innerHTML = `
-    <div class="floor-map">
-      <div class="floor-label">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
+    <div class="floor-map floor-alive">
+      <div class="floor-label${floorDone ? " floor-done" : ""}">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
       ${mapTipHtml()}
       <div class="floor-grid floor-basic">
-        ${mapTorch(3, 1)}
+        ${mapTorch(3, 1, torchCls)}
         <div class="cell ext-cell" style="grid-column:6;grid-row:1">${roomCardHtml(ROOM_BY_ID.more)}</div>
         <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
