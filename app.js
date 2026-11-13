@@ -3343,15 +3343,12 @@ function nodePoint(id) {
       const s = nodeEl(id).querySelector(".stairs-steps").getBoundingClientRect();
       return { x: s.left + s.width / 2 - grid.left, y: s.bottom + 6 - grid.top };
     }
-    // A room's spot is inside it, in the middle of the room, level with the
-    // halls (the side room: up in its floor); so the marker is already in the
-    // room when a barred exit stops it.
-    const lineHall = towerEl.querySelector(`.hall[data-spot="${linePath()[1]}"]`);
+    // A room's spot is inside it, on the strip of floor at its foot (under
+    // its progress); so the marker is already in the room when a barred exit
+    // stops it.
     if (ROOM_BY_ID[id] && hallsShown()) {
       const r = nodeEl(id).getBoundingClientRect();
-      const h = lineHall.getBoundingClientRect();
-      const onRow = r.top < h.top + h.height / 2 && r.bottom > h.top + h.height / 2;
-      return { x: r.left + r.width / 2 - grid.left, y: (onRow ? h.top + h.height / 2 : r.top + r.height * 0.62) - grid.top };
+      return { x: r.left + r.width / 2 - grid.left, y: r.bottom - 22 - grid.top };
     }
     // The entrance's spot is its threshold.
     const hall = towerEl.querySelector(`.hall[data-spot="${id === "entrance" ? linePath()[1] : id}"]`);

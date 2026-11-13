@@ -1939,6 +1939,13 @@ body { overflow-x: clip; }
   }
   /* The marker walks through a room, under its card. */
   .floor-basic > .cell { z-index: 6; }
+  /* A strip of bare floor at the foot of each room on a line: the marker
+     stands there, under the room's progress, not on it. */
+  .floor-basic .room-card { padding-bottom: 38px; }
+  /* There, its label sits beside the pin, inside the strip. */
+  .floor-basic .marker-hint { top: -9px; left: auto; right: 16px; transform: none; }
+  /* The landing is floor, not a room: the marker walks over it, in view. */
+  .floor-basic > .stairs-landing { z-index: 4; }
   .floor-basic .map-marker:not(.walking) { z-index: 7; } /* standing: its label over the cards */
   .floor-basic > .cell:has(.info-wrap.open, .info-wrap:hover) { z-index: 8; }
   .floor-basic .entrance { align-self: center; padding-top: 18px; }
