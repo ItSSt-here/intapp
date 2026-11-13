@@ -1671,6 +1671,8 @@ body { overflow-x: clip; }
 .sound-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .sound-btn svg path:first-child { fill: currentColor; }
 .sound-btn[aria-pressed="true"] { color: #0a635a; border-color: #0a635a; }
+/* The lecturer's test bar (?test) takes the same corner: the button sits above it. */
+body:has(.test-panel) .sound-btn { bottom: 62px; }
 
 /* The medals button: top left of the map, beside the title. */
 .map-header { position: relative; }
