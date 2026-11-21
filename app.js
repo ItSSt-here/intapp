@@ -458,10 +458,8 @@ const GENERATORS = {
   // cubic denominators (floor 2): three linear factors / repeated / irreducible
   cubLin3: () => cubSmall(() => generateCubicLin3("factored")),
   cubLin3Quad: () => cubSmall(() => generateCubicLin3("lq")),
-  cubLin3Boss: () => cubSmall(() => generateCubicLin3(chance(0.5) ? "lq" : "factored", cubBossQ())),
   cubRep: () => cubSmall(() => generateCubicRep("factored")),
   cubRepQuad: () => cubSmall(() => generateCubicRep("lq")),
-  cubRepBoss: () => cubSmall(() => generateCubicRep(chance(0.5) ? "lq" : "factored", cubBossQ())),
   cubIrr: () => cubSmall(() => generateCubicIrr([], 0.3)), // p = 0 at times: x^2 + k^2, no square to complete
   cubIrrBoss: () => cubSmall(() => generateCubicIrr(cubBossQ())),
 };
@@ -1190,17 +1188,22 @@ function cubNearMissVariants(p) {
 }
 
 // Review: four exercises, each family at least once, the fourth at random;
-// half of them with a division, the denominator shown either way.
+// exactly one of them with a division ("irr/div"), the denominator shown
+// either way. (Plans saved before the division mark: no division at all.)
 function drawCubicReviewPlan(length) {
   const fams = ["lin3", "rep", "irr"];
   const plan = [...fams];
   while (plan.length < length) plan.push(pick(fams));
-  return shuffled(plan);
+  const out = shuffled(plan);
+  const i = randInt(0, out.length - 1);
+  out[i] += "/div";
+  return out;
 }
 
-function generateCubicReviewExercise(fam) {
+function generateCubicReviewExercise(entry) {
+  const [fam, div] = entry.split("/");
   return cubSmall(() => {
-    const Q = chance(0.5) ? cubBossQ() : [];
+    const Q = div ? cubBossQ() : [];
     const show = chance(0.5) ? "lq" : "factored";
     if (fam === "rep") return generateCubicRep(show, Q);
     if (fam === "irr") return generateCubicIrr(Q);
@@ -2735,8 +2738,7 @@ const ROOMS = [
     tag: "A · B · C",
     nodes: [
       { gen: "cubLin3" },
-      { gen: "cubLin3Quad" },
-      { gen: "cubLin3Boss", boss: true },
+      { gen: "cubLin3Quad", boss: true }, // the quadratic to factor first
     ],
   },
   {
@@ -2750,8 +2752,7 @@ const ROOMS = [
     requires: ["cub3"],
     nodes: [
       { gen: "cubRep" },
-      { gen: "cubRepQuad" },
-      { gen: "cubRepBoss", boss: true },
+      { gen: "cubRepQuad", boss: true }, // the perfect square to recognize
     ],
   },
   {
