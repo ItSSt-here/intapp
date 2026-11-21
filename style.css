@@ -2220,6 +2220,23 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   }
 }
 
+/* The rational tower's second floor: a line four rooms long. */
+@media (min-width: 760px) {
+  .floor-grid.floor-basic.floor-parts.floor-cubic {
+    grid-template-columns: 104px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px minmax(0, 1fr);
+  }
+}
+@media (min-width: 760px) and (max-width: 1199px) {
+  .floor-grid.floor-basic.floor-parts.floor-cubic {
+    grid-template-columns: 84px 36px minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr) 36px minmax(0, 1fr);
+  }
+}
+
+/* The old medal room, now the stairs up to the rational tower's second floor. */
+.room-stairs-up { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.room-stairs-up .stairs-steps { width: 52px; flex: none; order: 0; }
+.room-stairs-up .room-head { flex: 1; flex-wrap: wrap; gap: 6px; }
+
 /* ---------------------------------------------------------------------- */
 /* The floor panel beside the map: the tower in cross-section              */
 /* ---------------------------------------------------------------------- */
@@ -2375,6 +2392,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .cs-wall { fill: url(#csBlocks); stroke: #2b2620; stroke-width: 2; }
 .cs-shade { fill: url(#csShade); pointer-events: none; }
 .cs-stone { fill: #4a4238; stroke: #2b2620; stroke-width: 1.5; }
+.cs-course { fill: none; stroke: #2b2620; stroke-width: 2; } /* the line between two storeys */
 .cs-roof { fill: #3a3129; stroke: #241f1a; stroke-width: 2; }
 .cs-tiles { fill: none; stroke: #2a231d; stroke-width: 1.2; }
 .cs-finial { fill: #8d806a; }

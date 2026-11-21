@@ -1125,7 +1125,8 @@ function cubSolutionLatex(p) {
   if (q) rows.push(`&= ${ratLatex(shown)}`);
   if (p.fam === "lin3" && p.show === "lq") rows.push(`&= ${ratLatex(full)}`); // factor the quadratic
   const den = p.fam === "lin3" ? full : shown;
-  rows.push(`&\\qquad \\left[\\,\\frac{${polyLatex(R)}}{${den}}=${cubTemplateLatex(p)}\\,\\right]`);
+  const template = `&\\left[\\,\\frac{${polyLatex(R)}}{${den}}=${cubTemplateLatex(p)}\\,\\right]`; // wide: no indent
+  rows.push(template);
 
   if (p.fam === "lin3") {
     rows.push(`&= ${wrap(q + splitLatex(cubLin3Sorted(p), !q))}`);
@@ -1145,6 +1146,8 @@ function cubSolutionLatex(p) {
       rows.push(...irrSubstRows(cubIrrPart(p), pre));
     }
   }
+  // The template is wide: never on the problem's own line.
+  if (rows[0] === template) rows.unshift("&");
   return `\\begin{aligned}${cubProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
 }
 
@@ -2721,6 +2724,61 @@ const ROOMS = [
     requires: ["partsLn"],
     nodes: [{ gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }],
   },
+  // The rational tower's second floor: cubic denominators, monic, a line.
+  {
+    id: "cub3",
+    place: "pf2",
+    kind: "core",
+    num: 1,
+    title: "שלושה גורמים שונים",
+    en: "Three distinct factors",
+    tag: "A · B · C",
+    nodes: [
+      { gen: "cubLin3" },
+      { gen: "cubLin3Quad" },
+      { gen: "cubLin3Boss", boss: true },
+    ],
+  },
+  {
+    id: "cubDouble",
+    place: "pf2",
+    kind: "core",
+    num: 2,
+    title: "גורם כפול",
+    en: "A repeated factor",
+    tag: "Bx+C ואז הצבה",
+    requires: ["cub3"],
+    nodes: [
+      { gen: "cubRep" },
+      { gen: "cubRepQuad" },
+      { gen: "cubRepBoss", boss: true },
+    ],
+  },
+  {
+    id: "cubQuad",
+    place: "pf2",
+    kind: "core",
+    num: 3,
+    title: "גורם ריבועי שלא מתפרק",
+    en: "An irreducible quadratic factor",
+    tag: "Bx+C והשלמה לריבוע",
+    requires: ["cubDouble"],
+    nodes: [
+      { gen: "cubIrr" },
+      { gen: "cubIrrBoss", boss: true },
+    ],
+  },
+  {
+    id: "cubReview",
+    place: "pf2",
+    kind: "review",
+    title: "תרגילים מעורבבים",
+    en: "Mixed review",
+    tag: "חזרה · כל הסוגים, בלי רמז",
+    label: "חזרה",
+    requires: ["cubQuad"],
+    nodes: [{ gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }],
+  },
 ];
 
 const ROOM_BY_ID = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
@@ -2747,7 +2805,7 @@ let store = loadStore();
 // Where the map is: the ground floor or one of the towers above it.
 // Saves from before the towers kept store.floor (2: partial fractions) and
 // a single "stairs".
-const PLACES = ["ground", "pf", "parts"];
+const PLACES = ["ground", "pf", "parts", "pf2"];
 if (!PLACES.includes(store.place)) store.place = store.floor === 2 ? "pf" : "ground";
 delete store.floor;
 if (store.lastRoom === "stairs") store.lastRoom = "stairsPf";
@@ -2771,8 +2829,9 @@ const isConquered = (id) => roomRecord(id).wins > 0;
 // student has gone up into a tower (or is in one of its rooms).
 const currentPlace = () => (PLACES.includes(store.place) ? store.place : "ground");
 
-// The ground floor and the parts tower are lines of rooms, each opening
-// after the one before it; the partial-fractions tower has its own gate.
+// The ground floor, the parts tower and the rational tower's second floor are
+// lines of rooms, each opening after the one before it; the rational tower's
+// first floor has its own gate.
 const isLinearPlace = (place) => place !== "pf";
 
 // The rooms this one builds on that aren't conquered yet.
@@ -2787,6 +2846,7 @@ const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(
 const CORE_IDS = ["repeated", "pf1", "irreducible"];
 const FLOOR1_IDS = ["basic", "linear"];
 const PARTS_IDS = ["partsPoly", "partsLn"];
+const CUB_IDS = ["cub3", "cubDouble", "cubQuad"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
@@ -2819,6 +2879,7 @@ const stairsOpen = () => exitOpen("linear");
 function recommendedRoomId() {
   if (currentPlace() === "ground") return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
   if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || (isConquered("partsReview") ? null : "partsReview");
+  if (currentPlace() === "pf2") return CUB_IDS.find((id) => !isConquered(id)) || (isConquered("cubReview") ? null : "cubReview");
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -3226,7 +3287,8 @@ function padlockSvg(n, open) {
 
 // --- medals: one per topic, shown in the medals room (the button beside the map) ---
 // A medal is earned by winning its rooms; its score is their average best.
-// Upgrades (rational functions only): a gold rim and a star for optional rooms.
+// Upgrades: a gold rim for the review room (and, rational functions only, a
+// star for the optional room).
 
 const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
 
@@ -3245,6 +3307,13 @@ const MEDALS = [
     rooms: PARTS_IDS,
     need: "שני החדרים במגדל",
     gold: { room: "partsReview", text: "תרגילים מעורבבים" },
+  },
+  {
+    id: "pf2",
+    title: "מכנה ממעלה 3",
+    rooms: CUB_IDS,
+    need: "שלושת החדרים בקומה",
+    gold: { room: "cubReview", text: "תרגילים מעורבבים" },
   },
 ];
 
@@ -3343,12 +3412,14 @@ function medalSvg(m) {
     </svg>`;
 }
 
-// The old medal room on the rational floor: kept in its place, empty for now
-// (the medals moved to their own room, opened from the button by the map).
+// The old medal room on the rational floor (node "trophy"): the stairs up to
+// the tower's second floor, cubic denominators. Part of the upper area, so it
+// opens with the gate.
 function trophyHtml() {
   return `
-    <div class="room-card room-medals" data-node="trophy" role="button" tabindex="0">
-      <div class="room-head"><span class="room-title">חדר ריק</span></div>
+    <div class="room-card room-medals room-stairs-up" data-node="trophy" role="button" tabindex="0" aria-label="מדרגות לקומה 2: מכנה ממעלה 3">
+      ${stairsSvg(false)}
+      <div class="room-head"><span class="room-title">קומה 2 · מכנה ממעלה 3</span>${medalMiniHtml("pf2")}</div>
     </div>`;
 }
 
@@ -3461,7 +3532,10 @@ $("medalsBtn").addEventListener("click", () => goToMedals());
 
 // The stairs on the ground floor, one per tower.
 const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts" };
-const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts" };
+const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts", trophy: "pf2" };
+// Where a place's way down leads, and where the marker arrives there.
+const PLACE_BELOW = { pf: "ground", parts: "ground", pf2: "pf" };
+const ARRIVE_BELOW = { pf: "stairsPf", parts: "stairsParts", pf2: "trophy" };
 
 // Up or down the stairs: the map of the other place comes in, with the
 // marker standing where the stairs arrive (a tower's way down, or that
@@ -3469,7 +3543,8 @@ const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts" };
 function goToPlace(place, at) {
   const from = currentPlace();
   store.place = place;
-  store.lastRoom = at || (place === "ground" ? STAIRS_TO[from] || "entrance" : "entrance");
+  const down = PLACE_BELOW[from] === place;
+  store.lastRoom = at || (down ? ARRIVE_BELOW[from] : "entrance");
   saveStore();
   if (mapZoom) {
     mapZoom.cancel();
@@ -3479,7 +3554,7 @@ function goToPlace(place, at) {
   window.scrollTo(0, 0);
   if (!reducedMotion()) {
     mapView.animate(
-      [{ transform: `translateY(${place === "ground" ? -24 : 24}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
+      [{ transform: `translateY(${down || place === "ground" ? -24 : 24}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: 380, easing: "cubic-bezier(0.2, 0.7, 0.3, 1)" }
     );
   }
@@ -3491,13 +3566,14 @@ const goUpstairs = (stairs) => {
 };
 const goDownstairs = () => {
   sfx("stairs", false);
-  goToPlace("ground");
+  goToPlace(PLACE_BELOW[currentPlace()] || "ground");
 };
 
 function renderMap() {
   const place = currentPlace();
   if (place === "ground") renderBasicFloor();
   else if (place === "parts") renderPartsFloor();
+  else if (place === "pf2") renderCubicFloor();
   else renderRationalFloor();
   renderTowerNav();
 }
@@ -3521,6 +3597,16 @@ function towerNavItems() {
       locked: !stairsOpen(),
       done: coreDone(),
       here: place === "pf",
+    },
+    {
+      go: "pf2",
+      mark: "x³",
+      name: "מכנה ממעלה 3",
+      sub: "פונקציות רציונליות · קומה 2",
+      full: "מגדל הפונקציות הרציונליות · קומה 2",
+      locked: !stairsOpen() || !wingOpen(),
+      done: CUB_IDS.every(isConquered),
+      here: place === "pf2",
     },
     {
       go: "parts",
@@ -3572,14 +3658,26 @@ function renderTowerNav() {
     <div class="tn-list">${[ground, ...towers].map(towerNavButton).join("")}</div>`;
 }
 
+// A place not reached yet asks first: the towers wait for room 2 on the
+// ground floor, the rational tower's second floor for its gate. `retry` asks
+// the next one, or goes. True if it asked.
+function askBeforePlace(place, retry) {
+  if (place !== "ground" && !stairsOpen()) {
+    openStairsDialog(retry);
+    return true;
+  }
+  if (place === "pf2" && !wingOpen()) {
+    openGateDialog(retry);
+    return true;
+  }
+  return false;
+}
+
 // Go to a place from the panel - or ask, if its stairs are locked.
 function towerNavGo(place) {
   if (markerBusy || !PLACES.includes(place)) return;
   dismissMapTip();
-  if (place !== "ground" && !stairsOpen()) {
-    openStairsDialog(() => goToPlace(place, "entrance"));
-    return;
-  }
+  if (askBeforePlace(place, () => towerNavGo(place))) return;
   if (place !== currentPlace()) goToPlace(place, place === "ground" ? "entrance" : undefined);
 }
 
@@ -3743,14 +3841,23 @@ function renderCastleView(intro = false) {
 
       <g class="${towerCls("pf")}" data-go="pf">
         <title>מגדל הפונקציות הרציונליות</title>
-        ${castleTop(220, 140, 124, 52)}
+        ${castleTop(220, 140, 84, 30)}
         <rect x="150" y="124" width="140" height="170" class="cs-wall"/>
         <rect x="150" y="124" width="140" height="170" class="cs-shade"/>
         ${win("review", 184, 150)}${win("nonmonic", 240, 150)}
         ${win("repeated", 166, 200)}${win("pf1", 212, 200)}${win("irreducible", 258, 200)}
         ${win("division", 212, 248)}
         <text x="220" y="145" class="cs-label">פונקציות רציונליות</text>
-        ${castleFlag(220, 57, "pf")}
+        ${castleFlag(220, 39, "pf")}
+      </g>
+
+      <g class="cs-place${locked || !wingOpen() ? " cs-locked" : ""}${currentPlace() === "pf2" ? " cs-here" : ""}" data-go="pf2">
+        <title>פונקציות רציונליות · קומה 2</title>
+        <rect x="150" y="84" width="140" height="40" class="cs-wall"/>
+        <rect x="150" y="84" width="140" height="40" class="cs-shade"/>
+        <path d="M150 124H290" class="cs-course"/>
+        ${win("cub3", 166, 92)}${win("cubDouble", 198, 92)}${win("cubQuad", 230, 92)}${win("cubReview", 262, 92)}
+        ${castleFlag(158, 72, "pf2")}
       </g>
 
       <g class="${towerCls("parts")}" data-go="parts">
@@ -3789,10 +3896,7 @@ function castleGo(place) {
   clearTimeout(castleIntroTimer);
   castleView.classList.remove("intro");
   // A tower not reached yet asks first (recommending room 2), as the floor panel does.
-  if (place && place !== "ground" && !stairsOpen()) {
-    openStairsDialog(() => castleGo(place));
-    return;
-  }
+  if (place && askBeforePlace(place, () => castleGo(place))) return;
   if (place && place !== currentPlace()) {
     store.place = place;
     store.lastRoom = "entrance";
@@ -4056,6 +4160,34 @@ function renderPartsFloor() {
   );
 }
 
+// The rational tower's second floor: the same kind of line, four rooms long -
+// the stairs down · room 1 · room 2 · room 3 · the review room.
+function renderCubicFloor() {
+  const [r1, r2, r3, r4] = [...CUB_IDS, "cubReview"].map((id) => ROOM_BY_ID[id]);
+  const light = floorLighting("pf2", CUB_IDS);
+  const hall = (col, id) => `<div class="hall" style="grid-column:${col};grid-row:1" data-spot="${id}" aria-hidden="true"></div>`;
+  const cell = (col, room) => `<div class="cell" style="grid-column:${col};grid-row:1">${roomCardHtml(room)}</div>`;
+  towerEl.innerHTML = `
+    <div class="floor-map floor-alive">
+      <div class="floor-label${light.label}">פונקציות רציונליות · קומה 2: מכנה ממעלה 3 <span class="floor-en" dir="ltr">(cubic denominators)</span>${medalMiniHtml("pf2")}</div>
+      ${mapTipHtml()}
+      <div class="floor-grid floor-basic floor-parts floor-cubic">
+        <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
+          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומה 1</span>
+        </div>
+        ${hall(2, "cub3")}${cell(3, r1)}${hall(4, "cubDouble")}${cell(5, r2)}${hall(6, "cubQuad")}${cell(7, r3)}${hall(8, "cubReview")}${cell(9, r4)}
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
+        </div>
+      </div>
+    </div>`;
+  justConquered = justLit = null;
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
+}
+
 // --- the "you are here" marker ---------------------------------------------
 // It stands at the doorway of a room (or the entrance, or the gate). Arrow
 // keys step it between neighbouring places; Enter goes in. A click on a room
@@ -4082,11 +4214,21 @@ const PARTS_FLOOR_NODES = {
   partsReview: { nav: { right: "partsLn" } },
 };
 
+// The rational tower's second floor: the way down, rooms 1-3, the review room.
+const CUBIC_FLOOR_NODES = {
+  entrance: { nav: { left: "cub3" } },
+  cub3: { nav: { right: "entrance", left: "cubDouble" } },
+  cubDouble: { nav: { right: "cub3", left: "cubQuad" } },
+  cubQuad: { nav: { right: "cubDouble", left: "cubReview" } },
+  cubReview: { nav: { right: "cubQuad" } },
+};
+
 // The places of a line in walking order. On the ground floor both stairs
 // and the side room are as far along as the landing (past room 2).
 const LINE_PATHS = {
   ground: ["entrance", "basic", "linear", "landing", "stairsPf"],
   parts: ["entrance", "partsPoly", "partsLn", "partsReview"],
+  pf2: ["entrance", ...CUB_IDS, "cubReview"],
 };
 const linePath = () => LINE_PATHS[currentPlace()];
 const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" ? "stairsPf" : id);
@@ -4103,7 +4245,7 @@ const RATIONAL_FLOOR_NODES = {
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
 
-const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES };
+const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES, pf2: CUBIC_FLOOR_NODES };
 const mapNodes = () => PLACE_NODES[currentPlace()];
 const onLine = () => isLinearPlace(currentPlace());
 
@@ -4197,7 +4339,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
-  if (id === "trophy") return "";
+  if (id === "trophy") return wingOpen() ? "עולים ↵" : "";
   if (STAIRS_PLACE[id]) return "עולים ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
@@ -4311,7 +4453,8 @@ function activateMarker() {
     return;
   }
   if (id === "trophy") {
-    if (!wingOpen()) openGateDialog(); // open, it is empty for now
+    if (!wingOpen()) openGateDialog();
+    else goUpstairs("trophy");
     return;
   }
   if (STAIRS_PLACE[id]) {
@@ -4399,11 +4542,12 @@ towerEl.addEventListener("click", (e) => {
   }
   if (e.target.closest('[data-node="trophy"]')) {
     if (!wingOpen()) openGateDialog();
-    else walkTo("trophy"); // empty for now: the pawn just walks there
+    else walkTo("trophy").then(() => goUpstairs("trophy"));
     return;
   }
   if (e.target.closest('[data-node="entrance"]')) {
-    // A tower's way in is the way back down to the ground floor.
+    // A tower's way in is the way back down (to the ground floor, or to the
+    // tower's first floor).
     walkTo("entrance").then(() => {
       if (currentPlace() !== "ground") goDownstairs();
     });
@@ -4442,7 +4586,7 @@ function showLockDialog({ title, html, anyway, then = null }) {
   $("lockBackBtn").focus();
 }
 
-function openGateDialog() {
+function openGateDialog(then = null) {
   const missing = CORE_IDS.filter((id) => !isConquered(id));
   // Room numbers, not names; only the rooms still to do.
   const nums = missing.map((id) => ROOM_BY_ID[id].num).join(", ");
@@ -4452,6 +4596,7 @@ function openGateDialog() {
       `האזור העליון בנוי על שלושת החדרים במסדרון הראשון. ` +
       `מומלץ לעבור קודם את ${missing.length > 1 ? "חדרים" : "חדר"} <bdi dir="ltr">${nums}</bdi> - אבל אפשר לפתוח אותו כבר עכשיו.`,
     anyway: "wing",
+    then,
   });
 }
 
@@ -4545,6 +4690,7 @@ function makeProblem(room, i, run) {
   const node = room.nodes[i];
   if (node.gen === "review") return generateReviewExercise(run.plan[i]);
   if (node.gen === "partsReview") return generatePartsReviewExercise(run.plan[i]);
+  if (node.gen === "cubReview") return generateCubicReviewExercise(run.plan[i]);
   return GENERATORS[node.gen]();
 }
 
@@ -4565,7 +4711,7 @@ function enterRoom(id) {
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
-    if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
+    if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : room.place === "pf2" ? drawCubicReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
     rec.run.problem = makeProblem(room, 0, rec.run);
     saveStore();
   }
@@ -5171,6 +5317,10 @@ function showConquest(room, { score, prevBest, wins, before }) {
   } else if (room.place === "parts") {
     if (partsLeft.length) next = `החדר הבא: "${ROOM_BY_ID[partsLeft[0]].title}"`;
     else if (!before.medals.find((m) => m.id === "parts").earned) next = "המדליה מחכה בחדר המדליות";
+  } else if (room.place === "pf2") {
+    const cubLeft = CUB_IDS.filter((id) => !isConquered(id));
+    if (cubLeft.length) next = `החדר הבא: "${ROOM_BY_ID[cubLeft[0]].title}"`;
+    else if (!before.medals.find((m) => m.id === "pf2").earned) next = "המדליה מחכה בחדר המדליות";
   }
   else if (coreLeft.length) next = `נשארו במסדרון: ${quotedTitles(coreLeft)}`;
   else if (!before.medals.find((m) => m.id === "pf").earned) next = "המדליה מחכה בחדר המדליות";
