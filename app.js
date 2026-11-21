@@ -455,6 +455,15 @@ const GENERATORS = {
   irrPlain: () => generateIrreducible([]),
   irrDegree2: () => generateIrreducible([nonZero(-3, 3)]),
   irrBoss: () => generateIrreducible([randInt(-4, 4), nonZero(-3, 3)]),
+  // cubic denominators (floor 2): three linear factors / repeated / irreducible
+  cubLin3: () => cubSmall(() => generateCubicLin3("factored")),
+  cubLin3Quad: () => cubSmall(() => generateCubicLin3("lq")),
+  cubLin3Boss: () => cubSmall(() => generateCubicLin3(chance(0.5) ? "lq" : "factored", cubBossQ())),
+  cubRep: () => cubSmall(() => generateCubicRep("factored")),
+  cubRepQuad: () => cubSmall(() => generateCubicRep("lq")),
+  cubRepBoss: () => cubSmall(() => generateCubicRep(chance(0.5) ? "lq" : "factored", cubBossQ())),
+  cubIrr: () => cubSmall(() => generateCubicIrr([], 0.3)), // p = 0 at times: x^2 + k^2, no square to complete
+  cubIrrBoss: () => cubSmall(() => generateCubicIrr(cubBossQ())),
 };
 
 // --- LaTeX ------------------------------------------------------------------
@@ -508,6 +517,7 @@ const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPo
 
 function problemLatex(p) {
   if (p.kind === "parts") return partsProblemLatex(p);
+  if (p.kind === "cub") return cubProblemLatex(p);
   if (p.kind === "basic") return basicProblemLatex(p);
   if (p.kind === "nmr") return nmrProblemLatex(p);
   if (p.kind === "nmi") return nmiProblemLatex(p);
@@ -531,6 +541,7 @@ function splitLatex(p, isFirst) {
 
 function antiderivativeLatex(p) {
   if (p.kind === "parts") return partsAntiderivativeLatex(p);
+  if (p.kind === "cub") return cubAntiderivativeLatex(p);
   if (p.kind === "basic") return basicAntiderivativeLatex(p);
   if (p.kind === "nmr") return nmrAntiderivativeLatex(p);
   if (p.kind === "nmi") return nmiAntiderivativeLatex(p);
@@ -548,6 +559,7 @@ function antiderivativeLatex(p) {
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
   if (p.kind === "parts") return partsSolutionLatex(p);
+  if (p.kind === "cub") return cubSolutionLatex(p);
   if (p.kind === "basic") return basicSolutionLatex(p);
   if (p.kind === "nmr") return nmrSolutionLatex(p);
   if (p.kind === "nmi") return nmiSolutionLatex(p);
@@ -655,15 +667,24 @@ function repSolutionLatex(p) {
   } else if (p.display === "expanded") {
     rows.push(`&= ${intR(`(${factor})^2`)}`);
   }
-  rows.push(`&\\qquad \\left[\\,t=${factor},\\ \\ x=t${fmtSigned(p.a, false)},\\ \\ dx=dt\\,\\right]`);
-  const substituted = polyInLatex(R, `(t${fmtSigned(p.a, false)})`);
+  rows.push(...repSubstRows(rest, Iq));
+  return `\\begin{aligned}${repProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+// From ∫R/(x-a)^2 on: substitute t = x - a, split, integrate, substitute
+// back. rest = { a, A, B } with R = A(x - a) + B; Iq is already integrated.
+function repSubstRows(rest, Iq) {
+  const factor = repFactorLatex(rest);
+  const R = repNumeratorPoly({ ...rest, Q: [] });
+  const rows = [`&\\qquad \\left[\\,t=${factor},\\ \\ x=t${fmtSigned(rest.a, false)},\\ \\ dx=dt\\,\\right]`];
+  const substituted = polyInLatex(R, `(t${fmtSigned(rest.a, false)})`);
   const inT = polyLatex(repTPoly(rest), "t");
   rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${substituted}}{t^2}\\,dt`)}`);
   if (inT !== substituted) rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${inT}}{t^2}\\,dt`)}`);
   rows.push(`&= ${joinPlus(Iq, `\\int\\left(${repSplitLatex(rest)}\\right)dt`)}`);
   rows.push(`&= ${joinPlus(Iq, repIntegratedLatex(rest, "t"))}`);
-  rows.push(`&= ${repAntiderivativeLatex(p)}`);
-  return `\\begin{aligned}${repProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+  rows.push(`&= ${joinPlus(Iq, repIntegratedLatex(rest, factor))}`);
+  return rows;
 }
 
 const repIntegrandFn = (p) => {
@@ -775,15 +796,23 @@ function irrSolutionLatex(q) {
   const rows = [];
   const R = irrRemainderPoly(q);
   const D = polyLatex(irrDenPoly(q));
-  const sq = irrSquareLatex(q);
   const Iq = integratedQLatex(q.Q);
-  const v = q.p === 0 ? "x" : "t"; // with p = 0 there is nothing to substitute
-  const vDen = `${v}^2+${q.k * q.k}`;
-
   if (q.Q.length) {
     rows.push(`&= \\int\\left(${polyLatex(q.Q)}${fracTermLatex(R, D)}\\right)dx`);
     rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${polyLatex(R)}}{${D}}\\,dx`)}`);
   }
+  rows.push(...irrSubstRows(q, Iq));
+  return `\\begin{aligned}${irrProblemLatex(q)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+// From ∫R/D on: complete the square, substitute, split, the two formulas,
+// substitute back. Iq is what is already integrated, written before each row.
+function irrSubstRows(q, Iq) {
+  const rows = [];
+  const R = irrRemainderPoly(q);
+  const sq = irrSquareLatex(q);
+  const v = q.p === 0 ? "x" : "t"; // with p = 0 there is nothing to substitute
+  const vDen = `${v}^2+${q.k * q.k}`;
   if (q.p !== 0) {
     rows.push(`&= ${joinPlus(Iq, `\\int \\frac{${polyLatex(R)}}{${sq}}\\,dx`)}`);
     rows.push(`&\\qquad \\left[\\,t=${irrShift(q)},\\ \\ x=t${fmtSigned(-q.p, false)},\\ \\ dx=dt\\,\\right]`);
@@ -798,7 +827,7 @@ function irrSolutionLatex(q) {
   if (parts.length === 2) rows.push(`&= ${joinPlus(Iq, `\\int\\left(${parts.join("")}\\right)d${v}`)}`);
   rows.push(`&= ${joinPlus(Iq, irrLogAtanLatex(q, vDen, v))}+C`);
   if (q.p !== 0) rows.push(`&= ${joinPlus(Iq, irrLogAtanLatex(q, sq, irrShift(q)))}+C`);
-  return `\\begin{aligned}${irrProblemLatex(q)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+  return rows;
 }
 
 function irrIntegrandFn(q) {
@@ -952,12 +981,238 @@ function nmiNearMissVariants(q) {
 }
 
 // ---------------------------------------------------------------------------
+// Cubic denominators (the rational tower's second floor), all monic
+//
+// The students' rule: a degree-1 factor gets A, a degree-2 factor gets Bx+C.
+// The denominator is never a cubic to factor: it is shown in linear factors
+// ("factored") or as linear × quadratic ("lq"). Three families:
+//   lin3  (x-a)(x-b)(x-c)  - a quadratic with distinct roots is factored
+//         straight away, so only A's. Problem: { Q, terms: [{A, m: 1, n}] x3 }
+//   rep   (x-a)(x-b)^2  -> A/(x-a) + (Bx+C)/(x-b)^2, then t = x - b:
+//         (Bx+C)/(x-b)^2 = B/t + E/t^2 with E = Bb + C.
+//         Problem: { Q, a, A, b, B, E }
+//   irr   (x-a)(x^2+2px+p^2+k^2) -> A/(x-a) + (Bx+C)/(quadratic), the
+//         quadratic part as in the irreducible room: Bx+C = 2c(x+p) + dk.
+//         Problem: { Q, a, A, p, k, c, d }
+// All: { kind: "cub", fam, show: "factored" | "lq", Q }. Answer first: the
+// coefficients are drawn whole and the numerator is built from them.
+// ---------------------------------------------------------------------------
+
+function distinctInts(count, min, max) {
+  const out = [];
+  while (out.length < count) {
+    const v = randInt(min, max);
+    if (!out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+// Redraw until the numerator's coefficients stay small enough to work with
+// by hand: at most 30, or 40 when there is a division.
+function cubSmall(make) {
+  for (;;) {
+    const p = make();
+    if (Math.max(...cubNumeratorPoly(p).map(Math.abs)) <= (p.Q.length ? 40 : 30)) return p;
+  }
+}
+
+// Numerator of degree 3 (sometimes 4): the quotient of the division.
+const cubBossQ = () => (chance(0.7) ? [nonZero(-3, 3)] : [randInt(-3, 3), nonZero(-2, 2)]);
+
+function generateCubicLin3(show, Q = []) {
+  return {
+    kind: "cub", fam: "lin3", show, Q,
+    terms: distinctInts(3, -4, 4).map((n) => ({ A: nonZero(-5, 5), m: 1, n })),
+  };
+}
+
+function generateCubicRep(show, Q = []) {
+  let a, b, B, E;
+  do {
+    [a, b] = distinctInts(2, -4, 4);
+    B = chance(0.2) ? 0 : nonZero(-4, 4); // B = 0: no ln for the double root
+    E = nonZero(-6, 6);
+  } while (b === 0 || Math.abs(E - B * b) > 9); // b = 0 would leave nothing to substitute
+  return { kind: "cub", fam: "rep", show, Q, a, A: nonZero(-5, 5), b, B, E };
+}
+
+function generateCubicIrr(Q = [], p0 = 0.1) {
+  const { p, k, c, d } = generateIrreducible([]);
+  return { kind: "cub", fam: "irr", show: "lq", Q, a: randInt(-4, 4), A: nonZero(-5, 5), p: chance(p0) ? 0 : p, k, c, d };
+}
+
+// The quadratic part of an irr problem, shaped as an irreducible-room problem.
+const cubIrrPart = (p) => ({ p: p.p, k: p.k, c: p.c, d: p.d, ka: p.ka, Q: [] });
+// The (x-b)^2 part of a rep problem, shaped as a repeated-root problem.
+const cubRepPart = (p) => ({ a: p.b, A: p.B, B: p.E, Q: [] });
+
+const cubLinLatex = (a) => (a === 0 ? "x" : `(${mxLatex(1, a)})`);
+const cubQuadPoly = (p) =>
+  p.fam === "rep" ? [p.b * p.b, -2 * p.b, 1] :
+  p.fam === "irr" ? irrDenPoly(p) :
+  polyMul(linearFactor(p.terms[1]), linearFactor(p.terms[2]));
+const cubLinRoot = (p) => (p.fam === "lin3" ? p.terms[0].n : p.a);
+
+function cubDenPoly(p) {
+  return polyMul([-cubLinRoot(p), 1], cubQuadPoly(p));
+}
+
+// Proper remainder R over the denominator.
+function cubRemainderPoly(p) {
+  if (p.fam === "lin3") return remainderPoly(p);
+  const lin = [-p.a, 1];
+  const quadNum = p.fam === "rep" ? repNumeratorPoly(cubRepPart(p)) : irrRemainderPoly(p);
+  return polyAdd(polyMul([p.A], cubQuadPoly(p)), polyMul(quadNum, lin));
+}
+
+const cubNumeratorPoly = (p) => polyAdd(polyMul(p.Q, cubDenPoly(p)), cubRemainderPoly(p));
+
+function cubFactoredLatex(p) {
+  if (p.fam === "lin3") return factoredDenLatex(p);
+  if (p.fam === "rep") return cubLinLatex(p.a) + `(${mxLatex(1, p.b)})^2`;
+  return cubLinLatex(p.a) + `(${polyLatex(irrDenPoly(p))})`;
+}
+
+const cubShownDenLatex = (p) =>
+  p.show === "lq" ? cubLinLatex(cubLinRoot(p)) + `(${polyLatex(cubQuadPoly(p))})` : cubFactoredLatex(p);
+
+const cubProblemLatex = (p) => `\\int \\frac{${polyLatex(cubNumeratorPoly(p))}}{${cubShownDenLatex(p)}}\\,dx`;
+
+// "A ln|x - a|" (isFirst: no leading +)
+const cubLnLatex = (A, a, isFirst) =>
+  `${signLatex(A, isFirst)}${Math.abs(A) === 1 ? "" : Math.abs(A)}\\ln|${mxLatex(1, a)}|`;
+
+// ∫Q dx + A ln|x - a|: what is integrated before the quadratic part.
+const cubLinIntegratedLatex = (p) => {
+  const Iq = integratedQLatex(p.Q);
+  return Iq + cubLnLatex(p.A, p.a, Iq === "");
+};
+
+// The three factors in the order the factored denominator shows them (x first).
+const cubLin3Sorted = (p) => ({ ...p, kind: undefined, terms: [...p.terms].sort((s, t) => (s.n === 0 ? -1 : t.n === 0 ? 1 : 0)) });
+
+function cubAntiderivativeLatex(p) {
+  if (p.fam === "lin3") return antiderivativeLatex(cubLin3Sorted(p));
+  const pre = cubLinIntegratedLatex(p);
+  if (p.fam === "rep") return joinPlus(pre, repIntegratedLatex(cubRepPart(p), mxLatex(1, p.b)));
+  const q = cubIrrPart(p);
+  return joinPlus(pre, irrLogAtanLatex(q, polyLatex(irrDenPoly(q)), irrShift(q))) + "+C";
+}
+
+// The template the students write, with letters: A for each linear factor,
+// Bx+C over the quadratic one.
+function cubTemplateLatex(p) {
+  if (p.fam === "lin3") {
+    return cubLin3Sorted(p).terms.map((t, i) => `${i ? "+" : ""}\\frac{${"ABC"[i]}}{${mxLatex(1, t.n)}}`).join("");
+  }
+  const quad = p.fam === "rep" && p.show === "factored" ? `(${mxLatex(1, p.b)})^2` : polyLatex(cubQuadPoly(p));
+  return `\\frac{A}{${mxLatex(1, p.a)}}+\\frac{Bx+C}{${quad}}`;
+}
+
+// Worked solution: divide, (factor the quadratic,) the template, the split
+// with numbers, then each part - ln for A/(x-a), and for Bx+C the method of
+// the matching room on the first floor.
+function cubSolutionLatex(p) {
+  const rows = [];
+  const R = cubRemainderPoly(p);
+  const Q = p.Q;
+  const shown = cubShownDenLatex(p);
+  const full = cubFactoredLatex(p);
+  const wrap = (body) => `\\int\\left(${body}\\right)dx`;
+  const q = Q.length ? polyLatex(Q) : "";
+  const ratLatex = (den) => (q ? wrap(q + fracTermLatex(R, den)) : `\\int \\frac{${polyLatex(R)}}{${den}}\\,dx`);
+
+  if (q) rows.push(`&= ${ratLatex(shown)}`);
+  if (p.fam === "lin3" && p.show === "lq") rows.push(`&= ${ratLatex(full)}`); // factor the quadratic
+  const den = p.fam === "lin3" ? full : shown;
+  rows.push(`&\\qquad \\left[\\,\\frac{${polyLatex(R)}}{${den}}=${cubTemplateLatex(p)}\\,\\right]`);
+
+  if (p.fam === "lin3") {
+    rows.push(`&= ${wrap(q + splitLatex(cubLin3Sorted(p), !q))}`);
+    rows.push(`&= ${cubAntiderivativeLatex(p)}`);
+  } else {
+    const BC = p.fam === "rep" ? repNumeratorPoly(cubRepPart(p)) : irrRemainderPoly(p);
+    const quad = p.fam === "rep" && p.show === "factored" ? `(${mxLatex(1, p.b)})^2` : polyLatex(cubQuadPoly(p));
+    const linFrac = `${signLatex(p.A, !q)}\\frac{${Math.abs(p.A)}}{${mxLatex(1, p.a)}}`;
+    rows.push(`&= ${wrap(q + linFrac + fracTermLatex(BC, quad))}`);
+    const pre = cubLinIntegratedLatex(p);
+    if (p.fam === "rep") {
+      rows.push(`&= ${joinPlus(pre, `\\int \\frac{${polyLatex(BC)}}{${quad}}\\,dx`)}`);
+      if (p.show === "lq") rows.push(`&= ${joinPlus(pre, `\\int \\frac{${polyLatex(BC)}}{(${mxLatex(1, p.b)})^2}\\,dx`)}`);
+      rows.push(...repSubstRows(cubRepPart(p), pre));
+    } else {
+      rows.push(`&= ${joinPlus(pre, `\\int \\frac{${polyLatex(BC)}}{${quad}}\\,dx`)}`);
+      rows.push(...irrSubstRows(cubIrrPart(p), pre));
+    }
+  }
+  return `\\begin{aligned}${cubProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+function cubIntegrandFn(p) {
+  if (p.fam === "lin3") return integrandFn({ ...p, kind: undefined });
+  const lin = (x) => polyEval(p.Q, x) + p.A / (x - p.a);
+  if (p.fam === "rep") {
+    const r = repIntegrandFn(cubRepPart(p));
+    return (x) => lin(x) + r(x);
+  }
+  const f = irrIntegrandFn(cubIrrPart(p));
+  return (x) => lin(x) + f(x);
+}
+
+function cubSampleZones(p) {
+  if (p.fam === "lin3") return sampleZones({ ...p, kind: undefined });
+  const roots = p.fam === "rep" ? [p.a, p.b] : [p.a];
+  return sampleZones({ terms: roots.map((n) => ({ m: 1, n })) });
+}
+
+function cubNearMissVariants(p) {
+  if (p.fam === "lin3") return nearMissVariants({ ...p, kind: undefined }).map((v) => ({ ...v, problem: { ...v.problem, kind: "cub" } }));
+  const variants = [{ kind: "sign", problem: { ...p, A: -p.A } }];
+  if (p.a !== 0) variants.push({ kind: "lnSign", problem: { ...p, a: -p.a } });
+  if (p.fam === "rep") {
+    // the (x-b)^2 part's slips, as in the repeated-root room
+    for (const v of repNearMissVariants(cubRepPart(p))) {
+      if (v.kind === "repConst") continue;
+      const r = v.problem;
+      variants.push({ kind: v.kind, problem: { ...p, b: r.a, B: r.A, E: r.B } });
+    }
+  } else {
+    for (const v of irrNearMissVariants(cubIrrPart(p))) {
+      const { p: pp, k, c, d, ka } = v.problem;
+      if (v.kind !== "quotient") variants.push({ kind: v.kind, problem: { ...p, p: pp, k, c, d, ka } });
+    }
+  }
+  if (p.Q.length) variants.push({ kind: "quotient", problem: { ...p, Q: [] } });
+  return variants;
+}
+
+// Review: four exercises, each family at least once, the fourth at random;
+// half of them with a division, the denominator shown either way.
+function drawCubicReviewPlan(length) {
+  const fams = ["lin3", "rep", "irr"];
+  const plan = [...fams];
+  while (plan.length < length) plan.push(pick(fams));
+  return shuffled(plan);
+}
+
+function generateCubicReviewExercise(fam) {
+  return cubSmall(() => {
+    const Q = chance(0.5) ? cubBossQ() : [];
+    const show = chance(0.5) ? "lq" : "factored";
+    if (fam === "rep") return generateCubicRep(show, Q);
+    if (fam === "irr") return generateCubicIrr(Q);
+    return generateCubicLin3(show, Q);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Checking: differentiate the student's answer numerically and compare it
 // with the integrand on every interval between the poles.
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
   if (p.kind === "parts") return partsIntegrandFn(p);
+  if (p.kind === "cub") return cubIntegrandFn(p);
   if (p.kind === "basic") return basicIntegrandFn(p);
   if (p.kind === "nmr") return nmrIntegrandFn(p);
   if (p.kind === "nmi") return nmiIntegrandFn(p);
@@ -968,6 +1223,7 @@ function integrandFn(p) {
 
 function sampleZones(p) {
   if (p.kind === "parts") return partsSampleZones(p);
+  if (p.kind === "cub") return cubSampleZones(p);
   if (p.kind === "basic") return basicSampleZones(p);
   if (p.kind === "nmr") return sampleZones({ kind: "rep", a: p.n / p.m });
   if (p.kind === "nmi") return irrSampleZones({ p: p.p / p.m });
@@ -993,6 +1249,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
   if (p.kind === "parts") return partsNearMissVariants(p);
+  if (p.kind === "cub") return cubNearMissVariants(p);
   if (p.kind === "basic") return basicNearMissVariants(p);
   if (p.kind === "nmr") return nmrNearMissVariants(p);
   if (p.kind === "nmi") return nmiNearMissVariants(p);
