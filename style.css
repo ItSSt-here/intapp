@@ -2236,6 +2236,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .room-stairs-up { display: flex; align-items: center; gap: 12px; cursor: pointer; }
 .room-stairs-up .stairs-steps { width: 52px; flex: none; order: 0; }
 .room-stairs-up .room-head { flex: 1; flex-wrap: wrap; gap: 6px; }
+.room-stairs-up .stairs-sub { flex-basis: 100%; font-size: 0.82rem; color: #7a6a4a; }
 
 /* ---------------------------------------------------------------------- */
 /* The floor panel beside the map: the tower in cross-section              */

@@ -3296,7 +3296,7 @@ const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
 const MEDALS = [
   {
     id: "pf",
-    title: "פונקציות רציונליות",
+    title: "פונקציות רציונליות I",
     rooms: CORE_IDS,
     need: "שלושת החדרים במסדרון",
     gold: { room: "review", text: "תרגילים מעורבבים" },
@@ -3311,7 +3311,7 @@ const MEDALS = [
   },
   {
     id: "pf2",
-    title: "מכנה ממעלה 3",
+    title: "פונקציות רציונליות II",
     rooms: CUB_IDS,
     need: "שלושת החדרים בקומה",
     gold: { room: "cubReview", text: "תרגילים מעורבבים" },
@@ -3418,9 +3418,9 @@ function medalSvg(m) {
 // opens with the gate.
 function trophyHtml() {
   return `
-    <div class="room-card room-medals room-stairs-up" data-node="trophy" role="button" tabindex="0" aria-label="מדרגות לקומה 2: מכנה ממעלה 3">
+    <div class="room-card room-medals room-stairs-up" data-node="trophy" role="button" tabindex="0" aria-label="מדרגות לפונקציות רציונליות II: מכנה ממעלה 3">
       ${stairsSvg(false)}
-      <div class="room-head"><span class="room-title">קומה 2 · מכנה ממעלה 3</span>${medalMiniHtml("pf2")}</div>
+      <div class="room-head"><span class="room-title">פונקציות רציונליות II</span><span class="stairs-sub">מכנה ממעלה 3</span></div>
     </div>`;
 }
 
@@ -3593,8 +3593,9 @@ function towerNavItems() {
     {
       go: "pf",
       mark: "½",
-      name: "פונקציות רציונליות",
-      full: "מגדל הפונקציות הרציונליות",
+      name: "פונקציות רציונליות I",
+      sub: "מכנה ממעלה 2",
+      full: "פונקציות רציונליות I · מכנה ממעלה 2",
       locked: !stairsOpen(),
       done: coreDone(),
       here: place === "pf",
@@ -3602,9 +3603,9 @@ function towerNavItems() {
     {
       go: "pf2",
       mark: "x³",
-      name: "מכנה ממעלה 3",
-      sub: "פונקציות רציונליות · קומה 2",
-      full: "מגדל הפונקציות הרציונליות · קומה 2",
+      name: "פונקציות רציונליות II",
+      sub: "מכנה ממעלה 3",
+      full: "פונקציות רציונליות II · מכנה ממעלה 3",
       locked: !stairsOpen() || !wingOpen(),
       done: CUB_IDS.every(isConquered),
       here: place === "pf2",
@@ -3853,7 +3854,7 @@ function renderCastleView(intro = false) {
       </g>
 
       <g class="cs-place${locked || !wingOpen() ? " cs-locked" : ""}${currentPlace() === "pf2" ? " cs-here" : ""}" data-go="pf2">
-        <title>פונקציות רציונליות · קומה 2</title>
+        <title>פונקציות רציונליות II</title>
         <rect x="150" y="84" width="140" height="40" class="cs-wall"/>
         <rect x="150" y="84" width="140" height="40" class="cs-shade"/>
         <path d="M150 124H290" class="cs-course"/>
@@ -4086,7 +4087,7 @@ function renderRationalFloor() {
   const light = floorLighting("pf", CORE_IDS);
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">מגדל הפונקציות הרציונליות <span class="floor-en" dir="ltr">(rational functions)</span>${medalMiniHtml("pf")}</div>
+      <div class="floor-label${light.label}">פונקציות רציונליות I · מכנה ממעלה 2 <span class="floor-en" dir="ltr">(rational functions I)</span>${medalMiniHtml("pf")}</div>
       ${mapTipHtml()}
       <div class="floor-grid">
         ${mapTorch(1, 9, light.core)}${mapTorch(3, 9, light.core)}${mapTorch(4, 1, light.all)}
@@ -4170,7 +4171,7 @@ function renderCubicFloor() {
   const cell = (col, room) => `<div class="cell" style="grid-column:${col};grid-row:1">${roomCardHtml(room)}</div>`;
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">פונקציות רציונליות · קומה 2: מכנה ממעלה 3 <span class="floor-en" dir="ltr">(cubic denominators)</span>${medalMiniHtml("pf2")}</div>
+      <div class="floor-label${light.label}">פונקציות רציונליות II · מכנה ממעלה 3 <span class="floor-en" dir="ltr">(rational functions II)</span>${medalMiniHtml("pf2")}</div>
       ${mapTipHtml()}
       <div class="floor-grid floor-basic floor-parts floor-cubic">
         <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
