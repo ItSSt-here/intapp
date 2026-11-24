@@ -1,0 +1,77 @@
+/* The lecturer's page (teacher.html): a plain, dense table. */
+:root {
+  --bg: #f7f5f0;
+  --text: #26231f;
+  --muted: #857e73;
+  --border: #e6e0d4;
+  --accent: #0d7d72;
+  --accent-tint: #e3f2f0;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 16px 20px 40px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+.t-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.t-header h1 { font-size: 1.3rem; margin: 0; }
+.t-account { font-size: 0.9rem; color: var(--muted); }
+
+.t-btn {
+  font: inherit;
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--text);
+  cursor: pointer;
+}
+.t-btn:hover { border-color: var(--accent); }
+.t-btn.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 700; }
+.t-link { font: inherit; background: none; border: 0; padding: 0 4px; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+.t-signin { max-width: 360px; margin: 60px auto; text-align: center; background: white; padding: 24px; border-radius: 12px; border: 1px solid var(--border); }
+.t-error { color: #b5523b; font-weight: 600; min-height: 1.4em; }
+
+.t-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.t-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.t-tab {
+  font: inherit;
+  padding: 7px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+}
+.t-tab.on { border-color: var(--accent); background: var(--accent-tint); font-weight: 700; }
+.t-count { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 10px; background: #efeae0; font-size: 0.8rem; text-align: center; }
+.t-actions { display: flex; gap: 6px; }
+.t-status { color: var(--muted); min-height: 1.2em; margin: 4px 0 8px; }
+
+.t-table-wrap { overflow-x: auto; background: white; border: 1px solid var(--border); border-radius: 10px; }
+.t-table { border-collapse: collapse; font-size: 0.85rem; width: max-content; min-width: 100%; }
+.t-table th, .t-table td { border: 1px solid var(--border); padding: 5px 7px; text-align: center; }
+.t-table thead th { background: #faf8f3; font-weight: 600; position: sticky; top: 0; }
+.t-place { background: #f1ece1 !important; }
+.t-room { max-width: 92px; min-width: 56px; font-size: 0.75rem; font-weight: 500 !important; line-height: 1.25; }
+.t-room.review { font-style: italic; }
+.t-name { text-align: right !important; white-space: nowrap; font-weight: 600; position: sticky; right: 0; background: white; }
+thead .t-name { background: #faf8f3; z-index: 1; }
+.t-when { white-space: nowrap; color: var(--muted); font-size: 0.8rem; }
+
+.t-cell.high { background: #e3f1e8; }
+.t-cell.mid { background: #fbf0d6; }
+.t-cell.low { background: #f8e1da; }
+.t-run { color: var(--muted); }
+.t-partial { color: var(--muted); font-size: 0.8rem; }
+.t-gold { color: #c9a227; }
+
+.t-foot td { background: #faf8f3; font-weight: 600; }
+.t-row-actions { white-space: nowrap; }
+.t-move { font: inherit; font-size: 0.8rem; padding: 2px; }
+
+.t-legend { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }

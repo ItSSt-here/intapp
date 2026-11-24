@@ -17,8 +17,8 @@
 // This web config is not a secret - every visitor's browser gets it anyway.
 // ---------------------------------------------------------------------------
 
-const FIREBASE_VERSION = "12.19.0";
-const FIREBASE_CONFIG = {
+export const FIREBASE_VERSION = "12.19.0";
+export const FIREBASE_CONFIG = {
   apiKey: "AIzaSyC6W2pyNA35_I_WeDuK89x8Clz4yUGpU8o",
   authDomain: "intapp-2f266.firebaseapp.com",
   projectId: "intapp-2f266",

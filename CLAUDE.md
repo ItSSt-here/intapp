@@ -3,6 +3,11 @@
 - Always reply to the user in English, even when they write to you in Hebrew or another language.
 - This is the integrals practice game (a castle: ground floor + topic towers), split out of the Calcapp repo. Students use Calcapp (https://itsst-here.github.io/Calcapp/) for other topics - never change that repo from here.
 - Vanilla JS ES module, no build: `index.html`, `app.js` (~4,400 lines), `style.css` (~2,000 lines). Syntax check: `node --input-type=module --check < app.js`.
+- Other modules: `rooms.js` (ROOMS, the medal room-id lists and `MEDAL_LIST` - plain data shared with the
+  lecturer page), `cloud.js` (Firebase project intapp-2f266: ID-number entry, saving the store, groups),
+  `teacher.html`/`teacher.js`/`teacher.css` (the lecturer page, Google sign-in). `firestore.rules` is the copy
+  of the rules kept in the Firebase console - the lecturer's address is a placeholder; never commit it.
+- `?test` plays on its own local copy, with no entry and no server; `?test&group=software` shows that group's view.
 
 ## Code map - read only the section you need
 
@@ -21,9 +26,9 @@ Sections in file order:
    sampling, `gen*` generators for rooms basic / linear / more, `basicNearMissVariants`.
 6. **Parts tower math** (`kind: "parts"`, `fam: "poly" | "ln"`) - `partsPolyTerms`,
    `partsLnTerms`, `parts*Latex`, `partsSolutionLatex`, `partsNearMissVariants`, `genParts*`.
-7. **`ROOMS`** - every room: `id`, `place` ("ground" | "pf" | "parts"), `kind`, `num`, `title`,
-   `requires`, `nodes` (generator names). Everything above `const ROOMS = [` runs in node
-   (stub `MathfieldElement`) - use that for math tests.
+7. **`ROOMS`** (in `rooms.js`) - every room: `id`, `place` ("ground" | "pf" | "parts" | "pf2" | "sub"),
+   `kind`, `num`, `title`, `requires`, `nodes` (generator names). Everything in app.js above
+   `const ROOM_BY_ID` runs in node (strip imports, stub `MathfieldElement`) - use that for math tests.
 8. **Store & progress** - `STORE_KEY`, `loadStore` + migration, `currentPlace`, `isLocked`,
    `stairsOpen`, `wingOpen`, `recommendedRoomId`.
 9. **Map** - `roomCardHtml`, medal (`medalState`, `renderMedalView`), `goToPlace`, the floor

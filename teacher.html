@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>מגדל האינטגרלים · מרצה</title>
+<link rel="stylesheet" href="teacher.css">
+</head>
+<body>
+  <header class="t-header">
+    <h1>מגדל האינטגרלים · התקדמות הסטודנטים</h1>
+    <div class="t-account" id="account"></div>
+  </header>
+
+  <main id="main">
+    <section id="signIn" class="t-signin" hidden>
+      <p>הדף הזה פתוח רק למרצה.</p>
+      <button type="button" id="signInBtn" class="t-btn primary">כניסה עם Google</button>
+      <p class="t-error" id="signInError" role="alert"></p>
+    </section>
+
+    <section id="board" hidden>
+      <div class="t-bar">
+        <div class="t-tabs" id="tabs" role="tablist"></div>
+        <div class="t-actions">
+          <button type="button" id="refreshBtn" class="t-btn">רענון</button>
+          <button type="button" id="exportBtn" class="t-btn">ייצוא לאקסל</button>
+        </div>
+      </div>
+      <p class="t-status" id="status"></p>
+      <div class="t-table-wrap"><table class="t-table" id="table"></table></div>
+      <p class="t-legend">ציון = הציון הטוב ביותר בחדר (מתוך 10). <span class="t-run">…</span> = התחיל ולא סיים. מדליה = ממוצע החדרים שלה; <span class="t-gold">★</span> = עם זהב.</p>
+    </section>
+  </main>
+
+  <script type="module" src="teacher.js"></script>
+</body>
+</html>

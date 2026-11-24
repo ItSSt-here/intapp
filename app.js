@@ -1,5 +1,6 @@
 import "https://esm.run/mathlive@0.110.0"; // registers the <math-field> custom element
 import { MathfieldElement } from "https://esm.run/mathlive@0.110.0";
+import { ROOMS, MEDAL_LIST, CORE_IDS, FLOOR1_IDS, PARTS_IDS, CUB_IDS, SUB_IDS } from "./rooms.js";
 import { cloudInit, cloudSave, currentStudent, switchStudent, GROUPS } from "./cloud.js";
 
 // esm.run's asset resolution for MathLive's math fonts is unreliable -
@@ -3025,279 +3026,6 @@ Object.assign(GENERATORS, {
 // ---------------------------------------------------------------------------
 
 
-const ROOMS = [
-  {
-    id: "basic",
-    place: "ground",
-    kind: "core",
-    num: 1,
-    title: "אינטגרלים מיידיים",
-    en: "Basic integrals",
-    tag: "טבלת האינטגרלים",
-    nodes: [
-      { gen: "basicPoly" },
-      { gen: "basicNegative" },
-      { gen: "basicRoots" },
-      { gen: "basicLn" },
-      { gen: "basicTable" },
-      { gen: "basicBoss", boss: true },
-    ],
-  },
-  {
-    id: "linear",
-    place: "ground",
-    kind: "core",
-    num: 2,
-    title: "שינוי לינארי",
-    en: "f(ax+b)",
-    tag: "שיטה: חלוקה ב-a",
-    requires: ["basic"],
-    nodes: [
-      { gen: "linPow" },
-      { gen: "linRoot" },
-      { gen: "linExpLn" },
-      { gen: "linTrig" },
-      { gen: "linBoss", boss: true },
-    ],
-  },
-  {
-    id: "more",
-    place: "ground",
-    kind: "ext",
-    title: "אינטגרלים נוספים",
-    en: "More basic integrals",
-    tag: "עוד פונקציות מהטבלה",
-    label: "הרחבה",
-    stars: 1,
-    requires: ["linear"],
-    nodes: [
-      { gen: "extAx" },
-      { gen: "extCot" },
-      { gen: "extAsin" },
-      { gen: "extLin" },
-      { gen: "extBoss", boss: true },
-    ],
-  },
-  {
-    id: "division",
-    place: "pf",
-    kind: "prep",
-    title: "חילוק פולינומים",
-    en: "Polynomial division",
-    tag: "לא חובה",
-    label: "מבוא",
-    blurb: "חישוב אינטגרל על ידי חילוק פולינומים. יודעים לחלק פולינומים? אפשר לדלג.",
-    nodes: [
-      { gen: "div1" },
-      { gen: "div3", boss: true },
-    ],
-  },
-  {
-    id: "repeated",
-    place: "pf",
-    kind: "core",
-    num: 1,
-    title: "שורש כפול",
-    en: "Repeated root",
-    tag: "שיטה: הצבה",
-    nodes: [
-      { gen: "repFactored" },
-      { gen: "repExpanded" },
-      { gen: "repDegree2" },
-    ],
-  },
-  {
-    id: "pf1",
-    place: "pf",
-    kind: "core",
-    num: 2,
-    title: "שני שורשים שונים",
-    en: "Partial fractions: distinct roots",
-    tag: "שיטה: שברים חלקיים",
-    nodes: [
-      { gen: "pfFactored" },
-      { gen: "pfExpanded" },
-      { gen: "pfDivide" },
-      { gen: "pfBoss", boss: true },
-    ],
-  },
-  {
-    id: "irreducible",
-    place: "pf",
-    kind: "core",
-    num: 3,
-    title: "מכנה שלא מתפרק",
-    en: "Irreducible quadratic",
-    tag: "שיטה: השלמה לריבוע",
-    nodes: [
-      { gen: "irrPlain" },
-      { gen: "irrDegree2" },
-      { gen: "irrBoss", boss: true },
-    ],
-  },
-  {
-    id: "review",
-    place: "pf",
-    kind: "review",
-    title: "תרגילים מעורבבים",
-    en: "Mixed review",
-    tag: "חזרה · כל הסוגים, בלי רמז",
-    label: "חזרה",
-    requires: ["repeated", "pf1", "irreducible"],
-    nodes: [
-      { gen: "review" },
-      { gen: "review" },
-      { gen: "review" },
-    ],
-  },
-  {
-    id: "nonmonic",
-    place: "pf",
-    kind: "ext",
-    title: "מכנה עם מקדם מוביל",
-    en: "Non-monic",
-    tag: "טכניקה גבוהה",
-    label: "טכניקה גבוהה",
-    stars: 2,
-    requires: ["repeated", "pf1", "irreducible"],
-    nodes: [
-      { gen: "nmExpanded" },
-      { gen: "nmRepeated" },
-      { gen: "nmIrreducible" },
-    ],
-  },
-  {
-    id: "partsPoly",
-    place: "parts",
-    kind: "core",
-    num: 1,
-    title: "פולינום כפול eˣ / טריגו",
-    en: "Polynomial × eˣ, sin, cos",
-    tag: "u = הפולינום",
-    nodes: [
-      { gen: "partsLinExp" },
-      { gen: "partsLinTrig" },
-      { gen: "partsSquare" },
-      { gen: "partsPolyBoss", boss: true },
-    ],
-  },
-  {
-    id: "partsLn",
-    place: "parts",
-    kind: "core",
-    num: 2,
-    title: "חלקים עם ln",
-    en: "Parts with ln x",
-    tag: "u = ln",
-    requires: ["partsPoly"],
-    nodes: [
-      { gen: "partsLnAlone" },
-      { gen: "partsLnPow" },
-      { gen: "partsLnRoot" },
-      { gen: "partsLnBoss", boss: true },
-    ],
-  },
-  {
-    id: "partsReview",
-    place: "parts",
-    kind: "review",
-    title: "תרגילים מעורבבים",
-    en: "Mixed review",
-    tag: "חזרה · שני הסוגים, בלי רמז",
-    label: "חזרה",
-    requires: ["partsLn"],
-    nodes: [{ gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }, { gen: "partsReview" }],
-  },
-  // The rational tower's second floor: cubic denominators, monic, a line.
-  {
-    id: "cub3",
-    place: "pf2",
-    kind: "core",
-    num: 1,
-    title: "שלושה גורמים שונים",
-    en: "Three distinct factors",
-    tag: "A · B · C",
-    nodes: [
-      { gen: "cubLin3" },
-      { gen: "cubLin3Quad", boss: true }, // the quadratic to factor first
-    ],
-  },
-  {
-    id: "cubDouble",
-    place: "pf2",
-    kind: "core",
-    num: 2,
-    title: "גורם כפול",
-    en: "A repeated factor",
-    tag: "Bx+C ואז הצבה",
-    requires: ["cub3"],
-    nodes: [
-      { gen: "cubRep" },
-      { gen: "cubRepQuad", boss: true }, // the perfect square to recognize
-    ],
-  },
-  {
-    id: "cubQuad",
-    place: "pf2",
-    kind: "core",
-    num: 3,
-    title: "גורם ריבועי שלא מתפרק",
-    en: "An irreducible quadratic factor",
-    tag: "Bx+C והשלמה לריבוע",
-    requires: ["cubDouble"],
-    nodes: [
-      { gen: "cubIrr" },
-      { gen: "cubIrrBoss", boss: true },
-    ],
-  },
-  {
-    id: "cubReview",
-    place: "pf2",
-    kind: "review",
-    title: "תרגילים מעורבבים",
-    en: "Mixed review",
-    tag: "חזרה · כל הסוגים, בלי רמז",
-    label: "חזרה",
-    requires: ["cubQuad"],
-    nodes: [{ gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }],
-  },
-  // The substitution tower: one floor, a line. Room 1 and the review draw
-  // their exercises' types up front (`plan`, see drawSubPlan).
-  {
-    id: "subR1",
-    place: "sub",
-    kind: "core",
-    num: 1,
-    title: "בסיס",
-    en: "Basics",
-    tag: "t = g(x)",
-    plan: "subR1",
-    nodes: [{ gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }],
-  },
-  {
-    id: "subR2",
-    place: "sub",
-    kind: "core",
-    num: 2,
-    title: "העמקה",
-    en: "Going deeper",
-    tag: "t = g(x)",
-    requires: ["subR1"],
-    nodes: [{ gen: "subA" }, { gen: "subB" }, { gen: "subC", boss: true }],
-  },
-  {
-    id: "subReview",
-    place: "sub",
-    kind: "review",
-    title: "תרגילים מעורבבים",
-    en: "Mixed review",
-    tag: "חזרה · שני הסוגים, בלי רמז",
-    label: "חזרה",
-    requires: ["subR2"],
-    plan: "subReview",
-    nodes: [{ gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }],
-  },
-];
 
 const ROOM_BY_ID = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
 const START_SCORE = 10;
@@ -3306,7 +3034,11 @@ const SOLUTION_COST = 3;
 
 // --- persistence (localStorage may be missing or throw: private mode etc.) --
 
-const STORE_KEY = "intapp.progress.v1";
+// ?test (the lecturer's test panel, below) plays on its own copy, never on
+// the server: no entry, nothing in the student table. ?test&group=software
+// shows the game as that group sees it.
+const TEST_MODE = new URLSearchParams(location.search).has("test");
+const STORE_KEY = TEST_MODE ? "intapp.progress.test" : "intapp.progress.v1";
 
 function loadStore() {
   try {
@@ -3321,10 +3053,11 @@ function loadStore() {
 let store = loadStore();
 // Who is playing, and the newer of this computer's and the server's copy
 // (cloud.js). Asks for an ID number the first time; nothing is drawn before.
-store = await cloudInit(store);
-const student = currentStudent();
+if (!TEST_MODE) store = await cloudInit(store);
+const student = TEST_MODE ? null : currentStudent();
+const viewGroup = TEST_MODE ? new URLSearchParams(location.search).get("group") : student?.group;
 // Software engineering doesn't study rational functions II (cubic floor).
-const hasPf2 = () => student?.group !== "software";
+const hasPf2 = () => viewGroup !== "software";
 // Beside the title: who is playing, and a way out on a shared computer.
 if (student) {
   const el = document.getElementById("whoLine");
@@ -3381,11 +3114,6 @@ const quotedTitles = (ids) => ids.map((id) => `"${ROOM_BY_ID[id].title}"`).join(
 
 // The upper wing (review, non-monic, the topic medal) opens once the three core
 // rooms are conquered - or earlier, if the student opens its gate anyway.
-const CORE_IDS = ["repeated", "pf1", "irreducible"];
-const FLOOR1_IDS = ["basic", "linear"];
-const PARTS_IDS = ["partsPoly", "partsLn"];
-const CUB_IDS = ["cub3", "cubDouble", "cubQuad"];
-const SUB_IDS = ["subR1", "subR2"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
@@ -3830,39 +3558,10 @@ function padlockSvg(n, open) {
 // Upgrades: a gold rim for the review room (and, rational functions only, a
 // star for the optional room).
 
+const MEDALS = MEDAL_LIST.filter((m) => m.id !== "pf2" || hasPf2());
+
 const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
 
-const MEDALS = [
-  {
-    id: "pf",
-    title: "פונקציות רציונליות I",
-    rooms: CORE_IDS,
-    need: "שלושת החדרים במסדרון",
-    gold: { room: "review", text: "תרגילים מעורבבים" },
-    star: { room: "nonmonic", text: "מכנה עם מקדם מוביל" },
-  },
-  {
-    id: "parts",
-    title: "אינטגרציה בחלקים",
-    rooms: PARTS_IDS,
-    need: "שני החדרים במגדל",
-    gold: { room: "partsReview", text: "תרגילים מעורבבים" },
-  },
-  {
-    id: "pf2",
-    title: "פונקציות רציונליות II",
-    rooms: CUB_IDS,
-    need: "שלושת החדרים בקומה",
-    gold: { room: "cubReview", text: "תרגילים מעורבבים" },
-  },
-  {
-    id: "sub",
-    title: "הצבה",
-    rooms: SUB_IDS,
-    need: "שני החדרים במגדל",
-    gold: { room: "subReview", text: "תרגילים מעורבבים" },
-  },
-].filter((m) => m.id !== "pf2" || hasPf2());
 
 function medalState(medal) {
   const earned = medal.rooms.every(isConquered);

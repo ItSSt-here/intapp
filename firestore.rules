@@ -3,7 +3,7 @@ rules_version = '2';
 // Firestore security rules for intapp (project intapp-2f266). They live in the
 // Firebase console (Firestore Database -> Rules); this file is the copy kept
 // with the code. Before pasting, replace LECTURER_EMAIL with the lecturer's
-// Google address.
+// Google address, in lowercase.
 //
 // students/<key>: one document per student; the key is a SHA-256 hash of the
 // ID number (cloud.js). Anyone signed in (students are anonymous) may read or
@@ -17,7 +17,7 @@ service cloud.firestore {
 
     function isLecturer() {
       return request.auth != null
-        && request.auth.token.email == "LECTURER_EMAIL"
+        && request.auth.token.email.lower() == "LECTURER_EMAIL"
         && request.auth.token.email_verified == true;
     }
 
