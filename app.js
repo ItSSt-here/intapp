@@ -3879,7 +3879,7 @@ function medalMiniHtml(medalId) {
   const got = m.pieces.filter(Boolean).length;
   const label = m.earned ? `מדליה: ממוצע ${m.avg}` : `המדליה: ${got} מתוך ${m.pieces.length} חלקים`;
   const body = m.earned
-    ? `<circle cx="60" cy="58" r="35" class="medal-rim"/><circle cx="60" cy="58" r="30" fill="${MEDAL_COLORS[scoreTier(m.avg)]}"/>
+    ? `${medalRim(m.id, "medal-rim")}<circle cx="60" cy="58" r="30" fill="${MEDAL_COLORS[scoreTier(m.avg)]}"/>
        <text x="60" y="69" text-anchor="middle" class="medal-avg">${m.avg}</text>`
     : medalSlices(m.pieces.length, (i) => m.pieces[i]);
   return `<svg class="medal-mini${m.earned ? " earned" : ""}${m.gold ? " gold" : ""}" viewBox="22 20 76 76" role="img" aria-label="${label}"><title>${label}</title>${body}</svg>`;
@@ -3891,6 +3891,23 @@ const medalSig = (m) => (m.earned ? `${m.avg}|${m.gold}|${m.star}` : "");
 // (Older stores kept one string, store.medalSeen, for the rational medal.)
 const medalsSeen = () => store.medalsSeen || { pf: store.medalSeen };
 const medalIsNew = (m) => m.earned && medalsSeen()[m.id] !== medalSig(m);
+
+// Each tower's medal has its own rim shape (the colour is the score): a
+// coin with a toothed edge for rational functions, an octagon for parts, a
+// shield for substitution. Centre (60, 58); the disc inside has r = 30.
+function medalRimD(id) {
+  const pts = (n, r, turn) => Array.from({ length: n }, (_, k) => {
+    const a = ((turn + (k * 360) / n) * Math.PI) / 180;
+    const rr = typeof r === "function" ? r(k) : r;
+    return `${(60 + rr * Math.cos(a)).toFixed(2)} ${(58 + rr * Math.sin(a)).toFixed(2)}`;
+  });
+  if (id === "parts") return `M${pts(8, 37, 22.5).join("L")}Z`;
+  if (id === "sub") return "M30 22H90Q94 22 94 26V56Q94 82 60 96Q26 82 26 56V26Q26 22 30 22Z";
+  return `M${pts(48, (k) => (k % 2 ? 34 : 36.5), -90).join("L")}Z`;
+}
+const medalRim = (id, cls) => `<path d="${medalRimD(id)}" class="${cls}" stroke-linejoin="round"/>`;
+// The topic's mark at the top of the disc, the same as in the floor panel.
+const medalMark = (id) => ({ pf: "½", pf2: "x³", parts: "uv", sub: "t" })[id] || "∫";
 
 // Two laurel branches curving up either side of the medal.
 function laurelLeaves(color) {
@@ -3919,7 +3936,7 @@ function medalSvg(m) {
     return `
       <svg class="medal empty" viewBox="0 0 120 116" role="img" aria-label="המדליה עוד לא הושגה: ${got} מתוך ${pieces.length} חלקים">
         <g opacity="0.3">${laurelLeaves("#8c8270")}</g>
-        <circle cx="60" cy="58" r="34" class="medal-outline"/>
+        ${medalRim(m.id, "medal-outline")}
         ${pieces.length ? medalSlices(pieces.length, (i) => pieces[i]) : '<text x="60" y="69" text-anchor="middle" class="medal-q">?</text>'}
         ${ribbon}
       </svg>`;
@@ -3928,10 +3945,10 @@ function medalSvg(m) {
   return `
     <svg class="medal${m.gold ? " gold" : ""}" viewBox="0 0 120 116" role="img" aria-label="מדליה: ממוצע ${m.avg}">
       ${laurelLeaves(m.gold ? "#c9a227" : "#6f8f4e")}
-      <circle cx="60" cy="58" r="35" class="medal-rim"/>
+      ${medalRim(m.id, "medal-rim")}
       <circle cx="60" cy="58" r="30" fill="${fill}"/>
       <circle cx="60" cy="58" r="26" class="medal-inner"/>
-      <text x="60" y="47" text-anchor="middle" class="medal-int">∫</text>
+      <text x="60" y="47" text-anchor="middle" class="medal-int">${medalMark(m.id)}</text>
       <text x="60" y="72" text-anchor="middle" class="medal-avg">${m.avg}</text>
       ${m.star ? star : ""}
       ${ribbon}
