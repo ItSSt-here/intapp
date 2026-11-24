@@ -516,6 +516,7 @@ const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPo
 function problemLatex(p) {
   if (p.kind === "parts") return partsProblemLatex(p);
   if (p.kind === "cub") return cubProblemLatex(p);
+  if (p.kind === "sub") return subProblemLatex(p);
   if (p.kind === "basic") return basicProblemLatex(p);
   if (p.kind === "nmr") return nmrProblemLatex(p);
   if (p.kind === "nmi") return nmiProblemLatex(p);
@@ -540,6 +541,7 @@ function splitLatex(p, isFirst) {
 function antiderivativeLatex(p) {
   if (p.kind === "parts") return partsAntiderivativeLatex(p);
   if (p.kind === "cub") return cubAntiderivativeLatex(p);
+  if (p.kind === "sub") return subAntiderivativeLatex(p);
   if (p.kind === "basic") return basicAntiderivativeLatex(p);
   if (p.kind === "nmr") return nmrAntiderivativeLatex(p);
   if (p.kind === "nmi") return nmiAntiderivativeLatex(p);
@@ -558,6 +560,7 @@ function antiderivativeLatex(p) {
 function solutionLatex(p) {
   if (p.kind === "parts") return partsSolutionLatex(p);
   if (p.kind === "cub") return cubSolutionLatex(p);
+  if (p.kind === "sub") return subSolutionLatex(p);
   if (p.kind === "basic") return basicSolutionLatex(p);
   if (p.kind === "nmr") return nmrSolutionLatex(p);
   if (p.kind === "nmi") return nmiSolutionLatex(p);
@@ -1219,6 +1222,7 @@ function generateCubicReviewExercise(entry) {
 function integrandFn(p) {
   if (p.kind === "parts") return partsIntegrandFn(p);
   if (p.kind === "cub") return cubIntegrandFn(p);
+  if (p.kind === "sub") return subIntegrandFn(p);
   if (p.kind === "basic") return basicIntegrandFn(p);
   if (p.kind === "nmr") return nmrIntegrandFn(p);
   if (p.kind === "nmi") return nmiIntegrandFn(p);
@@ -1230,6 +1234,7 @@ function integrandFn(p) {
 function sampleZones(p) {
   if (p.kind === "parts") return partsSampleZones(p);
   if (p.kind === "cub") return cubSampleZones(p);
+  if (p.kind === "sub") return subSampleZones(p);
   if (p.kind === "basic") return basicSampleZones(p);
   if (p.kind === "nmr") return sampleZones({ kind: "rep", a: p.n / p.m });
   if (p.kind === "nmi") return irrSampleZones({ p: p.p / p.m });
@@ -1256,6 +1261,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 function nearMissVariants(p) {
   if (p.kind === "parts") return partsNearMissVariants(p);
   if (p.kind === "cub") return cubNearMissVariants(p);
+  if (p.kind === "sub") return subNearMissVariants(p);
   if (p.kind === "basic") return basicNearMissVariants(p);
   if (p.kind === "nmr") return nmrNearMissVariants(p);
   if (p.kind === "nmi") return nmiNearMissVariants(p);
@@ -2540,6 +2546,480 @@ Object.assign(NEAR_MISS_TEXT, {
 });
 
 // ---------------------------------------------------------------------------
+// Substitution tower: t = g(x), dt = g'(x) dx
+//
+// Answer first: every exercise integrates to F = sum c_i o_i(g(x)) - one inner
+// function g for the whole answer, outer functions from the table (t^r,
+// ln|t|, e^t, sin t, cos t) with rational coefficients. The integrand is then
+// g'(x) sum c_i o_i'(g(x)), and a slip is the same answer with a c_i changed.
+//   g: { f: "poly", P } or { f: "sin" | "cos" | "ln" | "exp" | "atan" | "sqrt", a }  (base(x) + a)
+//   terms: [{ c: [num, den], o: "pow" | "ln" | "exp" | "sin" | "cos", r: [p, q] (pow only) }]
+// Problem: { kind: "sub", type, g, terms, k, shown, tRows, pre?, extra? }
+//   k      the constant in front of the integral in t (1/2 in x(x^2+3)^5) - a slip forgets it
+//   shown  the integrand as the exam writes it
+//   tRows  the integral in t as first written (and rewritten)
+//   pre    rows before the substitution (a trig identity)
+//   extra  more for the substitution bracket (x^2 = t - 1)
+// Room 1 draws 3 of SUB_R1 (different types); room 2 is one each of SUB_A
+// (a fraction or polynomial in t), SUB_B (a product (t+a)(t+b)) and SUB_C
+// (the boss: one more factor to write in t). All in plain data, as runs are saved.
+// ---------------------------------------------------------------------------
+
+const SUB_BASE = {
+  sin: { v: Math.sin, d: Math.cos, latex: "\\sin x", dLatex: "\\cos x" },
+  cos: { v: Math.cos, d: (x) => -Math.sin(x), latex: "\\cos x", dLatex: "-\\sin x" },
+  ln: { v: Math.log, d: (x) => 1 / x, latex: "\\ln x", dLatex: "\\frac{1}{x}" },
+  exp: { v: Math.exp, d: Math.exp, latex: "e^{x}", dLatex: "e^{x}" },
+  atan: { v: Math.atan, d: (x) => 1 / (1 + x * x), latex: "\\arctan x", dLatex: "\\frac{1}{1+x^2}" },
+  sqrt: { v: Math.sqrt, d: (x) => 1 / (2 * Math.sqrt(x)), latex: "\\sqrt{x}", dLatex: "\\frac{1}{2\\sqrt{x}}" },
+};
+
+const subG = (g) => (g.f === "poly" ? (x) => polyEval(g.P, x) : (x) => SUB_BASE[g.f].v(x) + g.a);
+const subDG = (g) => (g.f === "poly" ? (x) => polyEval(polyDeriv(g.P), x) : SUB_BASE[g.f].d);
+const subGLatex = (g) => (g.f === "poly" ? polyLatex(g.P) : SUB_BASE[g.f].latex + (g.a ? fmtSigned(g.a, false) : ""));
+const rv = (r) => r[0] / r[1];
+
+// g > 0 everywhere: its ln needs no | |.
+const subAlwaysPos = (g) =>
+  g.f === "poly" ? g.P[0] > 0 && g.P.every((c, i) => c >= 0 && (i % 2 === 0 || c === 0)) : g.f === "exp" && g.a >= 0;
+
+function subOuter(o, r, t) {
+  if (o === "pow") return Math.pow(t, rv(r));
+  if (o === "ln") return Math.log(Math.abs(t));
+  return Math[o](t);
+}
+function subOuterD(o, r, t) {
+  if (o === "pow") return rv(r) * Math.pow(t, rv(r) - 1);
+  if (o === "ln") return 1 / t;
+  if (o === "exp") return Math.exp(t);
+  return o === "sin" ? Math.cos(t) : -Math.sin(t);
+}
+
+const subF = (p) => {
+  const g = subG(p.g);
+  return (x) => p.terms.reduce((s, t) => s + rv(t.c) * subOuter(t.o, t.r, g(x)), 0);
+};
+
+function subIntegrandFn(p) {
+  const g = subG(p.g);
+  const dg = subDG(p.g);
+  return (x) => {
+    const t = g(x);
+    return dg(x) * p.terms.reduce((s, u) => s + rv(u.c) * subOuterD(u.o, u.r, t), 0);
+  };
+}
+
+// --- LaTeX: one term c o(arg), arg = "t" (g null) or g(x) --------------------
+
+// arg^n for a whole n >= 2: sin^3 x, ln^2 x, e^{3x}, (arctan x)^3, (x^2+1)^4.
+function subPowLatex(g, n) {
+  if (!g) return `t^{${n}}`;
+  if (!g.a && ["sin", "cos", "ln"].includes(g.f)) return `\\${g.f}^{${n}}x`;
+  if (!g.a && g.f === "exp") return `e^{${n}x}`;
+  return `\\left(${subGLatex(g)}\\right)^{${n}}`;
+}
+
+// arg^(p/q) for p/q > 0.
+function subPosPowLatex(g, [p, q]) {
+  if (q === 1) return p === 1 ? (g ? subGLatex(g) : "t") : subPowLatex(g, p);
+  const A = g ? subGLatex(g) : "t";
+  if (p === 1 && q === 2) return `\\sqrt{${A}}`;
+  return `${g ? `\\left(${A}\\right)` : "t"}^{\\frac{${p}}{${q}}}`;
+}
+
+// The coefficient in front of a body: "", "3", "\frac{1}{4}" (sign apart).
+const subCoef = ([n, d]) => (d === 1 ? (Math.abs(n) === 1 ? "" : `${Math.abs(n)}`) : `\\frac{${Math.abs(n)}}{${d}}`);
+
+function subTermLatex(term, g, isFirst, pos) {
+  const [n, d] = term.c;
+  const sign = signLatex(n, isFirst);
+  const A = g ? subGLatex(g) : "t";
+  const fnArg = !g ? " t" : g.f === "sqrt" && !g.a ? A : `\\left(${A}\\right)`;
+  if (term.o === "pow" && term.r[0] < 0) {
+    const body = subPosPowLatex(g, [-term.r[0], term.r[1]]);
+    return `${sign}\\frac{${Math.abs(n)}}{${d === 1 ? "" : d}${body}}`;
+  }
+  // A sum times a coefficient gets brackets: \frac{1}{2}(x^2+3).
+  let body;
+  if (term.o === "pow") {
+    body = subPosPowLatex(g, term.r);
+    const isSum = g && (g.f === "poly" ? polyTermCount(g.P) > 1 : !!g.a);
+    if (rv(term.r) === 1 && isSum && (subCoef(term.c) || n < 0)) body = `\\left(${A}\\right)`;
+  } else if (term.o === "ln") body = `\\ln${g && pos ? `\\left(${A}\\right)` : `|${A}|`}`;
+  else if (term.o === "exp") body = `e^{${A}}`;
+  else body = `\\${term.o}${fnArg}`;
+  return sign + subCoef(term.c) + body;
+}
+
+const subTermsLatex = (p, g) =>
+  p.terms.map((t, i) => subTermLatex(t, g, i === 0, g && subAlwaysPos(g))).join("") + "+C";
+
+const subProblemLatex = (p) => `\\int ${p.shown}\\,dx`;
+const subAntiderivativeLatex = (p) => subTermsLatex(p, p.g);
+
+// dt = g'(x) dx, written the way it is taught.
+function subDtLatex(g) {
+  if (g.f !== "poly") return `dt=${SUB_BASE[g.f].dLatex}\\,dx`;
+  const D = polyDeriv(g.P);
+  return `dt=${polyTermCount(D) > 1 ? `\\left(${polyLatex(D)}\\right)` : polyLatex(D)}\\,dx`;
+}
+
+// Worked solution: (rewrite,) substitute, (rewrite in t,) integrate, back to x.
+function subSolutionLatex(p) {
+  const rows = (p.pre || []).map((r) => `&= ${r}`);
+  rows.push(`&\\qquad \\left[\\,t=${subGLatex(p.g)},\\ \\ ${subDtLatex(p.g)}${p.extra ? `,\\ \\ ${p.extra}` : ""}\\,\\right]`);
+  for (const r of p.tRows) rows.push(`&= ${r}`);
+  rows.push(`&= ${subTermsLatex(p, null)}`);
+  rows.push(`&= ${subAntiderivativeLatex(p)}`);
+  return `\\begin{aligned}${subProblemLatex(p)} ${rows.join(" \\\\ ")}\\end{aligned}`;
+}
+
+// --- checking ------------------------------------------------------------------
+
+// Five short stretches spread over where the integrand and answer are defined
+// and tame (away from g = 0 when the answer has ln t or a root of t).
+function subSampleZones(p) {
+  const g = subG(p.g);
+  const f = subIntegrandFn(p);
+  const F = subF(p);
+  const [lo, hi] = ["ln", "sqrt"].includes(p.g.f) ? [0.05, 8] : p.g.f === "poly" ? [-2.5, 2.5] : p.g.f === "exp" ? [-3, 2.2] : [-4, 4];
+  const touchy = p.terms.some((t) => t.o === "ln" || (t.o === "pow" && (t.r[0] < 0 || t.r[1] !== 1)));
+  const ok = (x) => {
+    const fx = f(x);
+    const Fx = F(x);
+    return Number.isFinite(fx) && Number.isFinite(Fx) && Math.abs(fx) < 1e4 && (!touchy || Math.abs(g(x)) > 0.2);
+  };
+  const good = [];
+  for (let i = 0; i <= 240; i++) {
+    const x = lo + ((hi - lo) * i) / 240;
+    if (ok(x - 0.03) && ok(x) && ok(x + 0.03)) good.push(x);
+  }
+  const n = Math.min(5, good.length);
+  const zones = [];
+  for (let j = 0; j < n; j++) {
+    const x = good[Math.round((j * (good.length - 1)) / Math.max(n - 1, 1))];
+    zones.push([x - 0.02, x + 0.02]);
+  }
+  return zones;
+}
+
+function subNearMissVariants(p) {
+  const variants = [];
+  const scaleAll = (s) => ({ ...p, terms: p.terms.map((t) => ({ ...t, c: ratMul(t.c, s) })) });
+  const scaleOne = (i, s) => ({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, c: ratMul(t.c, s) } : t)) });
+  const [kn, kd] = p.k;
+  if (kn === -kd) variants.push({ kind: "subSign", problem: scaleAll([-1, 1]) }); // sin x dx = -dt forgotten
+  else if (kn !== kd) {
+    variants.push({ kind: "subConst", problem: scaleAll([kd, kn]) }); // the constant forgotten
+    variants.push({ kind: "subConst", problem: scaleAll([kd * kd, kn * kn]) }); // multiplied instead of divided
+  }
+  p.terms.forEach((t, i) => {
+    if (t.o === "pow" && rv(t.r) !== 1) variants.push({ kind: "subPow", problem: scaleOne(i, t.r) }); // not divided by the new power
+  });
+  // (a sign slip on c/t is the power slip above, already listed)
+  if (p.terms.length > 1) p.terms.forEach((t, i) => (t.o === "pow" && rv(t.r) === -1) || variants.push({ kind: "sign", problem: scaleOne(i, [-1, 1]) }));
+  else if (kn !== -kd) variants.push({ kind: "sign", problem: scaleAll([-1, 1]) });
+  return variants;
+}
+
+Object.assign(NEAR_MISS_TEXT, {
+  subConst: `כמעט! בדקו את המקדם: ${ltr("dt = g′(x)dx")}, ולכן חסר (או מיותר) מקדם - למשל ${ltr("x dx = dt/2")}.`,
+  subPow: `כמעט! בדקו את החזקה: ${ltr("∫tⁿdt = tⁿ⁺¹/(n+1)")} - מחלקים בחזקה החדשה.`,
+  subSign: `כמעט! בדקו את הסימן: ${ltr("(cos x)′ = −sin x")}, ולכן ${ltr("sin x dx = −dt")}.`,
+});
+
+// --- generators ------------------------------------------------------------------
+
+const subPow = (c, r) => ({ c, o: "pow", r: typeof r === "number" ? [r, 1] : r });
+const subFn = (o, c) => ({ c, o });
+const R = (n, d = 1) => ratio(n, d);
+// "+3" / "-3" after something; "" for 0.
+const plusN = (n) => (n ? fmtSigned(n, false) : "");
+const one = (a) => (a === 1 ? "" : a); // "t", not "1t"
+// A coefficient written before an integral: "", "-", "3", "\frac{1}{2}", "-\frac{1}{3}".
+const leadLatex = ([n, d]) => (n < 0 ? "-" : "") + subCoef([n, d]);
+const sub = (type, g, terms, k, shown, tRows, more = {}) => ({ kind: "sub", type, g, terms: terms.filter((t) => t.c[0] !== 0), k, shown, tRows, ...more });
+
+const SUB_R1 = {
+  // m x (x^2+a)^n
+  pow2() {
+    const n = randInt(3, 6), a = nonZero(-5, 5), m = pick([1, 1, 2, 3]);
+    const g = { f: "poly", P: [a, 0, 1] };
+    return sub("pow2", g, [subPow(R(m, 2 * (n + 1)), n + 1)], [1, 2], `${m === 1 ? "" : m}x\\left(x^2${plusN(a)}\\right)^{${n}}`, [`${leadLatex(R(m, 2))}\\int t^{${n}}\\,dt`]);
+  },
+  // m x^2 (x^3+a)^n
+  pow3() {
+    const n = randInt(3, 5), a = nonZero(-4, 4), m = pick([1, 1, 2, 3]);
+    const g = { f: "poly", P: [a, 0, 0, 1] };
+    return sub("pow3", g, [subPow(R(m, 3 * (n + 1)), n + 1)], [1, 3], `${m === 1 ? "" : m}x^2\\left(x^3${plusN(a)}\\right)^{${n}}`, [`${leadLatex(R(m, 3))}\\int t^{${n}}\\,dt`]);
+  },
+  // x sqrt(x^2+a) or x / sqrt(x^2+a)
+  root() {
+    const a = randInt(1, 9);
+    const g = { f: "poly", P: [a, 0, 1] };
+    if (chance(0.5)) return sub("root", g, [subPow(R(1, 3), [3, 2])], [1, 2], `x\\sqrt{x^2+${a}}`, ["\\frac{1}{2}\\int\\sqrt{t}\\,dt", "\\frac{1}{2}\\int t^{\\frac{1}{2}}\\,dt"]);
+    return sub("root", g, [subPow(R(1), [1, 2])], [1, 2], `\\frac{x}{\\sqrt{x^2+${a}}}`, ["\\frac{1}{2}\\int\\frac{dt}{\\sqrt{t}}", "\\frac{1}{2}\\int t^{-\\frac{1}{2}}\\,dt"]);
+  },
+  // m x e^{x^2}, m x^2 e^{x^3}, m x e^{-x^2}
+  exp() {
+    const m = pick([1, 1, 2, 3, 4]);
+    const v = pick([[[0, 0, 1], "x", 2], [[0, 0, 0, 1], "x^2", 3], [[0, 0, -1], "x", -2]]);
+    const [P, front, kd] = v;
+    const k = R(1, kd);
+    return sub("exp", { f: "poly", P }, [subFn("exp", R(m, kd))], k, `${m === 1 ? "" : m}${front}e^{${polyLatex(P)}}`, [`${leadLatex(R(m, kd))}\\int e^{t}\\,dt`]);
+  },
+  // x cos(x^2), x sin(x^2), x^2 cos(x^3), x^2 sin(x^3)
+  trig() {
+    const deg = pick([2, 3]), fn = pick(["sin", "cos"]);
+    const P = deg === 2 ? [0, 0, 1] : [0, 0, 0, 1];
+    const out = fn === "cos" ? subFn("sin", R(1, deg)) : subFn("cos", R(-1, deg));
+    return sub("trig", { f: "poly", P }, [out], [1, deg], `${deg === 2 ? "x" : "x^2"}\\${fn}\\left(${polyLatex(P)}\\right)`, [`\\frac{1}{${deg}}\\int\\${fn} t\\,dt`]);
+  },
+  // cos x e^{sin x}, sin x e^{cos x}
+  expTrig() {
+    if (chance(0.5)) return sub("expTrig", { f: "sin", a: 0 }, [subFn("exp", R(1))], [1, 1], "e^{\\sin x}\\cos x", ["\\int e^{t}\\,dt"]);
+    return sub("expTrig", { f: "cos", a: 0 }, [subFn("exp", R(-1))], [-1, 1], "e^{\\cos x}\\sin x", ["-\\int e^{t}\\,dt"]);
+  },
+  // sin x cos^n x, cos x sin^n x, cos x / sin^n x, sin x / cos^n x
+  trigPow() {
+    const up = chance(0.5);
+    const g = { f: pick(["sin", "cos"]), a: 0 };
+    const other = g.f === "sin" ? "cos" : "sin";
+    const s = g.f === "cos" ? -1 : 1;
+    const k = [s, 1];
+    if (up) {
+      const n = randInt(2, 5);
+      return sub("trigPow", g, [subPow(R(s, n + 1), n + 1)], k, `\\${other} x\\${g.f}^{${n}}x`, [`${s < 0 ? "-" : ""}\\int t^{${n}}\\,dt`]);
+    }
+    const n = randInt(2, 4);
+    return sub("trigPow", g, [subPow(R(s, 1 - n), 1 - n)], k, `\\frac{\\${other} x}{\\${g.f}^{${n}}x}`, [`${s < 0 ? "-" : ""}\\int\\frac{dt}{t^{${n}}}`, `${s < 0 ? "-" : ""}\\int t^{-${n}}\\,dt`]);
+  },
+  // f'/f: m(2x+b)/(x^2+bx+c), x/(x^2+a), x^2/(x^3+a)
+  log() {
+    const v = randInt(0, 2);
+    if (v === 0) {
+      const b = nonZero(-4, 4), c = nonZero(-6, 6), m = pick([1, 1, 2, 3]);
+      const g = { f: "poly", P: [c, b, 1] };
+      return sub("log", g, [subFn("ln", R(m))], [1, 1], `\\frac{${polyLatex([m * b, 2 * m])}}{${polyLatex(g.P)}}`, [`${m === 1 ? "" : m}\\int\\frac{dt}{t}`]);
+    }
+    const deg = v === 1 ? 2 : 3;
+    const a = deg === 2 ? randInt(1, 9) : nonZero(-4, 4);
+    const P = deg === 2 ? [a, 0, 1] : [a, 0, 0, 1];
+    return sub("log", { f: "poly", P }, [subFn("ln", R(1, deg))], [1, deg], `\\frac{${deg === 2 ? "x" : "x^2"}}{${polyLatex(P)}}`, [`\\frac{1}{${deg}}\\int\\frac{dt}{t}`]);
+  },
+  // m e^x / (e^x + a)
+  logExp() {
+    const a = randInt(1, 5), m = pick([1, 1, 2, 3]);
+    return sub("logExp", { f: "exp", a }, [subFn("ln", R(m))], [1, 1], `\\frac{${m === 1 ? "" : m}e^{x}}{e^{x}+${a}}`, [`${m === 1 ? "" : m}\\int\\frac{dt}{t}`]);
+  },
+  // tan x = sin x / cos x, cot x = cos x / sin x
+  tan() {
+    if (chance(0.5)) return sub("tan", { f: "cos", a: 0 }, [subFn("ln", R(-1))], [-1, 1], "\\tan x", ["-\\int\\frac{dt}{t}"], { pre: ["\\int\\frac{\\sin x}{\\cos x}\\,dx"] });
+    return sub("tan", { f: "sin", a: 0 }, [subFn("ln", R(1))], [1, 1], "\\cot x", ["\\int\\frac{dt}{t}"], { pre: ["\\int\\frac{\\cos x}{\\sin x}\\,dx"] });
+  },
+  // ln^n x / x, 1/(x ln x), cos(ln x)/x, sin(ln x)/x
+  ln() {
+    const g = { f: "ln", a: 0 };
+    const v = randInt(0, 3);
+    if (v === 0) {
+      const n = randInt(2, 4);
+      return sub("ln", g, [subPow(R(1, n + 1), n + 1)], [1, 1], `\\frac{\\ln^{${n}}x}{x}`, [`\\int t^{${n}}\\,dt`]);
+    }
+    if (v === 1) return sub("ln", g, [subFn("ln", R(1))], [1, 1], "\\frac{1}{x\\ln x}", ["\\int\\frac{dt}{t}"]);
+    if (v === 2) return sub("ln", g, [subFn("sin", R(1))], [1, 1], "\\frac{\\cos\\left(\\ln x\\right)}{x}", ["\\int\\cos t\\,dt"]);
+    return sub("ln", g, [subFn("cos", R(-1))], [1, 1], "\\frac{\\sin\\left(\\ln x\\right)}{x}", ["\\int\\sin t\\,dt"]);
+  },
+  // arctan^n x / (1+x^2), e^{arctan x} / (1+x^2)
+  atan() {
+    const g = { f: "atan", a: 0 };
+    if (chance(0.6)) {
+      const n = randInt(2, 4);
+      return sub("atan", g, [subPow(R(1, n + 1), n + 1)], [1, 1], `\\frac{\\left(\\arctan x\\right)^{${n}}}{1+x^2}`, [`\\int t^{${n}}\\,dt`]);
+    }
+    return sub("atan", g, [subFn("exp", R(1))], [1, 1], "\\frac{e^{\\arctan x}}{1+x^2}", ["\\int e^{t}\\,dt"]);
+  },
+  // e^{sqrt x}/sqrt x, cos(sqrt x)/sqrt x, sin(sqrt x)/sqrt x
+  sqrt() {
+    const g = { f: "sqrt", a: 0 };
+    const v = randInt(0, 2);
+    if (v === 0) return sub("sqrt", g, [subFn("exp", R(2))], [2, 1], "\\frac{e^{\\sqrt{x}}}{\\sqrt{x}}", ["2\\int e^{t}\\,dt"]);
+    if (v === 1) return sub("sqrt", g, [subFn("sin", R(2))], [2, 1], "\\frac{\\cos\\sqrt{x}}{\\sqrt{x}}", ["2\\int\\cos t\\,dt"]);
+    return sub("sqrt", g, [subFn("cos", R(-2))], [2, 1], "\\frac{\\sin\\sqrt{x}}{\\sqrt{x}}", ["2\\int\\sin t\\,dt"]);
+  },
+  // e^x (e^x+a)^n, e^x cos(e^x), e^x sin(e^x)
+  ex() {
+    const v = randInt(0, 2);
+    if (v === 0) {
+      const a = nonZero(-3, 3), n = randInt(2, 5);
+      return sub("ex", { f: "exp", a }, [subPow(R(1, n + 1), n + 1)], [1, 1], `e^{x}\\left(e^{x}${plusN(a)}\\right)^{${n}}`, [`\\int t^{${n}}\\,dt`]);
+    }
+    const g = { f: "exp", a: 0 };
+    if (v === 1) return sub("ex", g, [subFn("sin", R(1))], [1, 1], "e^{x}\\cos\\left(e^{x}\\right)", ["\\int\\cos t\\,dt"]);
+    return sub("ex", g, [subFn("cos", R(-1))], [1, 1], "e^{x}\\sin\\left(e^{x}\\right)", ["\\int\\sin t\\,dt"]);
+  },
+};
+
+// g'(x) dx written into a shown integrand: "f/x", "f/(1+x^2)", "cos x f".
+const SUB_SHOW = {
+  ln: (num, den = "") => `\\frac{${num}}{x${den}}`,
+  atan: (num, den = "") => `\\frac{${num}}{\\left(1+x^2\\right)${den}}`,
+};
+
+// A polynomial in g with whole coefficients: ln^2x - 3 ln x + 2.
+function subPolyInLatex(P, g) {
+  let out = "";
+  for (let k = P.length - 1; k >= 0; k--) {
+    const c = P[k];
+    if (!c) continue;
+    const abs = Math.abs(c);
+    const body = k === 0 ? "" : k === 1 ? subGLatex(g) : subPowLatex(g, k);
+    out += signLatex(c, out === "") + (k > 0 && abs === 1 ? "" : abs) + body;
+  }
+  return out;
+}
+
+// Room 2, exercise 1: g and g' in view; in t a fraction to split, or a polynomial.
+const SUB_A = {
+  // (t+b)/t: (ln x + b)/(x ln x), cos x (sin x + b)/sin x
+  overT() {
+    const b = nonZero(-5, 5), lnG = chance(0.5);
+    const g = { f: lnG ? "ln" : "sin", a: 0 };
+    const shown = lnG ? `\\frac{\\ln x${plusN(b)}}{x\\ln x}` : `\\frac{\\cos x\\left(\\sin x${plusN(b)}\\right)}{\\sin x}`;
+    return sub("overT", g, [subPow(R(1), 1), subFn("ln", R(b))], [1, 1], shown, [`\\int\\frac{t${plusN(b)}}{t}\\,dt`, `\\int\\left(1${signLatex(b, false)}\\frac{${Math.abs(b)}}{t}\\right)dt`]);
+  },
+  // (t+b)/t^2: ln|t| - b/t
+  overT2() {
+    const b = nonZero(-5, 5), lnG = chance(0.5);
+    const g = { f: lnG ? "ln" : "sin", a: 0 };
+    const shown = lnG ? `\\frac{\\ln x${plusN(b)}}{x\\ln^{2}x}` : `\\frac{\\cos x\\left(\\sin x${plusN(b)}\\right)}{\\sin^{2}x}`;
+    return sub("overT2", g, [subFn("ln", R(1)), subPow(R(-b), -1)], [1, 1], shown, [`\\int\\frac{t${plusN(b)}}{t^2}\\,dt`, `\\int\\left(\\frac{1}{t}${signLatex(b, false)}\\frac{${Math.abs(b)}}{t^2}\\right)dt`]);
+  },
+  // (t+b)/sqrt t with t = ln x
+  overSqrt() {
+    const b = nonZero(-4, 4);
+    const g = { f: "ln", a: 0 };
+    return sub("overSqrt", g, [subPow(R(2, 3), [3, 2]), subPow(R(2 * b), [1, 2])], [1, 1], `\\frac{\\ln x${plusN(b)}}{x\\sqrt{\\ln x}}`,
+      [`\\int\\frac{t${plusN(b)}}{\\sqrt{t}}\\,dt`, `\\int\\left(t^{\\frac{1}{2}}${signLatex(b, false)}${Math.abs(b) === 1 ? "" : Math.abs(b)}t^{-\\frac{1}{2}}\\right)dt`]);
+  },
+  // g'(x)(alpha g^2 + beta g + gamma), g = ln x, arctan x or sin x
+  poly() {
+    const al = pick([1, 1, 2, 3]), be = randInt(-4, 4), ga = nonZero(-5, 5);
+    const f = pick(["ln", "atan", "sin"]);
+    const g = { f, a: 0 };
+    const Pt = [ga, be, al];
+    const inG = subPolyInLatex(Pt, g);
+    const shown = f === "sin" ? `\\cos x\\left(${inG}\\right)` : f === "ln" ? `\\frac{${inG}}{x}` : `\\frac{${inG}}{1+x^2}`;
+    return sub("poly", g, [subPow(R(al, 3), 3), subPow(R(be, 2), 2), subPow(R(ga), 1)], [1, 1], shown, [`\\int\\left(${polyLatex(Pt, "t")}\\right)dt`]);
+  },
+  // trig identities: sin^3 x, cos^3 x, sin^3 x cos^2 x, cos^3 x sin^2 x
+  identity() {
+    const odd = pick(["sin", "cos"]); // the odd power: one of it goes with dx
+    const other = odd === "sin" ? "cos" : "sin";
+    const g = { f: other, a: 0 }; // t = the other one
+    const s = other === "cos" ? -1 : 1; // sin x dx = -dt
+    const minus = s < 0 ? "-" : "";
+    if (chance(0.5)) {
+      return sub("identity", g, [subPow(R(s), 1), subPow(R(-s, 3), 3)], [s, 1], `\\${odd}^{3}x`, [`${minus}\\int\\left(1-t^2\\right)dt`],
+        { pre: [`\\int\\${odd} x\\left(1-\\${other}^{2}x\\right)dx`] });
+    }
+    return sub("identity", g, [subPow(R(s, 3), 3), subPow(R(-s, 5), 5)], [s, 1], `\\${odd}^{3}x\\,\\${other}^{2}x`,
+      [`${minus}\\int\\left(1-t^2\\right)t^2\\,dt`, `${minus}\\int\\left(t^2-t^4\\right)dt`],
+      { pre: [`\\int\\${odd} x\\left(1-\\${other}^{2}x\\right)\\${other}^{2}x\\,dx`] });
+  },
+};
+
+// Room 2, exercise 2: g'(x)(g+a)(g+b), g = e^x, ln x, cos x or arctan x.
+function generateSubProduct() {
+  let a, b;
+  do {
+    a = nonZero(-3, 3);
+    b = nonZero(-3, 3);
+  } while (a === b);
+  const f = pick(["exp", "ln", "cos", "atan"]);
+  const g = { f, a: 0 };
+  const B = SUB_BASE[f].latex;
+  const pair = `\\left(${B}${plusN(a)}\\right)\\left(${B}${plusN(b)}\\right)`;
+  const shown = f === "exp" ? `e^{x}${pair}` : f === "cos" ? `\\sin x${pair}` : f === "ln" ? `\\frac{${pair}}{x}` : `\\frac{${pair}}{1+x^2}`;
+  const s = f === "cos" ? -1 : 1;
+  const minus = s < 0 ? "-" : "";
+  return sub("product", g, [subPow(R(s, 3), 3), subPow(R(s * (a + b), 2), 2), subPow(R(s * a * b), 1)], [s, 1], shown,
+    [`${minus}\\int\\left(t${plusN(a)}\\right)\\left(t${plusN(b)}\\right)dt`, `${minus}\\int\\left(${polyLatex([a * b, a + b, 1], "t")}\\right)dt`]);
+}
+
+// Room 2's boss: g and part of g' in view, one more factor to write in t.
+const SUB_C = {
+  // x^3 (x^2+a)^n: x^2 = t - a
+  x3pow() {
+    const a = randInt(1, 4), n = randInt(3, 5);
+    const g = { f: "poly", P: [a, 0, 1] };
+    return sub("x3pow", g, [subPow(R(1, 2 * (n + 2)), n + 2), subPow(R(-a, 2 * (n + 1)), n + 1)], [1, 2], `x^3\\left(x^2+${a}\\right)^{${n}}`,
+      [`\\frac{1}{2}\\int\\left(t-${a}\\right)t^{${n}}\\,dt`, `\\frac{1}{2}\\int\\left(t^{${n + 1}}-${one(a)}t^{${n}}\\right)dt`], { extra: `x^2=t-${a}` });
+  },
+  // x^3 sqrt(x^2+a), x^3 / sqrt(x^2+a)
+  x3root() {
+    const a = randInt(1, 9);
+    const g = { f: "poly", P: [a, 0, 1] };
+    if (chance(0.5)) {
+      return sub("x3root", g, [subPow(R(1, 5), [5, 2]), subPow(R(-a, 3), [3, 2])], [1, 2], `x^3\\sqrt{x^2+${a}}`,
+        [`\\frac{1}{2}\\int\\left(t-${a}\\right)\\sqrt{t}\\,dt`, `\\frac{1}{2}\\int\\left(t^{\\frac{3}{2}}-${one(a)}t^{\\frac{1}{2}}\\right)dt`], { extra: `x^2=t-${a}` });
+    }
+    return sub("x3root", g, [subPow(R(1, 3), [3, 2]), subPow(R(-a), [1, 2])], [1, 2], `\\frac{x^3}{\\sqrt{x^2+${a}}}`,
+      [`\\frac{1}{2}\\int\\frac{t-${a}}{\\sqrt{t}}\\,dt`, `\\frac{1}{2}\\int\\left(t^{\\frac{1}{2}}-${one(a)}t^{-\\frac{1}{2}}\\right)dt`], { extra: `x^2=t-${a}` });
+  },
+  // x^5 (x^3+a)^n: x^3 = t - a
+  x5pow() {
+    const a = randInt(1, 3), n = randInt(2, 4);
+    const g = { f: "poly", P: [a, 0, 0, 1] };
+    return sub("x5pow", g, [subPow(R(1, 3 * (n + 2)), n + 2), subPow(R(-a, 3 * (n + 1)), n + 1)], [1, 3], `x^5\\left(x^3+${a}\\right)^{${n}}`,
+      [`\\frac{1}{3}\\int\\left(t-${a}\\right)t^{${n}}\\,dt`, `\\frac{1}{3}\\int\\left(t^{${n + 1}}-${one(a)}t^{${n}}\\right)dt`], { extra: `x^3=t-${a}` });
+  },
+  // e^{2x}/(e^x+a)^2, e^{2x} sqrt(e^x+a): e^x = t - a
+  e2x() {
+    const a = randInt(1, 3);
+    const g = { f: "exp", a };
+    if (chance(0.5)) {
+      return sub("e2x", g, [subFn("ln", R(1)), subPow(R(a), -1)], [1, 1], `\\frac{e^{2x}}{\\left(e^{x}+${a}\\right)^{2}}`,
+        [`\\int\\frac{t-${a}}{t^2}\\,dt`, `\\int\\left(\\frac{1}{t}-\\frac{${a}}{t^2}\\right)dt`], { extra: `e^{x}=t-${a}` });
+    }
+    return sub("e2x", g, [subPow(R(2, 5), [5, 2]), subPow(R(-2 * a, 3), [3, 2])], [1, 1], `e^{2x}\\sqrt{e^{x}+${a}}`,
+      [`\\int\\left(t-${a}\\right)\\sqrt{t}\\,dt`, `\\int\\left(t^{\\frac{3}{2}}-${one(a)}t^{\\frac{1}{2}}\\right)dt`], { extra: `e^{x}=t-${a}` });
+  },
+  // ln x / (x (ln x + a)^2): ln x = t - a
+  lnx() {
+    const a = nonZero(-3, 3);
+    const g = { f: "ln", a };
+    // ∫(t-a)/t^2 dt = ln|t| + a/t
+    return sub("lnx", g, [subFn("ln", R(1)), subPow(R(a), -1)], [1, 1], `\\frac{\\ln x}{x\\left(\\ln x${plusN(a)}\\right)^{2}}`,
+      [`\\int\\frac{t${plusN(-a)}}{t^2}\\,dt`, `\\int\\left(\\frac{1}{t}${signLatex(-a, false)}\\frac{${Math.abs(a)}}{t^2}\\right)dt`], { extra: `\\ln x=t${plusN(-a)}` });
+  },
+};
+
+// Room 1: three different types. Review: two room-1 types, one of room 2's
+// first two exercises, and a boss - shuffled.
+function drawSubPlan(kind) {
+  const r1 = shuffled(Object.keys(SUB_R1)).map((t) => `r1:${t}`);
+  if (kind === "subR1") return r1.slice(0, 3);
+  return shuffled([r1[0], r1[1], pick(["A", "B"]), "C"]);
+}
+
+function generateSubExercise(entry) {
+  for (;;) {
+    let p;
+    if (entry.startsWith("r1:")) p = SUB_R1[entry.slice(3)]();
+    else if (entry === "A") p = pick(Object.values(SUB_A))();
+    else if (entry === "B") p = generateSubProduct();
+    else p = pick(Object.values(SUB_C))();
+    if (subSampleZones(p).length >= 4) return p; // enough tame ground to check on
+  }
+}
+
+Object.assign(GENERATORS, {
+  subA: () => generateSubExercise("A"),
+  subB: () => generateSubExercise("B"),
+  subC: () => generateSubExercise("C"),
+});
+
+// ---------------------------------------------------------------------------
 // The tower: floor 1
 // ---------------------------------------------------------------------------
 
@@ -2780,6 +3260,42 @@ const ROOMS = [
     requires: ["cubQuad"],
     nodes: [{ gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }, { gen: "cubReview" }],
   },
+  // The substitution tower: one floor, a line. Room 1 and the review draw
+  // their exercises' types up front (`plan`, see drawSubPlan).
+  {
+    id: "subR1",
+    place: "sub",
+    kind: "core",
+    num: 1,
+    title: "הנגזרת בפנים",
+    en: "The derivative is there",
+    tag: "t = g(x)",
+    plan: "subR1",
+    nodes: [{ gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }],
+  },
+  {
+    id: "subR2",
+    place: "sub",
+    kind: "core",
+    num: 2,
+    title: "נשאר חישוב",
+    en: "Work left after substituting",
+    tag: "t = g(x), ואז עוד צעד",
+    requires: ["subR1"],
+    nodes: [{ gen: "subA" }, { gen: "subB" }, { gen: "subC", boss: true }],
+  },
+  {
+    id: "subReview",
+    place: "sub",
+    kind: "review",
+    title: "תרגילים מעורבבים",
+    en: "Mixed review",
+    tag: "חזרה · שני הסוגים, בלי רמז",
+    label: "חזרה",
+    requires: ["subR2"],
+    plan: "subReview",
+    nodes: [{ gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }],
+  },
 ];
 
 const ROOM_BY_ID = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
@@ -2806,7 +3322,7 @@ let store = loadStore();
 // Where the map is: the ground floor or one of the towers above it.
 // Saves from before the towers kept store.floor (2: partial fractions) and
 // a single "stairs".
-const PLACES = ["ground", "pf", "parts", "pf2"];
+const PLACES = ["ground", "pf", "parts", "pf2", "sub"];
 if (!PLACES.includes(store.place)) store.place = store.floor === 2 ? "pf" : "ground";
 delete store.floor;
 if (store.lastRoom === "stairs") store.lastRoom = "stairsPf";
@@ -2848,6 +3364,7 @@ const CORE_IDS = ["repeated", "pf1", "irreducible"];
 const FLOOR1_IDS = ["basic", "linear"];
 const PARTS_IDS = ["partsPoly", "partsLn"];
 const CUB_IDS = ["cub3", "cubDouble", "cubQuad"];
+const SUB_IDS = ["subR1", "subR2"];
 const coreDone = () => CORE_IDS.every(isConquered);
 const wingOpen = () => coreDone() || !!store.wingOpen;
 
@@ -2881,6 +3398,7 @@ function recommendedRoomId() {
   if (currentPlace() === "ground") return FLOOR1_IDS.find((id) => !isConquered(id)) || null;
   if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || (isConquered("partsReview") ? null : "partsReview");
   if (currentPlace() === "pf2") return CUB_IDS.find((id) => !isConquered(id)) || (isConquered("cubReview") ? null : "cubReview");
+  if (currentPlace() === "sub") return SUB_IDS.find((id) => !isConquered(id)) || (isConquered("subReview") ? null : "subReview");
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -3316,6 +3834,13 @@ const MEDALS = [
     need: "שלושת החדרים בקומה",
     gold: { room: "cubReview", text: "תרגילים מעורבבים" },
   },
+  {
+    id: "sub",
+    title: "הצבה",
+    rooms: SUB_IDS,
+    need: "שני החדרים במגדל",
+    gold: { room: "subReview", text: "תרגילים מעורבבים" },
+  },
 ];
 
 function medalState(medal) {
@@ -3532,11 +4057,11 @@ $("medalBackBtn").addEventListener("click", () => goToMap());
 $("medalsBtn").addEventListener("click", () => goToMedals());
 
 // The stairs on the ground floor, one per tower.
-const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts" };
-const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts", trophy: "pf2" };
+const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub" };
+const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts", stairsSub: "sub", trophy: "pf2" };
 // Where a place's way down leads, and where the marker arrives there.
-const PLACE_BELOW = { pf: "ground", parts: "ground", pf2: "pf" };
-const ARRIVE_BELOW = { pf: "stairsPf", parts: "stairsParts", pf2: "trophy" };
+const PLACE_BELOW = { pf: "ground", parts: "ground", sub: "ground", pf2: "pf" };
+const ARRIVE_BELOW = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub", pf2: "trophy" };
 
 // Up or down the stairs: the map of the other place comes in, with the
 // marker standing where the stairs arrive (a tower's way down, or that
@@ -3575,6 +4100,7 @@ function renderMap() {
   if (place === "ground") renderBasicFloor();
   else if (place === "parts") renderPartsFloor();
   else if (place === "pf2") renderCubicFloor();
+  else if (place === "sub") renderSubFloor();
   else renderRationalFloor();
   renderTowerNav();
 }
@@ -3618,6 +4144,15 @@ function towerNavItems() {
       locked: !stairsOpen(),
       done: PARTS_IDS.every(isConquered),
       here: place === "parts",
+    },
+    {
+      go: "sub",
+      mark: "t",
+      name: "הצבה",
+      full: "מגדל ההצבה",
+      locked: !stairsOpen(),
+      done: SUB_IDS.every(isConquered),
+      here: place === "sub",
     },
   ];
   const ground = {
@@ -3864,13 +4399,24 @@ function renderCastleView(intro = false) {
 
       <g class="${towerCls("parts")}" data-go="parts">
         <title>מגדל האינטגרציה בחלקים</title>
-        ${castleTop(410, 100, 194, 38)}
-        <rect x="360" y="194" width="100" height="100" class="cs-wall"/>
-        <rect x="360" y="194" width="100" height="100" class="cs-shade"/>
-        <text x="410" y="214" class="cs-label">אינטגרציה בחלקים</text>
-        ${win("partsPoly", 382, 228)}${win("partsLn", 422, 228)}
-        ${win("partsReview", 402, 266)}
-        ${castleFlag(410, 141, "parts")}
+        ${castleTop(440, 100, 194, 38)}
+        <rect x="390" y="194" width="100" height="100" class="cs-wall"/>
+        <rect x="390" y="194" width="100" height="100" class="cs-shade"/>
+        <text x="440" y="214" class="cs-label">אינטגרציה בחלקים</text>
+        ${win("partsPoly", 412, 228)}${win("partsLn", 452, 228)}
+        ${win("partsReview", 432, 266)}
+        ${castleFlag(440, 141, "parts")}
+      </g>
+
+      <g class="${towerCls("sub")}" data-go="sub">
+        <title>מגדל ההצבה</title>
+        ${castleTop(339, 78, 222, 30)}
+        <rect x="300" y="222" width="78" height="72" class="cs-wall"/>
+        <rect x="300" y="222" width="78" height="72" class="cs-shade"/>
+        <text x="339" y="240" class="cs-label">הצבה</text>
+        ${win("subR1", 314, 244)}${win("subR2", 348, 244)}
+        ${win("subReview", 331, 268)}
+        ${castleFlag(339, 177, "sub")}
       </g>
 
       <g class="cs-place${currentPlace() === "ground" ? " cs-here" : ""}" data-go="ground">
@@ -4023,6 +4569,7 @@ function renderBasicFloor() {
     <div class="cell stairs-landing" style="grid-column:7;grid-row:3">
       ${stairsHtml("stairsPf", "פונקציות רציונליות", "מגדל הפונקציות הרציונליות")}
       ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
+      ${stairsHtml("stairsSub", "הצבה", "מגדל ההצבה")}
     </div>`;
   // The floor waking up (see floorLighting): the big torch after rooms 1-2.
   const light = floorLighting("ground", FLOOR1_IDS);
@@ -4162,6 +4709,37 @@ function renderPartsFloor() {
   );
 }
 
+// The substitution tower: a line like the parts tower's - the stairs down ·
+// room 1 · room 2 · the review room.
+function renderSubFloor() {
+  const [r1, r2, r3] = [...SUB_IDS, "subReview"].map((id) => ROOM_BY_ID[id]);
+  const light = floorLighting("sub", SUB_IDS);
+  towerEl.innerHTML = `
+    <div class="floor-map floor-alive">
+      <div class="floor-label${light.label}">מגדל ההצבה <span class="floor-en" dir="ltr">(substitution)</span>${medalMiniHtml("sub")}</div>
+      ${mapTipHtml()}
+      <div class="floor-grid floor-basic floor-parts">
+        <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
+          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">מדרגות לקומת הקרקע</span>
+        </div>
+        <div class="hall" style="grid-column:2;grid-row:1" data-spot="subR1" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(r1)}</div>
+        <div class="hall" style="grid-column:4;grid-row:1" data-spot="subR2" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:5;grid-row:1">${roomCardHtml(r2)}</div>
+        <div class="hall" style="grid-column:6;grid-row:1" data-spot="subReview" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:7;grid-row:1">${roomCardHtml(r3)}</div>
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
+        </div>
+      </div>
+    </div>`;
+  justConquered = justLit = null;
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
+}
+
 // The rational tower's second floor: the same kind of line, four rooms long -
 // the stairs down · room 1 · room 2 · room 3 · the review room.
 function renderCubicFloor() {
@@ -4204,7 +4782,8 @@ const BASIC_FLOOR_NODES = {
   // The hall past room 2: up to the extension room, on to the stairs.
   landing: { nav: { right: "linear", left: "stairsPf", up: "more" } },
   stairsPf: { nav: { right: "landing", left: "stairsParts", up: "more" } },
-  stairsParts: { nav: { right: "stairsPf", up: "more" } },
+  stairsParts: { nav: { right: "stairsPf", left: "stairsSub", up: "more" } },
+  stairsSub: { nav: { right: "stairsParts", up: "more" } },
   more: { nav: { down: "landing", left: "stairsParts", right: "linear" } },
 };
 
@@ -4214,6 +4793,14 @@ const PARTS_FLOOR_NODES = {
   partsPoly: { nav: { right: "entrance", left: "partsLn" } },
   partsLn: { nav: { right: "partsPoly", left: "partsReview" } },
   partsReview: { nav: { right: "partsLn" } },
+};
+
+// The substitution tower: the way down, room 1, room 2, the review room.
+const SUB_FLOOR_NODES = {
+  entrance: { nav: { left: "subR1" } },
+  subR1: { nav: { right: "entrance", left: "subR2" } },
+  subR2: { nav: { right: "subR1", left: "subReview" } },
+  subReview: { nav: { right: "subR2" } },
 };
 
 // The rational tower's second floor: the way down, rooms 1-3, the review room.
@@ -4231,9 +4818,10 @@ const LINE_PATHS = {
   ground: ["entrance", "basic", "linear", "landing", "stairsPf"],
   parts: ["entrance", "partsPoly", "partsLn", "partsReview"],
   pf2: ["entrance", ...CUB_IDS, "cubReview"],
+  sub: ["entrance", ...SUB_IDS, "subReview"],
 };
 const linePath = () => LINE_PATHS[currentPlace()];
-const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" ? "stairsPf" : id);
+const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" || id === "stairsSub" ? "stairsPf" : id);
 
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
@@ -4247,7 +4835,7 @@ const RATIONAL_FLOOR_NODES = {
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
 
-const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES, pf2: CUBIC_FLOOR_NODES };
+const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES, pf2: CUBIC_FLOOR_NODES, sub: SUB_FLOOR_NODES };
 const mapNodes = () => PLACE_NODES[currentPlace()];
 const onLine = () => isLinearPlace(currentPlace());
 
@@ -4693,6 +5281,7 @@ function makeProblem(room, i, run) {
   if (node.gen === "review") return generateReviewExercise(run.plan[i]);
   if (node.gen === "partsReview") return generatePartsReviewExercise(run.plan[i]);
   if (node.gen === "cubReview") return generateCubicReviewExercise(run.plan[i]);
+  if (node.gen === "subPlan") return generateSubExercise(run.plan[i]);
   return GENERATORS[node.gen]();
 }
 
@@ -4713,7 +5302,8 @@ function enterRoom(id) {
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
-    if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : room.place === "pf2" ? drawCubicReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
+    if (room.plan) rec.run.plan = drawSubPlan(room.plan);
+    else if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : room.place === "pf2" ? drawCubicReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
     rec.run.problem = makeProblem(room, 0, rec.run);
     saveStore();
   }
@@ -5319,6 +5909,10 @@ function showConquest(room, { score, prevBest, wins, before }) {
   } else if (room.place === "parts") {
     if (partsLeft.length) next = `החדר הבא: "${ROOM_BY_ID[partsLeft[0]].title}"`;
     else if (!before.medals.find((m) => m.id === "parts").earned) next = "המדליה מחכה בחדר המדליות";
+  } else if (room.place === "sub") {
+    const subLeft = SUB_IDS.filter((id) => !isConquered(id));
+    if (subLeft.length) next = `החדר הבא: "${ROOM_BY_ID[subLeft[0]].title}"`;
+    else if (!before.medals.find((m) => m.id === "sub").earned) next = "המדליה מחכה בחדר המדליות";
   } else if (room.place === "pf2") {
     const cubLeft = CUB_IDS.filter((id) => !isConquered(id));
     if (cubLeft.length) next = `החדר הבא: "${ROOM_BY_ID[cubLeft[0]].title}"`;

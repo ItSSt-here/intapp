@@ -2162,7 +2162,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .floor-grid.floor-basic {
     /* Halls and stairs kept slim: a won room's progress row (dots, score,
        wins) needs about 200px. */
-    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px 156px;
+    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px 210px; /* three stairs */
     grid-template-rows: auto 34px auto;
     gap: 0;
   }
@@ -2437,7 +2437,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 /* Narrower screens: slimmer entrance, halls and stairs, so the rooms keep
    their width next to the floor strip. */
 @media (min-width: 760px) and (max-width: 1199px) {
-  .floor-grid.floor-basic { grid-template-columns: 84px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px 128px; }
+  .floor-grid.floor-basic { grid-template-columns: 84px 40px minmax(0, 1fr) 40px minmax(0, 1fr) 40px 176px; }
   .stairs-landing { padding-inline: 2px; gap: 2px; }
   .stairs-label { font-size: 0.68rem; }
   .floor-grid.floor-basic.floor-parts { grid-template-columns: 84px 48px minmax(0, 1fr) 48px minmax(0, 1fr) 48px minmax(0, 1fr); }
