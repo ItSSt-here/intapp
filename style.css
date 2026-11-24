@@ -2444,3 +2444,43 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .floor-basic .room-progress { flex-wrap: wrap; row-gap: 6px; }
   .floor-basic .mini-conn { width: 8px; }
 }
+
+/* ---- Student entry (cloud.js) and who is playing ---- */
+.entry-backdrop { z-index: 50; background: rgba(38, 35, 31, 0.6); }
+.entry-dialog { max-width: 430px; }
+.entry-dialog .entry-lead { color: var(--muted); margin-bottom: 14px; }
+.entry-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-weight: 600; }
+.entry-field input {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+}
+.entry-field input[dir="ltr"] { text-align: right; }
+.entry-field input:focus { outline: none; border-color: var(--accent); }
+.entry-groups { border: 0; padding: 0; margin: 0 0 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.entry-groups legend { font-weight: 600; margin-bottom: 6px; padding: 0; }
+.entry-groups label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.entry-groups label:has(input:checked) { border-color: var(--accent); background: var(--accent-tint); }
+.entry-dialog .entry-note { font-size: 0.85rem; color: var(--muted); margin-bottom: 8px; }
+.entry-dialog .entry-error { color: #b5523b; font-weight: 600; min-height: 1.5em; margin-bottom: 8px; }
+
+.who-line { position: absolute; right: 0; top: 0; font-size: 0.85rem; color: var(--muted); }
+.who-line button {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  cursor: pointer;
+  text-decoration: underline;
+}

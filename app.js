@@ -1,5 +1,6 @@
 import "https://esm.run/mathlive@0.110.0"; // registers the <math-field> custom element
 import { MathfieldElement } from "https://esm.run/mathlive@0.110.0";
+import { cloudInit, cloudSave, currentStudent, switchStudent, GROUPS } from "./cloud.js";
 
 // esm.run's asset resolution for MathLive's math fonts is unreliable -
 // point it at a CDN path that actually serves them.
@@ -3318,21 +3319,41 @@ function loadStore() {
 }
 
 let store = loadStore();
+// Who is playing, and the newer of this computer's and the server's copy
+// (cloud.js). Asks for an ID number the first time; nothing is drawn before.
+store = await cloudInit(store);
+const student = currentStudent();
+// Software engineering doesn't study rational functions II (cubic floor).
+const hasPf2 = () => student?.group !== "software";
+// Beside the title: who is playing, and a way out on a shared computer.
+if (student) {
+  const el = document.getElementById("whoLine");
+  el.innerHTML = `<span></span> · <span></span><button type="button">החלפת משתמש</button>`;
+  el.children[0].textContent = student.name;
+  el.children[1].textContent = GROUPS[student.group];
+  el.querySelector("button").addEventListener("click", () => {
+    if (confirm(`לצאת מהמשתמש של ${student.name}? ההתקדמות נשמרת בשרת.`)) switchStudent(STORE_KEY);
+  });
+  el.hidden = false;
+}
 
 // Where the map is: the ground floor or one of the towers above it.
 // Saves from before the towers kept store.floor (2: partial fractions) and
 // a single "stairs".
 const PLACES = ["ground", "pf", "parts", "pf2", "sub"];
 if (!PLACES.includes(store.place)) store.place = store.floor === 2 ? "pf" : "ground";
+if (store.place === "pf2" && !hasPf2()) store.place = "pf";
 delete store.floor;
 if (store.lastRoom === "stairs") store.lastRoom = "stairsPf";
 
 function saveStore() {
+  store.savedAt = Date.now();
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   } catch {
     // progress just won't survive a reload
   }
+  cloudSave(store);
 }
 
 function roomRecord(id) {
@@ -3841,7 +3862,7 @@ const MEDALS = [
     need: "שני החדרים במגדל",
     gold: { room: "subReview", text: "תרגילים מעורבבים" },
   },
-];
+].filter((m) => m.id !== "pf2" || hasPf2());
 
 function medalState(medal) {
   const earned = medal.rooms.every(isConquered);
@@ -3959,6 +3980,8 @@ function medalSvg(m) {
 // the tower's second floor, cubic denominators. Part of the upper area, so it
 // opens with the gate.
 function trophyHtml() {
+  // A group without that floor: an empty room, as it was before the stairs.
+  if (!hasPf2()) return `<div class="room-card room-medals room-empty" data-node="trophy" aria-hidden="true"></div>`;
   return `
     <div class="room-card room-medals room-stairs-up" data-node="trophy" role="button" tabindex="0" aria-label="מדרגות לפונקציות רציונליות II: מכנה ממעלה 3">
       ${stairsSvg(false)}
@@ -4171,7 +4194,7 @@ function towerNavItems() {
       done: SUB_IDS.every(isConquered),
       here: place === "sub",
     },
-  ];
+  ].filter((t) => t.go !== "pf2" || hasPf2());
   const ground = {
     go: "ground",
     mark: "∫",
@@ -4216,6 +4239,7 @@ function renderTowerNav() {
 // ground floor, the rational tower's second floor for its gate. `retry` asks
 // the next one, or goes. True if it asked.
 function askBeforePlace(place, retry) {
+  if (place === "pf2" && !hasPf2()) return true; // not for this group: nowhere to go
   if (place !== "ground" && !stairsOpen()) {
     openStairsDialog(retry);
     return true;
@@ -4395,24 +4419,24 @@ function renderCastleView(intro = false) {
 
       <g class="${towerCls("pf")}" data-go="pf">
         <title>מגדל הפונקציות הרציונליות</title>
-        ${castleTop(220, 140, 84, 30)}
+        ${castleTop(220, 140, hasPf2() ? 84 : 124, 30)}
         <rect x="150" y="124" width="140" height="170" class="cs-wall"/>
         <rect x="150" y="124" width="140" height="170" class="cs-shade"/>
         ${win("review", 184, 150)}${win("nonmonic", 240, 150)}
         ${win("repeated", 166, 200)}${win("pf1", 212, 200)}${win("irreducible", 258, 200)}
         ${win("division", 212, 248)}
         <text x="220" y="145" class="cs-label">פונקציות רציונליות</text>
-        ${castleFlag(220, 39, "pf")}
+        ${castleFlag(220, hasPf2() ? 39 : 79, "pf")}
       </g>
 
-      <g class="cs-place${locked || !wingOpen() ? " cs-locked" : ""}${currentPlace() === "pf2" ? " cs-here" : ""}" data-go="pf2">
+      ${hasPf2() ? `<g class="cs-place${locked || !wingOpen() ? " cs-locked" : ""}${currentPlace() === "pf2" ? " cs-here" : ""}" data-go="pf2">
         <title>פונקציות רציונליות II</title>
         <rect x="150" y="84" width="140" height="40" class="cs-wall"/>
         <rect x="150" y="84" width="140" height="40" class="cs-shade"/>
         <path d="M150 124H290" class="cs-course"/>
         ${win("cub3", 166, 92)}${win("cubDouble", 198, 92)}${win("cubQuad", 230, 92)}${win("cubReview", 262, 92)}
         ${castleFlag(158, 72, "pf2")}
-      </g>
+      </g>` : ""}
 
       <g class="${towerCls("parts")}" data-go="parts">
         <title>מגדל האינטגרציה בחלקים</title>
@@ -4946,7 +4970,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
-  if (id === "trophy") return wingOpen() ? "עולים ↵" : "";
+  if (id === "trophy") return wingOpen() && hasPf2() ? "עולים ↵" : "";
   if (STAIRS_PLACE[id]) return "עולים ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
@@ -5060,6 +5084,7 @@ function activateMarker() {
     return;
   }
   if (id === "trophy") {
+    if (!hasPf2()) return;
     if (!wingOpen()) openGateDialog();
     else goUpstairs("trophy");
     return;
@@ -5148,6 +5173,7 @@ towerEl.addEventListener("click", (e) => {
     return;
   }
   if (e.target.closest('[data-node="trophy"]')) {
+    if (!hasPf2()) return;
     if (!wingOpen()) openGateDialog();
     else walkTo("trophy").then(() => goUpstairs("trophy"));
     return;
@@ -5976,7 +6002,7 @@ function showConquest(room, { score, prevBest, wins, before }) {
 
 function route() {
   const m = location.hash.match(/^#\/room\/(\w+)/);
-  if (m && ROOM_BY_ID[m[1]]) {
+  if (m && ROOM_BY_ID[m[1]] && (hasPf2() || ROOM_BY_ID[m[1]].place !== "pf2")) {
     enterRoom(m[1]);
   } else if (location.hash === "#/castle") {
     clearTimeout(castleIntroTimer);

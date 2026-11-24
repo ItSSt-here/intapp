@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Firestore security rules for intapp (project intapp-2f266). They live in the
+// Firebase console (Firestore Database -> Rules); this file is the copy kept
+// with the code. Before pasting, replace LECTURER_EMAIL with the lecturer's
+// Google address.
+//
+// students/<key>: one document per student; the key is a SHA-256 hash of the
+// ID number (cloud.js). Anyone signed in (students are anonymous) may read or
+// write a document whose key they know, but only the lecturer may list them -
+// so nobody can browse who is there. A student's saves touch only the
+// progress; the name and group are set when the document is created, and
+// after that only by the lecturer.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isLecturer() {
+      return request.auth != null
+        && request.auth.token.email == "LECTURER_EMAIL"
+        && request.auth.token.email_verified == true;
+    }
+
+    match /students/{key} {
+      function validProgress() {
+        let d = request.resource.data;
+        return d.store is string && d.store.size() < 300000
+          && d.savedAt is number
+          && d.updatedAt == request.time;
+      }
+      function validProfile() {
+        let d = request.resource.data;
+        return d.name is string && d.name.size() >= 2 && d.name.size() <= 60
+          && d.group in ["software", "mechanical", "electrical", "other"];
+      }
+
+      allow get: if request.auth != null;
+      allow list: if isLecturer();
+      allow create: if request.auth != null
+        && key.matches("^[0-9a-f]{64}$")
+        && request.resource.data.keys().hasOnly(["name", "group", "store", "savedAt", "updatedAt"])
+        && validProgress() && validProfile();
+      allow update: if (request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["store", "savedAt", "updatedAt"])
+          && validProgress())
+        || (isLecturer() && validProfile());
+      allow delete: if isLecturer();
+    }
+  }
+}
