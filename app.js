@@ -4470,7 +4470,7 @@ function goToPlace(place, at) {
 
 const goUpstairs = (stairs) => {
   if (stairs === "stairsTop" && !summitOpen()) {
-    openSummitDialog();
+    openSummitDialog(() => goUpstairs(stairs));
     return Promise.resolve();
   }
   sfx("stairs", true);
@@ -4597,7 +4597,7 @@ function renderTowerNav() {
 function askBeforePlace(place, retry) {
   if (place === "pf2" && !hasPf2()) return true; // not for this group: nowhere to go
   if (place === "top" && !summitOpen()) {
-    openSummitDialog(); // no "open anyway": the door wants every medal
+    openSummitDialog(retry);
     return true;
   }
   if (place !== "ground" && !stairsOpen()) {
@@ -4729,12 +4729,14 @@ function castleSkyHtml() {
     ${stars}
     <path pathLength="100" class="cs-integral-glow" d="M128 40C122 26 104 28 101 48L91 128C88 148 72 152 64 138"/>
     <path pathLength="100" class="cs-integral" d="M128 40C122 26 104 28 101 48L91 128C88 148 72 152 64 138"/>
+    <g transform="translate(46 -8)"><!-- out of the way of the summit tower's crown -->
     <g class="cs-moon-g">
       <circle cx="560" cy="64" r="25" class="cs-moon"/>
       <circle cx="548" cy="52" r="4" class="cs-crater"/><circle cx="574" cy="76" r="3" class="cs-crater"/><circle cx="571" cy="49" r="2.2" class="cs-crater"/>
       <path d="M548 63q4 3.5 8 0M564 63q4 3.5 8 0" class="cs-moon-face"/>
       <path d="M553 72q7 5 14 0" class="cs-moon-face"/>
       <circle cx="547" cy="70" r="3" class="cs-cheek"/><circle cx="573" cy="70" r="3" class="cs-cheek"/>
+    </g>
     </g>
     ${clouds}`;
 }
@@ -4775,15 +4777,6 @@ function renderCastleView(intro = false) {
       <g class="cs-bushes">
         <ellipse cx="40" cy="382" rx="30" ry="14"/><ellipse cx="72" cy="386" rx="22" ry="10"/>
         <ellipse cx="600" cy="380" rx="34" ry="15"/><ellipse cx="566" cy="387" rx="20" ry="9"/>
-      </g>
-
-      <g class="cs-place${summitOpen() ? "" : " cs-locked"}${currentPlace() === "top" ? " cs-here" : ""}" data-go="top">
-        <title>פסגת האינטגרלים</title>
-        ${castleTop(339, 50, 64, 26)}
-        <rect x="314" y="64" width="50" height="170" class="cs-wall"/>
-        <rect x="314" y="64" width="50" height="170" class="cs-shade"/>
-        ${win("top1", 331, 80)}${win("top2", 331, 112)}
-        ${TOP_IDS.every(isConquered) ? `<path d="M327 27L324 13L332 19L339 8L346 19L354 13L351 27Z" class="cs-crown"><title>הכתר</title></path>` : ""}
       </g>
 
       <g class="${towerCls("pf")}" data-go="pf">
@@ -4834,12 +4827,24 @@ function renderCastleView(intro = false) {
         <rect x="110" y="294" width="420" height="80" class="cs-wall"/>
         <rect x="110" y="294" width="420" height="80" class="cs-shade"/>
         ${castleMerlons(130, 512, 294)}
-        ${castleTurret(96, 272, 36, 102)}${castleTurret(508, 272, 36, 102)}
+        ${castleTurret(96, 272, 36, 102)}
         <path d="M296 374V344a24 24 0 0 1 48 0V374z" class="cs-gate"/>
         <path d="M300 352H340M300 344H340M308 330V352M320 322V352M332 330V352" class="cs-portcullis"/>
         ${gateStones}
         ${win("basic", 420, 324)}${win("linear", 370, 324)}${win("more", 222, 324)}
         <text x="180" y="366" class="cs-label">קומת הקרקע</text>
+      </g>
+
+      <g class="cs-place${summitOpen() ? "" : " cs-locked"}${currentPlace() === "top" ? " cs-here" : ""}" data-go="top">
+        <title>פסגת האינטגרלים</title>
+        ${castleTop(528, 64, 112, 30)}
+        <rect x="496" y="112" width="64" height="262" class="cs-wall"/>
+        <rect x="496" y="112" width="64" height="262" class="cs-shade"/>
+        <text x="528" y="132" class="cs-label">פסגת</text>
+        <text x="528" y="145" class="cs-label">האינטגרלים</text>
+        ${win("top2", 520, 156)}${win("top1", 520, 200)}
+        <rect x="526" y="292" width="4" height="16" rx="2" class="cs-slit"/>
+        ${TOP_IDS.every(isConquered) ? `<path d="M516 69L513 55L521 61L528 50L535 61L543 55L540 69Z" class="cs-crown"><title>הכתר</title></path>` : ""}
       </g>
     </svg>
     <p class="castle-hint">${intro ? "לחצו בכל מקום כדי להמשיך" : "לחצו על מקום בטירה כדי ללכת אליו"}</p>`;
@@ -4959,8 +4964,9 @@ function stairsHtml(id, name, full) {
     </div>`;
 }
 
-// The summit opens with every medal of the student's group (gold not needed).
-const summitOpen = () => MEDALS.every((m) => medalState(m).earned);
+// The summit opens with every medal of the student's group (gold not needed),
+// or earlier by "open anyway" - for a student who only wants exam practice.
+const summitOpen = () => !!store.summitOpened || MEDALS.every((m) => medalState(m).earned);
 
 // The door to the summit, beside the stairs: an arched door with a socket in
 // the shape of each medal (cloud.js groups: 3 or 4). A medal won sits in its
@@ -4999,13 +5005,15 @@ function summitDoorHtml() {
     </div>`;
 }
 
-function openSummitDialog() {
+function openSummitDialog(then = null) {
   const missing = MEDALS.filter((m) => !medalState(m).earned).map((m) => `"${m.title}"`);
   showLockDialog({
-    title: "הדלת סגורה",
+    title: "לא מומלץ עדיין",
     html:
       `הדלת לפסגת האינטגרלים נפתחת כשכל המדליות במקומן. ` +
-      `${missing.length > 1 ? "חסרות המדליות" : "חסרה המדליה"} ${missing.join(", ")}.`,
+      `${missing.length > 1 ? "חסרות המדליות" : "חסרה המדליה"} ${missing.join(", ")} - אבל אפשר לפתוח אותה כבר עכשיו.`,
+    anyway: "summit",
+    then,
   });
 }
 
@@ -5430,7 +5438,6 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return wingOpen() && hasPf2() ? "עולים ↵" : "";
-  if (id === "stairsTop" && !summitOpen()) return "";
   if (STAIRS_PLACE[id]) return "עולים ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
@@ -5741,6 +5748,7 @@ $("lockAnywayBtn").addEventListener("click", () => {
   const exit = lockDialogFor === "stairs" ? "linear" : lockDialogFor.startsWith("exit:") ? lockDialogFor.slice(5) : null;
   if (exit) store.openedExits = { ...store.openedExits, [exit]: true };
   else if (ROOM_BY_ID[lockDialogFor]) store.openedRooms = { ...store.openedRooms, [lockDialogFor]: true };
+  else if (lockDialogFor === "summit") store.summitOpened = true;
   else store.wingOpen = true;
   sfx(exit ? "grate" : "gate");
   saveStore();
