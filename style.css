@@ -2484,3 +2484,4 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   cursor: pointer;
   text-decoration: underline;
 }
+.who-line .who-name { font-weight: 700; font-size: 1rem; color: var(--text); }

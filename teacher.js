@@ -93,11 +93,21 @@ const roomsOf = (group) =>
   PLACES.filter(([p]) => groupHas(group, p)).map(([p, label]) => [pfName(group, label), ROOMS.filter((r) => r.place === p)]);
 const medalsOf = (group) => MEDAL_LIST.filter((m) => groupHas(group, m.id));
 
+const ROOM_BY_ID = Object.fromEntries(ROOMS.map((r) => [r.id, r]));
+
+// A room's box: the best score, how many times it was finished (from twice
+// on), and how far the student is in a run going on now (exercises solved
+// out of the room's). `csv` is the same in one line, for the export.
 function roomCell(st, id) {
   const r = st.store.rooms[id];
-  if (r?.wins > 0 && r.best != null) return { text: String(r.best), score: r.best };
-  if (r?.run) return { text: "…", run: true };
-  return { text: "" };
+  const progress = r?.run ? `${r.run.node}/${ROOM_BY_ID[id].nodes.length}` : "";
+  if (r?.wins > 0 && r.best != null) {
+    const sub = [r.wins > 1 ? `×${r.wins}` : "", progress].filter(Boolean).join(" · ");
+    const csv = [String(r.best), r.wins > 1 ? `סיים ${r.wins} פעמים` : "", progress ? `עכשיו ${progress}` : ""];
+    return { text: String(r.best), sub, score: r.best, csv: csv.filter(Boolean).join(", ") };
+  }
+  if (progress) return { text: progress, run: true, csv: `בתהליך ${progress}` };
+  return { text: "", csv: "" };
 }
 
 function medalCell(st, m) {
@@ -140,7 +150,7 @@ function render() {
     ${medals.map((m) => `<th class="t-room">${esc(pfName(tab, m.title))}</th>`).join("")}</tr>`;
 
   const cell = (c) =>
-    `<td class="t-cell${c.score != null ? " " + tier(c.score) : ""}${c.run ? " t-run" : ""}${c.partial ? " t-partial" : ""}">${c.text}${c.gold ? ' <span class="t-gold">★</span>' : ""}</td>`;
+    `<td class="t-cell${c.score != null ? " " + tier(c.score) : ""}${c.run ? " t-run" : ""}${c.partial ? " t-partial" : ""}">${c.text}${c.gold ? ' <span class="t-gold">★</span>' : ""}${c.sub ? `<span class="t-sub" dir="ltr">${c.sub}</span>` : ""}</td>`;
   const rows = list
     .map(
       (st) => `<tr data-key="${st.key}"${st.key === found ? ' class="t-found"' : ""}>
@@ -246,7 +256,7 @@ $("exportBtn").addEventListener("click", () => {
   const lines = [header.map(q).join(",")];
   for (const g of Object.keys(GROUPS)) {
     for (const st of students.filter((s) => s.group === g)) {
-      const roomVals = rooms.map((r) => (groupHas(g, r.place) ? roomCell(st, r.id).text.replace("…", "בתהליך") : "-"));
+      const roomVals = rooms.map((r) => (groupHas(g, r.place) ? roomCell(st, r.id).csv : "-"));
       const medalVals = MEDAL_LIST.map((m) => {
         if (!groupHas(g, m.id)) return "-";
         const c = medalCell(st, m);
@@ -286,6 +296,16 @@ async function start() {
 }
 
 $("signInBtn").addEventListener("click", signIn);
+// Test hook for the preview only: ?debug draws the table from sample
+// students (no sign-in, no server - the real data stays behind the rules).
+if (new URLSearchParams(location.search).has("debug")) {
+  window.__teacher = (list) => {
+    students = list.map((s) => ({ updatedAt: new Date(), ...s }));
+    $("signIn").hidden = true;
+    $("board").hidden = false;
+    render();
+  };
+}
 connect()
   .then((f) => {
     fb = f;

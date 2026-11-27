@@ -3072,7 +3072,7 @@ const PF1_NAME = hasPf2() ? "פונקציות רציונליות I" : "פונק�
 // Beside the title: who is playing, and a way out on a shared computer.
 if (student) {
   const el = document.getElementById("whoLine");
-  el.innerHTML = `<span></span> · <span></span><button type="button">החלפת משתמש</button>`;
+  el.innerHTML = `<span class="who-name"></span> · <span></span><button type="button">החלפת משתמש</button>`;
   el.children[0].textContent = student.name;
   el.children[1].textContent = GROUPS[student.group];
   el.querySelector("button").addEventListener("click", () => {
