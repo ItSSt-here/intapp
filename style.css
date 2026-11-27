@@ -1198,9 +1198,26 @@ math-field.input-field:focus-within {
   outline: none;
 }
 
-/* MathLive's own hamburger menu is clutter here; the keyboard toggle stays
-   for phones. */
+/* MathLive's own hamburger menu is clutter here. Its keyboard toggle stays,
+   on computers too (the on-screen keyboard, like Desmos's keypad), in the
+   colours of the ▾ symbols button so students notice it. */
 math-field.input-field::part(menu-toggle) { display: none; }
+math-field.input-field::part(virtual-keyboard-toggle) {
+  color: var(--accent);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-tint-border);
+  border-radius: 8px;
+}
+math-field.input-field::part(virtual-keyboard-toggle):hover { background: var(--accent); color: white; }
+.kb-hint-icon {
+  display: inline-block;
+  padding: 0 4px;
+  border-radius: 5px;
+  border: 1px solid var(--accent-tint-border);
+  background: var(--accent-tint);
+  color: var(--accent);
+  line-height: 1.3;
+}
 
 /* The read-only fields never need MathLive's own inner scrollbar. */
 math-field.solution-field::part(content),

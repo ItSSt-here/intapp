@@ -7,6 +7,11 @@ import { cloudInit, cloudSave, currentStudent, switchStudent, GROUPS } from "./c
 // point it at a CDN path that actually serves them.
 MathfieldElement.fontsDirectory = "https://cdn.jsdelivr.net/npm/mathlive@0.110.0/fonts";
 MathfieldElement.soundsDirectory = null;
+// The on-screen keyboard's button (in the answer field, on computers too):
+// its tooltip in Hebrew, whatever locale MathLive picks.
+for (const locale of ["en", "he"]) {
+  MathfieldElement.strings = { [locale]: { "tooltip.toggle virtual keyboard": "מקלדת מתמטית" } };
+}
 
 // ---------------------------------------------------------------------------
 // LaTeX -> JS evaluator
