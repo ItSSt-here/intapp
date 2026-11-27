@@ -1,6 +1,6 @@
 import "https://esm.run/mathlive@0.110.0"; // registers the <math-field> custom element
 import { MathfieldElement } from "https://esm.run/mathlive@0.110.0";
-import { ROOMS, MEDAL_LIST, CORE_IDS, FLOOR1_IDS, PARTS_IDS, CUB_IDS, SUB_IDS } from "./rooms.js";
+import { ROOMS, MEDAL_LIST, CORE_IDS, FLOOR1_IDS, PARTS_IDS, CUB_IDS, SUB_IDS, TOP_IDS } from "./rooms.js";
 import { cloudInit, cloudSave, currentStudent, switchStudent, GROUPS } from "./cloud.js";
 
 // esm.run's asset resolution for MathLive's math fonts is unreliable -
@@ -3715,7 +3715,7 @@ if (student) {
 // Where the map is: the ground floor or one of the towers above it.
 // Saves from before the towers kept store.floor (2: partial fractions) and
 // a single "stairs".
-const PLACES = ["ground", "pf", "parts", "pf2", "sub"];
+const PLACES = ["ground", "pf", "parts", "pf2", "sub", "top"];
 if (!PLACES.includes(store.place)) store.place = store.floor === 2 ? "pf" : "ground";
 if (store.place === "pf2" && !hasPf2()) store.place = "pf";
 delete store.floor;
@@ -3790,6 +3790,7 @@ function recommendedRoomId() {
   if (currentPlace() === "parts") return PARTS_IDS.find((id) => !isConquered(id)) || (isConquered("partsReview") ? null : "partsReview");
   if (currentPlace() === "pf2") return CUB_IDS.find((id) => !isConquered(id)) || (isConquered("cubReview") ? null : "cubReview");
   if (currentPlace() === "sub") return SUB_IDS.find((id) => !isConquered(id)) || (isConquered("subReview") ? null : "subReview");
+  if (currentPlace() === "top") return TOP_IDS.find((id) => !isConquered(id)) || null;
   if (!isConquered("repeated")) return "repeated";
   if (!isConquered("pf1")) return "pf1";
   if (!isConquered("irreducible")) return "irreducible";
@@ -4438,11 +4439,11 @@ $("medalBackBtn").addEventListener("click", () => goToMap());
 $("medalsBtn").addEventListener("click", () => goToMedals());
 
 // The stairs on the ground floor, one per tower.
-const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub" };
-const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts", stairsSub: "sub", trophy: "pf2" };
+const STAIRS_TO = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub", top: "stairsTop" };
+const STAIRS_PLACE = { stairsPf: "pf", stairsParts: "parts", stairsSub: "sub", stairsTop: "top", trophy: "pf2" };
 // Where a place's way down leads, and where the marker arrives there.
-const PLACE_BELOW = { pf: "ground", parts: "ground", sub: "ground", pf2: "pf" };
-const ARRIVE_BELOW = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub", pf2: "trophy" };
+const PLACE_BELOW = { pf: "ground", parts: "ground", sub: "ground", top: "ground", pf2: "pf" };
+const ARRIVE_BELOW = { pf: "stairsPf", parts: "stairsParts", sub: "stairsSub", top: "stairsTop", pf2: "trophy" };
 
 // Up or down the stairs: the map of the other place comes in, with the
 // marker standing where the stairs arrive (a tower's way down, or that
@@ -4468,6 +4469,10 @@ function goToPlace(place, at) {
 }
 
 const goUpstairs = (stairs) => {
+  if (stairs === "stairsTop" && !summitOpen()) {
+    openSummitDialog();
+    return Promise.resolve();
+  }
   sfx("stairs", true);
   return zoomIntoRoom(stairs).then(() => goToPlace(STAIRS_PLACE[stairs]));
 };
@@ -4482,6 +4487,7 @@ function renderMap() {
   else if (place === "parts") renderPartsFloor();
   else if (place === "pf2") renderCubicFloor();
   else if (place === "sub") renderSubFloor();
+  else if (place === "top") renderTopFloor();
   else renderRationalFloor();
   renderTowerNav();
 }
@@ -4535,6 +4541,15 @@ function towerNavItems() {
       done: SUB_IDS.every(isConquered),
       here: place === "sub",
     },
+    {
+      go: "top",
+      mark: "♛",
+      name: "פסגת האינטגרלים",
+      full: "פסגת האינטגרלים",
+      locked: !summitOpen(),
+      done: TOP_IDS.every(isConquered),
+      here: place === "top",
+    },
   ].filter((t) => t.go !== "pf2" || hasPf2());
   const ground = {
     go: "ground",
@@ -4581,6 +4596,10 @@ function renderTowerNav() {
 // the next one, or goes. True if it asked.
 function askBeforePlace(place, retry) {
   if (place === "pf2" && !hasPf2()) return true; // not for this group: nowhere to go
+  if (place === "top" && !summitOpen()) {
+    openSummitDialog(); // no "open anyway": the door wants every medal
+    return true;
+  }
   if (place !== "ground" && !stairsOpen()) {
     openStairsDialog(retry);
     return true;
@@ -4758,6 +4777,15 @@ function renderCastleView(intro = false) {
         <ellipse cx="600" cy="380" rx="34" ry="15"/><ellipse cx="566" cy="387" rx="20" ry="9"/>
       </g>
 
+      <g class="cs-place${summitOpen() ? "" : " cs-locked"}${currentPlace() === "top" ? " cs-here" : ""}" data-go="top">
+        <title>פסגת האינטגרלים</title>
+        ${castleTop(339, 50, 64, 26)}
+        <rect x="314" y="64" width="50" height="170" class="cs-wall"/>
+        <rect x="314" y="64" width="50" height="170" class="cs-shade"/>
+        ${win("top1", 331, 80)}${win("top2", 331, 112)}
+        ${TOP_IDS.every(isConquered) ? `<path d="M327 27L324 13L332 19L339 8L346 19L354 13L351 27Z" class="cs-crown"><title>הכתר</title></path>` : ""}
+      </g>
+
       <g class="${towerCls("pf")}" data-go="pf">
         <title>מגדל הפונקציות הרציונליות</title>
         ${castleTop(220, 140, hasPf2() ? 84 : 124, 30)}
@@ -4931,6 +4959,56 @@ function stairsHtml(id, name, full) {
     </div>`;
 }
 
+// The summit opens with every medal of the student's group (gold not needed).
+const summitOpen = () => MEDALS.every((m) => medalState(m).earned);
+
+// The door to the summit, beside the stairs: an arched door with a socket in
+// the shape of each medal (cloud.js groups: 3 or 4). A medal won sits in its
+// socket with its mark; with all of them in, the door stands open - the first
+// time it is seen open, its leaf fades away.
+function summitDoorHtml() {
+  const open = summitOpen();
+  const fresh = open && !store.summitDoorSeen;
+  if (fresh) {
+    store.summitDoorSeen = true;
+    saveStore();
+  }
+  const ms = MEDALS.map(medalState);
+  const sockets = ms
+    .map((m, i) => {
+      const cx = 50 + (i - (ms.length - 1) / 2) * 23;
+      return `<g transform="translate(${cx} 17) scale(0.25) translate(-60 -58)">
+        <path d="${medalRimD(m.id)}" class="${m.earned ? "socket-full" : "socket-empty"}"/>
+        ${m.earned ? `<text x="60" y="76" text-anchor="middle" class="socket-mark">${medalMark(m.id)}</text>` : ""}
+      </g>`;
+    })
+    .join("");
+  const leaf = `<path d="M24 118V78a26 26 0 0 1 52 0V118z" class="door-leaf${fresh ? " opening" : ""}"/><path d="M50 52V118" class="door-seam${fresh ? " opening" : ""}"/>`;
+  const missing = ms.filter((m) => !m.earned).length;
+  const label = open ? "הדלת לפסגת האינטגרלים" : `הדלת לפסגת האינטגרלים - נעולה, חסרות ${missing} מדליות`;
+  return `
+    <div class="stairs summit-door${open ? " open" : ""}" data-node="stairsTop" role="button" tabindex="0" aria-label="${label}">
+      <svg class="stairs-steps door-svg" viewBox="0 0 100 120" aria-hidden="true">
+        <rect x="2" y="2" width="96" height="30" rx="3" class="door-lintel"/>
+        <path d="M16 118V76a34 34 0 0 1 68 0V118z" class="door-frame"/>
+        <path d="M24 118V78a26 26 0 0 1 52 0V118z" class="door-dark"/>
+        ${open && !fresh ? "" : leaf}
+        ${sockets}
+      </svg>
+      <span class="stairs-label">פסגת האינטגרלים</span>
+    </div>`;
+}
+
+function openSummitDialog() {
+  const missing = MEDALS.filter((m) => !medalState(m).earned).map((m) => `"${m.title}"`);
+  showLockDialog({
+    title: "הדלת סגורה",
+    html:
+      `הדלת לפסגת האינטגרלים נפתחת כשכל המדליות במקומן. ` +
+      `${missing.length > 1 ? "חסרות המדליות" : "חסרה המדליה"} ${missing.join(", ")}.`,
+  });
+}
+
 const mapTipHtml = () =>
   store.mapTipSeen
     ? ""
@@ -4952,6 +5030,7 @@ function renderBasicFloor() {
       ${stairsHtml("stairsPf", "פונקציות רציונליות", "מגדל הפונקציות הרציונליות")}
       ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
       ${stairsHtml("stairsSub", "הצבה", "מגדל ההצבה")}
+      ${summitDoorHtml()}
     </div>`;
   // The floor waking up (see floorLighting): the big torch after rooms 1-2.
   const light = floorLighting("ground", FLOOR1_IDS);
@@ -5122,6 +5201,36 @@ function renderSubFloor() {
   );
 }
 
+// The summit: the door back down · room 1 · room 2, and a crown in the label
+// once both are won.
+function renderTopFloor() {
+  const [r1, r2] = TOP_IDS.map((id) => ROOM_BY_ID[id]);
+  const light = floorLighting("top", TOP_IDS);
+  const crown = TOP_IDS.every(isConquered) ? ' <span class="floor-crown" title="הכתר">♛</span>' : "";
+  towerEl.innerHTML = `
+    <div class="floor-map floor-alive">
+      <div class="floor-label${light.label}">פסגת האינטגרלים <span class="floor-en" dir="ltr">(the summit)</span>${crown}</div>
+      ${mapTipHtml()}
+      <div class="floor-grid floor-basic floor-parts floor-top">
+        <div class="cell entrance" style="grid-column:1;grid-row:1" data-node="entrance">
+          ${torchHtml("l")}${STAIRS_DOWN_SVG}${torchHtml("r")}<span class="door-label">חזרה לקומת הקרקע</span>
+        </div>
+        <div class="hall" style="grid-column:2;grid-row:1" data-spot="top1" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(r1)}</div>
+        <div class="hall" style="grid-column:4;grid-row:1" data-spot="top2" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:5;grid-row:1">${roomCardHtml(r2)}</div>
+        <div class="map-marker" aria-hidden="true">
+          <span class="marker-pin"></span>
+          <span class="marker-hint"></span>
+        </div>
+      </div>
+    </div>`;
+  justConquered = justLit = null;
+  requestAnimationFrame(() =>
+    Promise.all(mapView.getAnimations().map((a) => a.finished.catch(() => {}))).then(() => placeMarker(markerNode(), false))
+  );
+}
+
 // The rational tower's second floor: the same kind of line, four rooms long -
 // the stairs down · room 1 · room 2 · room 3 · the review room.
 function renderCubicFloor() {
@@ -5165,8 +5274,16 @@ const BASIC_FLOOR_NODES = {
   landing: { nav: { right: "linear", left: "stairsPf", up: "more" } },
   stairsPf: { nav: { right: "landing", left: "stairsParts", up: "more" } },
   stairsParts: { nav: { right: "stairsPf", left: "stairsSub", up: "more" } },
-  stairsSub: { nav: { right: "stairsParts", up: "more" } },
+  stairsSub: { nav: { right: "stairsParts", left: "stairsTop", up: "more" } },
+  stairsTop: { nav: { right: "stairsSub", up: "more" } },
   more: { nav: { down: "landing", left: "stairsParts", right: "linear" } },
+};
+
+// The summit: the door back down, room 1, room 2.
+const TOP_FLOOR_NODES = {
+  entrance: { nav: { left: "top1" } },
+  top1: { nav: { right: "entrance", left: "top2" } },
+  top2: { nav: { right: "top1" } },
 };
 
 // The parts tower: the way down, room 1, room 2, the review room.
@@ -5201,9 +5318,10 @@ const LINE_PATHS = {
   parts: ["entrance", "partsPoly", "partsLn", "partsReview"],
   pf2: ["entrance", ...CUB_IDS, "cubReview"],
   sub: ["entrance", ...SUB_IDS, "subReview"],
+  top: ["entrance", ...TOP_IDS],
 };
 const linePath = () => LINE_PATHS[currentPlace()];
-const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" || id === "stairsSub" ? "stairsPf" : id);
+const pathIndex = (id) => linePath().indexOf(id === "more" || id === "stairsParts" || id === "stairsSub" || id === "stairsTop" ? "stairsPf" : id);
 
 const RATIONAL_FLOOR_NODES = {
   entrance: { area: "lower", at: "top", nav: { up: "division" } },
@@ -5217,7 +5335,7 @@ const RATIONAL_FLOOR_NODES = {
   review: { area: "upper", at: "bottom", nav: { left: "nonmonic", down: "gate" } },
 };
 
-const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES, pf2: CUBIC_FLOOR_NODES, sub: SUB_FLOOR_NODES };
+const PLACE_NODES = { ground: BASIC_FLOOR_NODES, pf: RATIONAL_FLOOR_NODES, parts: PARTS_FLOOR_NODES, pf2: CUBIC_FLOOR_NODES, sub: SUB_FLOOR_NODES, top: TOP_FLOOR_NODES };
 const mapNodes = () => PLACE_NODES[currentPlace()];
 const onLine = () => isLinearPlace(currentPlace());
 
@@ -5312,6 +5430,7 @@ const markerTransform = (p) => `translate(${p.x}px, ${p.y}px)`;
 function markerHintText(id) {
   if (id === "gate") return wingOpen() ? "" : "שער ↵";
   if (id === "trophy") return wingOpen() && hasPf2() ? "עולים ↵" : "";
+  if (id === "stairsTop" && !summitOpen()) return "";
   if (STAIRS_PLACE[id]) return "עולים ↵";
   if (id === "entrance" && currentPlace() !== "ground") return "יורדים ↵";
   if (!ROOM_BY_ID[id]) return "";
@@ -5666,6 +5785,7 @@ function makeProblem(room, i, run) {
   if (node.gen === "partsReview") return generatePartsReviewExercise(run.plan[i]);
   if (node.gen === "cubReview") return generateCubicReviewExercise(run.plan[i]);
   if (node.gen === "subPlan") return generateSubExercise(run.plan[i]);
+  if (node.gen === "topPlan") return generateTopExercise(run.plan[i]);
   return GENERATORS[node.gen]();
 }
 
@@ -5686,7 +5806,11 @@ function enterRoom(id) {
   saveStore();
   if (!rec.run) {
     rec.run = { node: 0, score: START_SCORE };
-    if (room.plan) rec.run.plan = drawSubPlan(room.plan);
+    if (room.place === "top") {
+      // Room 2's combo comes from a family room 1 didn't use (its last plan).
+      rec.run.plan = drawTopPlan(room.plan, { cubic: hasPf2(), avoid: store.topFams || [] });
+      if (room.id === "top1") store.topFams = rec.run.plan.filter((e) => e.startsWith("combo:")).map((e) => e.slice(6));
+    } else if (room.plan) rec.run.plan = drawSubPlan(room.plan);
     else if (room.kind === "review") rec.run.plan = room.place === "pf" ? drawReviewPlan(room.nodes.length) : room.place === "pf2" ? drawCubicReviewPlan(room.nodes.length) : drawPartsReviewPlan(room.nodes.length);
     rec.run.problem = makeProblem(room, 0, rec.run);
     saveStore();
@@ -6297,6 +6421,9 @@ function showConquest(room, { score, prevBest, wins, before }) {
     const subLeft = SUB_IDS.filter((id) => !isConquered(id));
     if (subLeft.length) next = `החדר הבא: "${ROOM_BY_ID[subLeft[0]].title}"`;
     else if (!before.medals.find((m) => m.id === "sub").earned) next = "המדליה מחכה בחדר המדליות";
+  } else if (room.place === "top") {
+    if (!isConquered("top2")) next = `החדר הבא: "${ROOM_BY_ID.top2.title}"`;
+    else if (room.id === "top2" && before.firstWin) next = "הכתר מחכה על הטירה";
   } else if (room.place === "pf2") {
     const cubLeft = CUB_IDS.filter((id) => !isConquered(id));
     if (cubLeft.length) next = `החדר הבא: "${ROOM_BY_ID[cubLeft[0]].title}"`;

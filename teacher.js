@@ -13,6 +13,7 @@ const PLACES = [
   ["pf2", "פונקציות רציונליות II"],
   ["parts", "אינטגרציה בחלקים"],
   ["sub", "הצבה"],
+  ["top", "פסגת האינטגרלים"],
 ];
 // What each group studies (software engineering has no rational functions II).
 const groupHas = (group, place) => !(group === "software" && place === "pf2");
@@ -121,6 +122,9 @@ function medalCell(st, m) {
   return { text: String(avg), score: avg, gold };
 }
 
+// The crown: both summit rooms won.
+const hasCrown = (st) => ["top1", "top2"].every((id) => st.store.rooms[id]?.wins > 0);
+
 const tier = (s) => (s >= 9 ? "high" : s >= 7 ? "mid" : "low");
 const when = (d) =>
   d ? d.toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
@@ -145,8 +149,8 @@ function render() {
 
   const head1 = `<tr><th rowspan="2" class="t-name">שם</th><th rowspan="2" class="t-when">פעילות אחרונה</th>
     ${places.map(([label, rs]) => `<th colspan="${rs.length}" class="t-place">${label}</th>`).join("")}
-    <th colspan="${medals.length}" class="t-place">מדליות</th><th rowspan="2"></th></tr>`;
-  const head2 = `<tr>${rooms.map((r) => `<th class="t-room${r.kind === "review" ? " review" : ""}" title="${esc(r.title)}">${esc(r.title)}</th>`).join("")}
+    <th colspan="${medals.length}" class="t-place">מדליות</th><th rowspan="2" class="t-room">כתר</th><th rowspan="2"></th></tr>`;
+  const head2 = `<tr>${rooms.map((r) => `<th class="t-room${r.kind === "review" ? " review" : ""}" title="${esc(r.title)}">${esc(r.title.replace("פסגת האינטגרלים · ", ""))}</th>`).join("")}
     ${medals.map((m) => `<th class="t-room">${esc(pfName(tab, m.title))}</th>`).join("")}</tr>`;
 
   const cell = (c) =>
@@ -157,6 +161,7 @@ function render() {
         <td class="t-name">${esc(st.name)}</td><td class="t-when">${when(st.updatedAt)}</td>
         ${rooms.map((r) => cell(roomCell(st, r.id))).join("")}
         ${medals.map((m) => cell(medalCell(st, m))).join("")}
+        <td class="t-cell">${hasCrown(st) ? '<span class="t-gold">♛</span>' : ""}</td>
         <td class="t-row-actions">
           <select class="t-move" aria-label="העברה לקבוצה">
             <option value="">העברה…</option>
@@ -170,7 +175,7 @@ function render() {
   const done = (id) => list.filter((st) => st.store.rooms[id]?.wins > 0).length;
   const foot = list.length
     ? `<tr class="t-foot"><td class="t-name">סיימו</td><td></td>${rooms.map((r) => `<td>${done(r.id)}</td>`).join("")}
-       ${medals.map((m) => `<td>${list.filter((st) => medalCell(st, m).score != null).length}</td>`).join("")}<td></td></tr>`
+       ${medals.map((m) => `<td>${list.filter((st) => medalCell(st, m).score != null).length}</td>`).join("")}<td>${list.filter(hasCrown).length}</td><td></td></tr>`
     : "";
   $("table").innerHTML = `<thead>${head1}${head2}</thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot>`;
   if (!list.length) $("status").textContent = "אין עדיין סטודנטים בקבוצה הזאת.";
@@ -252,7 +257,7 @@ $("refreshBtn").addEventListener("click", () => load().catch(showLoadError));
 $("exportBtn").addEventListener("click", () => {
   const rooms = ROOMS;
   const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const header = ["שם", "קבוצה", "פעילות אחרונה", ...rooms.map((r) => `${PLACES.find(([p]) => p === r.place)[1]}: ${r.title}`), ...MEDAL_LIST.map((m) => `מדליה: ${m.title}`)];
+  const header = ["שם", "קבוצה", "פעילות אחרונה", ...rooms.map((r) => `${PLACES.find(([p]) => p === r.place)[1]}: ${r.title}`), ...MEDAL_LIST.map((m) => `מדליה: ${m.title}`), "כתר"];
   const lines = [header.map(q).join(",")];
   for (const g of Object.keys(GROUPS)) {
     for (const st of students.filter((s) => s.group === g)) {
@@ -262,7 +267,7 @@ $("exportBtn").addEventListener("click", () => {
         const c = medalCell(st, m);
         return c.score != null ? `${c.text}${c.gold ? " זהב" : ""}` : "";
       });
-      lines.push([st.name, GROUPS[g] || g, when(st.updatedAt), ...roomVals, ...medalVals].map(q).join(","));
+      lines.push([st.name, GROUPS[g] || g, when(st.updatedAt), ...roomVals, ...medalVals, hasCrown(st) ? "כן" : ""].map(q).join(","));
     }
   }
   const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });

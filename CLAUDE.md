@@ -26,13 +26,18 @@ Sections in file order:
    sampling, `gen*` generators for rooms basic / linear / more, `basicNearMissVariants`.
 6. **Parts tower math** (`kind: "parts"`, `fam: "poly" | "ln"`) - `partsPolyTerms`,
    `partsLnTerms`, `parts*Latex`, `partsSolutionLatex`, `partsNearMissVariants`, `genParts*`.
-7. **`ROOMS`** (in `rooms.js`) - every room: `id`, `place` ("ground" | "pf" | "parts" | "pf2" | "sub"),
+   Then the substitution tower (`sub*`, `SUB_R1`/`SUB_A`/`SUB_C`, `drawSubPlan`) and the summit
+   (`kind: "top"`: data-only exercises with their LaTeX written out, helpers `tFrac`/`tTerm`/`tJoin`,
+   `TOP_POOLS`, `TOP_OLD`, `drawTopPlan`, `generateTopExercise`). Parser: put `e^{\sin x}` before
+   `\sin x\cos x`, and write `\sin\left(2x\right)` - a function's argument is greedy.
+7. **`ROOMS`** (in `rooms.js`) - every room: `id`, `place` ("ground" | "pf" | "parts" | "pf2" | "sub" | "top"),
    `kind`, `num`, `title`, `requires`, `nodes` (generator names). Everything in app.js above
    `const ROOM_BY_ID` runs in node (strip imports, stub `MathfieldElement`) - use that for math tests.
 8. **Store & progress** - `STORE_KEY`, `loadStore` + migration, `currentPlace`, `isLocked`,
    `stairsOpen`, `wingOpen`, `recommendedRoomId`.
 9. **Map** - `roomCardHtml`, medal (`medalState`, `renderMedalView`), `goToPlace`, the floor
-   panel (`renderTowerNav`), `renderBasicFloor` / `renderRationalFloor` / `renderPartsFloor`.
+   panel (`renderTowerNav`), `renderBasicFloor` / `renderRationalFloor` / `renderPartsFloor` /
+   `renderTopFloor`; the summit's door on the ground floor (`summitDoorHtml`, `summitOpen`).
 10. **Marker** - `*_FLOOR_NODES` (arrow-key nav), `LINE_PATHS`, `nodePoint`, `routePoints`,
     `walkTo`, `stepMarker`, `lineGo`, `activateMarker`, map click handlers.
 11. **Lock dialog** - `showLockDialog`, `openGateDialog`, `openLockedRoomDialog`, `openStairsDialog`.

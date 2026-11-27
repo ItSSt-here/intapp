@@ -273,6 +273,31 @@ export const ROOMS = [
     plan: "subReview",
     nodes: [{ gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }, { gen: "subPlan" }],
   },
+  // The summit: behind a door that opens with all the medals. No hint of
+  // what is inside - the student finds the method alone.
+  {
+    id: "top1",
+    place: "top",
+    kind: "core",
+    num: 1,
+    title: "פסגת האינטגרלים · חדר 1",
+    en: "The summit · room 1",
+    tag: "כל השיטות",
+    plan: "top1",
+    nodes: [{ gen: "topPlan" }, { gen: "topPlan" }, { gen: "topPlan" }, { gen: "topPlan" }],
+  },
+  {
+    id: "top2",
+    place: "top",
+    kind: "core",
+    num: 2,
+    title: "פסגת האינטגרלים · חדר 2",
+    en: "The summit · room 2",
+    tag: "כל השיטות",
+    requires: ["top1"],
+    plan: "top2",
+    nodes: [{ gen: "topPlan" }, { gen: "topPlan" }, { gen: "topPlan" }, { gen: "topPlan", boss: true }],
+  },
 ];
 
 // The rooms each medal needs, by place.
@@ -281,6 +306,8 @@ export const FLOOR1_IDS = ["basic", "linear"];
 export const PARTS_IDS = ["partsPoly", "partsLn"];
 export const CUB_IDS = ["cub3", "cubDouble", "cubQuad"];
 export const SUB_IDS = ["subR1", "subR2"];
+// The summit's rooms (no medal: a crown on the castle).
+export const TOP_IDS = ["top1", "top2"];
 
 export const MEDAL_LIST = [
   {
