@@ -3053,7 +3053,16 @@ function loadStore() {
 let store = loadStore();
 // Who is playing, and the newer of this computer's and the server's copy
 // (cloud.js). Asks for an ID number the first time; nothing is drawn before.
-if (!TEST_MODE) store = await cloudInit(store);
+if (!TEST_MODE) {
+  store = await cloudInit(store);
+  // This computer keeps the copy chosen (a new student's new game replaces
+  // whatever was played here before).
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch {
+    // nothing kept locally
+  }
+}
 const student = TEST_MODE ? null : currentStudent();
 const viewGroup = TEST_MODE ? new URLSearchParams(location.search).get("group") : student?.group;
 // Software engineering doesn't study rational functions II (cubic floor).

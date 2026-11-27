@@ -140,7 +140,6 @@ function parseStore(json) {
   return null;
 }
 
-const hasProgress = (s) => Object.values(s.rooms || {}).some((r) => r.wins > 0 || r.run);
 
 // The newer copy, plus every room won only in the older one, with the better
 // score of the two: nothing won on either computer is lost.
@@ -309,10 +308,12 @@ function entryDialog(local) {
         return;
       }
       if (!doc) {
-        // A new student: this computer's progress (if any) starts the record.
+        // A new student starts a new game, whatever this computer played
+        // before (on a shared computer that is someone else's).
+        const fresh = { rooms: {}, savedAt: Date.now() };
         needsProfile = true;
-        finish({ key, name, group }, local);
-        cloudSave(local);
+        finish({ key, name, group }, fresh);
+        cloudSave(fresh);
         flush();
         return;
       }
@@ -329,10 +330,8 @@ function entryDialog(local) {
         entryDialog(local).then(resolve);
       });
       form.querySelector("[data-yes]").addEventListener("click", () => {
-        const remote = parseStore(doc.store);
-        const store = remote ? (hasProgress(local) ? mergeStores(local, remote) : remote) : local;
-        finish({ key, name: doc.name, group: doc.group }, store);
-        if (store !== remote) cloudSave(store);
+        // Their own progress only, not what this computer played before.
+        finish({ key, name: doc.name, group: doc.group }, parseStore(doc.store) || { rooms: {}, savedAt: Date.now() });
       });
       form.querySelector("[data-yes]").focus();
     });
