@@ -516,6 +516,7 @@ function factoredDenLatex(p) {
 const shownDenLatex = (p) => (p.display === "expanded" ? polyLatex(denominatorPoly(p)) : factoredDenLatex(p));
 
 function problemLatex(p) {
+  if (p.kind === "top") return topProblemLatex(p);
   if (p.kind === "parts") return partsProblemLatex(p);
   if (p.kind === "cub") return cubProblemLatex(p);
   if (p.kind === "sub") return subProblemLatex(p);
@@ -541,6 +542,7 @@ function splitLatex(p, isFirst) {
 }
 
 function antiderivativeLatex(p) {
+  if (p.kind === "top") return `${p.F}+C`;
   if (p.kind === "parts") return partsAntiderivativeLatex(p);
   if (p.kind === "cub") return cubAntiderivativeLatex(p);
   if (p.kind === "sub") return subAntiderivativeLatex(p);
@@ -560,6 +562,7 @@ function antiderivativeLatex(p) {
 
 // Worked solution, one step per aligned line: divide, factor, split, integrate.
 function solutionLatex(p) {
+  if (p.kind === "top") return topSolutionLatex(p);
   if (p.kind === "parts") return partsSolutionLatex(p);
   if (p.kind === "cub") return cubSolutionLatex(p);
   if (p.kind === "sub") return subSolutionLatex(p);
@@ -1222,6 +1225,7 @@ function generateCubicReviewExercise(entry) {
 // ---------------------------------------------------------------------------
 
 function integrandFn(p) {
+  if (p.kind === "top") return topIntegrandFn(p);
   if (p.kind === "parts") return partsIntegrandFn(p);
   if (p.kind === "cub") return cubIntegrandFn(p);
   if (p.kind === "sub") return subIntegrandFn(p);
@@ -1234,6 +1238,7 @@ function integrandFn(p) {
 }
 
 function sampleZones(p) {
+  if (p.kind === "top") return topSampleZones(p);
   if (p.kind === "parts") return partsSampleZones(p);
   if (p.kind === "cub") return cubSampleZones(p);
   if (p.kind === "sub") return subSampleZones(p);
@@ -1261,6 +1266,7 @@ function pickSamplePoints(p, countPerZone = 3) {
 
 // Common slips, each as the problem the slipped answer would be correct for.
 function nearMissVariants(p) {
+  if (p.kind === "top") return topNearMissVariants(p);
   if (p.kind === "parts") return partsNearMissVariants(p);
   if (p.kind === "cub") return cubNearMissVariants(p);
   if (p.kind === "sub") return subNearMissVariants(p);
@@ -3019,6 +3025,631 @@ Object.assign(GENERATORS, {
   subA: () => generateSubExercise("A"),
   subB: () => generateSubExercise("B"),
   subC: () => generateSubExercise("C"),
+});
+
+// ---------------------------------------------------------------------------
+// The summit (פסגת האינטגרלים): exercises that mix the methods
+//
+// Room 1: two "old" exercises (the harder forms of the towers' rooms, with no
+// room name to say which method) and two combos; room 2: a combo, a
+// substitution with a trick, another hard one, and a parts boss.
+//
+// The new exercises are plain data with their LaTeX written out (kind "top"):
+// the integrand as shown, the answer F, the worked solution's rows, the
+// x-range to check in, and the common slips (each a wrong F of its own). The
+// checker reads the integrand and F with buildEvaluator - the parser the
+// students' answers go through - so what is shown is what is checked.
+// ---------------------------------------------------------------------------
+
+const topGcd = (a, b) => (b ? topGcd(b, a % b) : Math.abs(a));
+
+// n/d in LaTeX, reduced, with its sign in front.
+function tFrac(n, d = 1) {
+  if (d < 0) [n, d] = [-n, -d];
+  const g = topGcd(n, d) || 1;
+  [n, d] = [n / g, d / g];
+  const s = n < 0 ? "-" : "";
+  return d === 1 ? `${s}${Math.abs(n)}` : `${s}\\frac{${Math.abs(n)}}{${d}}`;
+}
+// (n/d)·body, signed ("" when n = 0; no 1 before a body).
+function tTerm(n, d, body = "") {
+  if (n === 0) return "";
+  if (!body) return tFrac(n, d);
+  if (n === d) return body;
+  if (n === -d) return `-${body}`;
+  return tFrac(n, d) + body;
+}
+// n/den as one fraction, signed.
+const tOver = (n, den) => (n === 0 ? "" : `${n < 0 ? "-" : ""}\\frac{${Math.abs(n)}}{${den}}`);
+// Signed pieces into a sum.
+const tJoin = (parts) =>
+  parts.filter(Boolean).reduce((s, p, i) => s + (i && !p.startsWith("-") ? "+" : "") + p, "") || "0";
+const tMinus = (v, a) => (a === 0 ? v : a > 0 ? `${v}-${a}` : `${v}+${-a}`);
+const tPlus = (v, a) => tMinus(v, -a);
+const tCo = (n, d = 1) => tTerm(n, d, "@").replace("@", ""); // a coefficient alone: "", "-", "3", "\frac{1}{2}"
+const tPow = (b, m) => (m === 0 ? "1" : m === 1 ? b : `${b}^{${m}}`);
+const tTrig = (f, m) => (m === 1 ? `\\${f} x` : `\\${f}^{${m}}x`);
+const tBracket = (...items) => `&\\qquad \\left[\\,${items.join(",\\ \\ ")}\\,\\right]`;
+const tEq = (s) => `&= ${s}`;
+// c·(body): no brackets when there is no coefficient.
+const tWrap = (c, body) => (c === "" ? body : `${c}\\left(${body}\\right)`);
+const tUdv = (u, dv, du, v) => `&u=${u},\\qquad v^\\prime=${dv} \\\\ &u^\\prime=${du},\\qquad v=${v}`;
+const tNum = (c, rest = "") => (Math.abs(c) === 1 ? rest || "1" : `${Math.abs(c)}${rest}`); // a numerator, unsigned
+const tSgn = (c) => (c < 0 ? "-" : "");
+
+function topMake(type, shown, F, rows, range, slips = []) {
+  return {
+    kind: "top",
+    type,
+    shown,
+    F,
+    rows: [...rows, tEq(`${F}+C`)],
+    range,
+    slips: slips.filter((s) => s.F !== F),
+  };
+}
+
+// --- combos A: a substitution that leads to partial fractions ------------------
+
+// k/(t−a) − k/(t−b) after t = g(x); the integrand shows the expanded square.
+function topSubPf(type, g, gLatex, dtItem, shownOf, range, roots) {
+  let a, b;
+  do [a, b] = [pick(roots), pick(roots)];
+  while (a === b);
+  const k = pick([1, 2, 3]) * pick([1, -1]);
+  const c = k * (a - b);
+  const p = -(a + b);
+  const q = a * b;
+  const den = (v) => tJoin([`${v}^{2}`, tTerm(p, 1, v), tTerm(q, 1)]);
+  const lnPair = (v, kk) => tJoin([tTerm(kk, 1, `\\ln|${tMinus(v, a)}|`), tTerm(-kk, 1, `\\ln|${tMinus(v, b)}|`)]);
+  const F = lnPair(gLatex, k);
+  const rows = [
+    tBracket(`t=${g}`, dtItem),
+    tEq(`\\int ${tSgn(c)}\\frac{${tNum(c)}}{${den("t")}}\\,dt`),
+    tEq(`\\int ${tSgn(c)}\\frac{${tNum(c)}}{\\left(${tMinus("t", a)}\\right)\\left(${tMinus("t", b)}\\right)}\\,dt`),
+    tEq(`\\int\\left(${tJoin([tOver(k, tMinus("t", a)), tOver(-k, tMinus("t", b))])}\\right)dt`),
+    tEq(lnPair("t", k)),
+  ];
+  const slips = [{ kind: "sign", F: lnPair(gLatex, -k) }];
+  if (Math.abs(a - b) !== 1) slips.push({ kind: "pfCoef", F: lnPair(gLatex, k * (a - b)) });
+  return topMake(type, shownOf(c, den), F, rows, range, slips);
+}
+
+const genTopExpPf = () =>
+  topSubPf("expPf", "e^{x}", "e^{x}", "dt=e^{x}\\,dx",
+    (c, den) => `${tSgn(c)}\\frac{${tNum(c, "e^{x}")}}{${den("e^{x}").replace("e^{x}^{2}", "e^{2x}")}}`,
+    [-3, 2.3], [-3, -2, -1, 1, 2, 3]);
+const genTopSinPf = () =>
+  topSubPf("sinPf", "\\sin x", "\\sin x", "dt=\\cos x\\,dx",
+    (c, den) => `${tSgn(c)}\\frac{${tNum(c, "\\cos x")}}{${den("\\sin x").replace("\\sin x^{2}", "\\sin^{2}x")}}`,
+    [-4, 4], [-4, -3, -2, 2, 3, 4]);
+const genTopLnPf = () =>
+  topSubPf("lnPf", "\\ln x", "\\ln x", "dt=\\frac{dx}{x}",
+    (c, den) => `${tSgn(c)}\\frac{${tNum(c)}}{x\\left(${den("\\ln x").replace("\\ln x^{2}", "\\ln^{2}x")}\\right)}`,
+    [0.05, 12], [-2, -1, 1, 2]);
+
+// --- combos B: a substitution that leads to parts --------------------------------
+
+// ∫ t·f(t) dt by parts, for f = e^t, sin t, cos t: the answer's two terms in
+// any variable v (with v = g(x) already in place: "x^{2}", "\sqrt{x}").
+const T_F = {
+  exp: { f: (v) => `e^{${v}}`, v: (v) => `e^{${v}}`, uv: (v) => [[1, `${v}e^{${v}}`], [-1, `e^{${v}}`]], minus: (v) => `${v}e^{${v}}-\\int e^{${v}}\\,d${v}` },
+  sin: { f: (v) => `\\sin ${v}`, v: (v) => `-\\cos ${v}`, uv: (v) => [[-1, `${v}\\cos ${v}`], [1, `\\sin ${v}`]], minus: (v) => `-${v}\\cos ${v}+\\int\\cos ${v}\\,d${v}` },
+  cos: { f: (v) => `\\cos ${v}`, v: (v) => `\\sin ${v}`, uv: (v) => [[1, `${v}\\sin ${v}`], [1, `\\cos ${v}`]], minus: (v) => `${v}\\sin ${v}-\\int\\sin ${v}\\,d${v}` },
+};
+// The same two terms with the second one's sign flipped: uv + ∫u′v.
+const tPartsMinus = (terms) => terms.map(([s, b], i) => [i ? -s : s, b]);
+
+// ∫ k·x³·f(x²) dx: t = x², x³dx = ½t dt.
+function genTopX3() {
+  const fn = pick(["exp", "exp", "sin", "cos"]);
+  const k = pick([1, 2, 3, 4]);
+  const arg = fn === "exp" ? "x^{2}" : "\\left(x^{2}\\right)";
+  const shown = `${tCo(k)}x^{3}${fn === "exp" ? "e^{x^{2}}" : `\\${fn}${arg}`}`;
+  // In x the answer's terms read x²·e^{x²}, x²cos(x²)...: build them directly.
+  const terms = fn === "exp"
+    ? [[1, "x^{2}e^{x^{2}}"], [-1, "e^{x^{2}}"]]
+    : fn === "sin"
+      ? [[-1, `x^{2}\\cos${arg}`], [1, `\\sin${arg}`]]
+      : [[1, `x^{2}\\sin${arg}`], [1, `\\cos${arg}`]];
+  const inX = (n, d, ts) => tJoin(ts.map(([s, b]) => tTerm(n * s, d, b)));
+  const P = T_F[fn];
+  const rows = [
+    tBracket("t=x^{2}", "dt=2x\\,dx"),
+    tEq(`${tCo(k, 2)}\\int t\\,${P.f("t")}\\,dt`),
+    tUdv("t", P.f("t"), "1", P.v("t")),
+    tEq(tWrap(tCo(k, 2), P.minus("t"))),
+    tEq(inX(k, 2, P.uv("t"))),
+  ];
+  return topMake("x3", shown, inX(k, 2, terms), rows, fn === "exp" ? [-1.6, 1.6] : [-2.2, 2.2], [
+    { kind: "subConst", F: inX(k, 1, terms) },
+    { kind: "subConst", F: inX(k, 4, terms) },
+    { kind: "partsMinus", F: inX(k, 2, tPartsMinus(terms)) },
+  ]);
+}
+
+// ∫ k·f(√x) dx: t = √x, x = t², dx = 2t dt.
+function genTopRoot() {
+  const fn = pick(["exp", "sin", "cos"]);
+  const k = pick([1, 2, 3]);
+  const r = "\\sqrt{x}";
+  const shown = `${tCo(k)}${fn === "exp" ? `e^{${r}}` : `\\${fn}${r}`}`;
+  const terms = fn === "exp"
+    ? [[1, `${r}e^{${r}}`], [-1, `e^{${r}}`]]
+    : fn === "sin"
+      ? [[-1, `${r}\\cos${r}`], [1, `\\sin${r}`]]
+      : [[1, `${r}\\sin${r}`], [1, `\\cos${r}`]];
+  const inX = (n, ts) => tJoin(ts.map(([s, b]) => tTerm(n * s, 1, b)));
+  const P = T_F[fn];
+  const rows = [
+    tBracket("t=\\sqrt{x}", "x=t^{2}", "dx=2t\\,dt"),
+    tEq(`${tCo(2 * k)}\\int t\\,${P.f("t")}\\,dt`),
+    tUdv("t", P.f("t"), "1", P.v("t")),
+    tEq(`${tCo(2 * k)}\\left(${P.minus("t")}\\right)`),
+    tEq(inX(2 * k, P.uv("t"))),
+  ];
+  const slips = [{ kind: "partsMinus", F: inX(2 * k, tPartsMinus(terms)) }];
+  if (k === 1 || k === 3) slips.push({ kind: "subConst", F: inX(k, terms) });
+  else slips.push({ kind: "subConst", F: inX(1, terms) });
+  return topMake("root", shown, inX(2 * k, terms), rows, [0.05, 9], slips);
+}
+
+// --- combos C: parts, then another method for what is left ----------------------
+
+// ∫ k·x·arctan x dx: the rest, x²/(1+x²), needs a division.
+function genTopXAtan() {
+  const k = pick([1, 2, 3, 4]);
+  const c = tCo(k, 2);
+  const F = (s) => tJoin([tTerm(k, 2, "x^{2}\\arctan x"), tTerm(-k * s, 2, "x"), tTerm(k * s, 2, "\\arctan x")]);
+  const rows = [
+    tUdv("\\arctan x", `${tCo(k)}x`, "\\frac{1}{1+x^{2}}", `${c}x^{2}`),
+    tEq(`${c}x^{2}\\arctan x-${c}\\int\\frac{x^{2}}{1+x^{2}}\\,dx`),
+    tEq(`${c}x^{2}\\arctan x-${c}\\int\\left(1-\\frac{1}{1+x^{2}}\\right)dx`),
+  ];
+  return topMake("xAtan", `${tCo(k)}x\\arctan x`, F(1), rows, [-4, 4], [{ kind: "partsMinus", F: F(-1) }]);
+}
+
+// ∫ ln(x²+a²) dx: the rest, 2x²/(x²+a²), needs a division and an arctan.
+function genTopLnSq() {
+  const a = pick([1, 2, 3]);
+  const A = a * a;
+  const atan = (n, inner) => tTerm(n, 1, `\\arctan${inner}`);
+  const arg = a === 1 ? " x" : `\\left(\\frac{x}{${a}}\\right)`;
+  const ln = `\\ln\\left(x^{2}+${A}\\right)`;
+  const F = (s, at) => tJoin([`x${ln}`, tTerm(-2 * s, 1, "x"), at]);
+  const rows = [
+    tUdv(ln, "1", `\\frac{2x}{x^{2}+${A}}`, "x"),
+    tEq(`x${ln}-\\int\\frac{2x^{2}}{x^{2}+${A}}\\,dx`),
+    tEq(`x${ln}-\\int\\left(2-\\frac{${2 * A}}{x^{2}+${A}}\\right)dx`),
+  ];
+  const slips = [{ kind: "partsMinus", F: F(-1, atan(-2 * a, arg)) }];
+  if (a !== 1) {
+    slips.push({ kind: "atanCoef", F: F(1, atan(2 * A, arg)) });
+    slips.push({ kind: "atanArg", F: F(1, atan(2 * a, " x")) });
+  }
+  return topMake("lnSq", ln, F(1, atan(2 * a, arg)), rows, [-4, 4], slips);
+}
+
+// ∫ arctan(ax) dx: the rest, ax/(1+a²x²), needs a substitution.
+function genTopAtan() {
+  const a = pick([1, 2, 3]);
+  const A = a * a;
+  const ax = a === 1 ? "x" : `${a}x`;
+  const at = a === 1 ? "\\arctan x" : `\\arctan\\left(${ax}\\right)`;
+  const inner = `1+${A === 1 ? "" : A}x^{2}`;
+  const F = (n, d) => tJoin([`x${at}`, tTerm(-n, d, `\\ln\\left(${inner}\\right)`)]);
+  const rows = [
+    tUdv(at, "1", `\\frac{${a}}{${inner}}`, "x"),
+    tEq(`x${at}-\\int\\frac{${ax}}{${inner}}\\,dx`),
+    tBracket(`t=${inner}`, `dt=${2 * A}x\\,dx`),
+    tEq(`x${at}-${tCo(1, 2 * a)}\\int\\frac{dt}{t}`),
+  ];
+  return topMake("atan", at, F(1, 2 * a), rows, [-4, 4], [
+    { kind: "partsMinus", F: F(-1, 2 * a) },
+    { kind: "subConst", F: F(1, a) },
+    { kind: "subConst", F: F(1, 4 * a) },
+  ]);
+}
+
+// --- substitutions with a trick ---------------------------------------------------
+
+// ∫ k/(eˣ + a²e⁻ˣ) dx: multiply by eˣ, then t = eˣ and an arctan.
+function genTopCosh() {
+  const a = pick([1, 1, 2, 3]);
+  const A = a * a;
+  const k = pick([1, 2, 3]);
+  const arg = a === 1 ? "e^{x}" : `\\frac{e^{x}}{${a}}`;
+  const F = (n, d, ar = arg) => tTerm(n, d, `\\arctan\\left(${ar}\\right)`);
+  const rows = [
+    tEq(`\\int\\frac{${tNum(k, "e^{x}")}}{e^{2x}+${A}}\\,dx`),
+    tBracket("t=e^{x}", "dt=e^{x}\\,dx"),
+    tEq(`\\int\\frac{${k}}{t^{2}+${A}}\\,dt`),
+    tEq(F(k, a, a === 1 ? "t" : `\\frac{t}{${a}}`)),
+  ];
+  const slips = [];
+  if (a !== 1) slips.push({ kind: "atanCoef", F: F(k, 1) }, { kind: "atanArg", F: F(k, a, "e^{x}") });
+  return topMake("cosh", `\\frac{${k}}{e^{x}+${A === 1 ? "" : A}e^{-x}}`, F(k, a), rows, [-3, 3], slips);
+}
+
+// ∫ k/(a+eˣ) dx: add and take away eˣ in the numerator.
+function genTopOnePlusExp() {
+  const a = pick([1, 2, 3]);
+  const k = pick([1, 2, 3, 4]);
+  const ln = `\\ln\\left(${a}+e^{x}\\right)`;
+  const F = (n, d) => tJoin([tTerm(n, d, "x"), tTerm(-n, d, ln)]);
+  const c = tCo(k, a);
+  const rows = [
+    tEq(`${c}\\int\\frac{${a}+e^{x}-e^{x}}{${a}+e^{x}}\\,dx`),
+    tEq(`${c}\\int\\left(1-\\frac{e^{x}}{${a}+e^{x}}\\right)dx`),
+    tEq(tWrap(c, `x-${ln}`)),
+  ];
+  const slips = a === 1 ? [] : [{ kind: "topCoef", F: F(k, 1) }];
+  return topMake("onePlusExp", `\\frac{${k}}{${a}+e^{x}}`, F(k, a), rows, [-3, 3], slips);
+}
+
+// ∫ k/(√x(x+a²)) dx: t = √x, and an arctan.
+function genTopRootAtan() {
+  const a = pick([1, 2, 3]);
+  const A = a * a;
+  const k = pick([1, 2, 3]);
+  const arg = a === 1 ? "\\sqrt{x}" : `\\frac{\\sqrt{x}}{${a}}`;
+  const F = (n, d, ar = arg) => tTerm(n, d, `\\arctan\\left(${ar}\\right)`);
+  const rows = [
+    tBracket("t=\\sqrt{x}", "dt=\\frac{dx}{2\\sqrt{x}}"),
+    tEq(`\\int\\frac{${2 * k}}{t^{2}+${A}}\\,dt`),
+    tEq(F(2 * k, a, a === 1 ? "t" : `\\frac{t}{${a}}`)),
+  ];
+  const slips = [{ kind: "subConst", F: F(k, a) }];
+  if (a !== 1) slips.push({ kind: "atanCoef", F: F(2 * k, 1) }, { kind: "atanArg", F: F(2 * k, a, "\\sqrt{x}") });
+  return topMake("rootAtan", `\\frac{${k}}{\\sqrt{x}\\left(x+${A}\\right)}`, F(2 * k, a), rows, [0.05, 10], slips);
+}
+
+// ∫ k√(a+ln x)/x dx or ∫ k/(x√(a+ln x)) dx: t = a + ln x.
+function genTopLnRoot() {
+  const a = pick([1, 2, 3]);
+  const k = pick([1, 2, 3]);
+  const u = `${a}+\\ln x`;
+  const range = [Math.exp(-a) + 0.05, 10];
+  if (Math.random() < 0.5) {
+    const F = (n, d) => tTerm(n, d, `\\left(${u}\\right)\\sqrt{${u}}`);
+    const rows = [
+      tBracket(`t=${u}`, "dt=\\frac{dx}{x}"),
+      tEq(`${tCo(k)}\\int\\sqrt{t}\\,dt`),
+      tEq(`${tCo(k)}\\int t^{\\frac{1}{2}}\\,dt`),
+      tEq(tTerm(2 * k, 3, "t^{\\frac{3}{2}}")),
+    ];
+    return topMake("lnRoot", `\\frac{${tNum(k, `\\sqrt{${u}}`)}}{x}`, F(2 * k, 3), rows, range, [{ kind: "subPow", F: F(k, 1) }]);
+  }
+  const F = (n) => tTerm(n, 1, `\\sqrt{${u}}`);
+  const rows = [
+    tBracket(`t=${u}`, "dt=\\frac{dx}{x}"),
+    tEq(`${tCo(k)}\\int\\frac{dt}{\\sqrt{t}}`),
+    tEq(`${tCo(k)}\\int t^{-\\frac{1}{2}}\\,dt`),
+    tEq(tTerm(2 * k, 1, "\\sqrt{t}")),
+  ];
+  return topMake("lnRootInv", `\\frac{${k}}{x\\sqrt{${u}}}`, F(2 * k), rows, range, [{ kind: "subPow", F: F(k) }]);
+}
+
+// --- other hard ones -----------------------------------------------------------------
+
+// ∫ x√(x+a) dx: t = x+a, and x = t − a.
+function genTopXRoot() {
+  const a = pick([1, 2, 3, -1, -2]);
+  const xa = tPlus("x", a);
+  const u = `\\left(${xa}\\right)`;
+  const s = `\\sqrt{${xa}}`;
+  const F = (n1, d1, n2, d2) => tJoin([tTerm(n1, d1, `${u}^{2}${s}`), tTerm(n2, d2, `${u}${s}`)]);
+  const rows = [
+    tBracket(`t=${xa}`, `x=${tMinus("t", a)}`, "dx=dt"),
+    tEq(`\\int\\left(${tMinus("t", a)}\\right)\\sqrt{t}\\,dt`),
+    tEq(`\\int\\left(${tJoin(["t^{\\frac{3}{2}}", tTerm(-a, 1, "t^{\\frac{1}{2}}")])}\\right)dt`),
+    tEq(tJoin([tTerm(2, 5, "t^{\\frac{5}{2}}"), tTerm(-2 * a, 3, "t^{\\frac{3}{2}}")])),
+  ];
+  return topMake("xRoot", `x\\sqrt{${xa}}`, F(2, 5, -2 * a, 3), rows, [-a + 0.05, -a + 6], [
+    { kind: "subPow", F: F(1, 1, -a, 1) },
+    { kind: "subSignShift", F: F(2, 5, 2 * a, 3) },
+  ]);
+}
+
+// ∫ x³√(x²+a) dx: t = x²+a, x² = t − a, x dx = dt/2.
+function genTopX3Root() {
+  const a = pick([1, 2, 3, 4]);
+  const xa = `x^{2}+${a}`;
+  const u = `\\left(${xa}\\right)`;
+  const s = `\\sqrt{${xa}}`;
+  const F = (n1, d1, n2, d2) => tJoin([tTerm(n1, d1, `${u}^{2}${s}`), tTerm(n2, d2, `${u}${s}`)]);
+  const rows = [
+    tBracket(`t=${xa}`, "dt=2x\\,dx", `x^{2}=t-${a}`),
+    tEq(`\\frac{1}{2}\\int\\left(t-${a}\\right)\\sqrt{t}\\,dt`),
+    tEq(`\\frac{1}{2}\\int\\left(${tJoin(["t^{\\frac{3}{2}}", tTerm(-a, 1, "t^{\\frac{1}{2}}")])}\\right)dt`),
+    tEq(tJoin([tTerm(1, 5, "t^{\\frac{5}{2}}"), tTerm(-a, 3, "t^{\\frac{3}{2}}")])),
+  ];
+  return topMake("x3Root", `x^{3}${s}`, F(1, 5, -a, 3), rows, [-2.5, 2.5], [
+    { kind: "subConst", F: F(2, 5, -2 * a, 3) },
+    { kind: "subPow", F: F(1, 2, -a, 2) },
+  ]);
+}
+
+// ∫ N(x)/(x−a)² dx with N cubic: a division, then a ln and a 1/(x−a).
+function genTopCubicOverSquare() {
+  for (;;) {
+    const a = pick([-3, -2, -1, 1, 2, 3]);
+    const q = randInt(-3, 3);
+    const r = pick([-4, -3, -2, -1, 1, 2, 3, 4]);
+    const s = pick([-5, -4, -3, -2, -1, 1, 2, 3, 4, 5]);
+    // N = (x−a)²(x+q) + r(x−a) + s, low → high
+    const N = [a * a * q - r * a + s, a * a - 2 * a * q + r, q - 2 * a, 1];
+    if (N.some((c) => Math.abs(c) > 30)) continue;
+    const xa = tMinus("x", a);
+    const poly = (P) => tJoin(P.map((c, i) => tTerm(c, 1, ["", "x", "x^{2}", "x^{3}"][i])).reverse());
+    const F = ({ quot = true, ln = r, over = -s, overLn = 0 } = {}) =>
+      tJoin([quot ? tTerm(1, 2, "x^{2}") : "", quot ? tTerm(q, 1, "x") : "", tTerm(ln, 1, `\\ln|${xa}|`), tOver(over, xa), tTerm(overLn, 1, `\\ln|${xa}|`)]);
+    const R = [s - r * a, r];
+    const rows = [
+      tEq(`\\int\\left(${tJoin(["x", tTerm(q, 1)])}+\\frac{${poly(R)}}{\\left(${xa}\\right)^{2}}\\right)dx`),
+      tEq(`\\int\\left(${tJoin(["x", tTerm(q, 1), tOver(r, xa), tOver(s, `\\left(${xa}\\right)^{2}`)])}\\right)dx`),
+    ];
+    return topMake("cubicSq", `\\frac{${poly(N)}}{\\left(${xa}\\right)^{2}}`, F(), rows, [a - 6, a + 6], [
+      { kind: "quotient", F: F({ quot: false }) },
+      { kind: "repSign", F: F({ over: s }) },
+      { kind: "repLn", F: F({ ln: r + s, over: 0 }) },
+    ]);
+  }
+}
+
+// ∫ k·sin³x·cosⁿx dx (t = cos x) or k·cos³x·sinⁿx dx (t = sin x): sin²x = 1 − cos²x.
+function genTopOddPower() {
+  const n = pick([0, 1, 2]);
+  const k = pick([1, 2, 3]);
+  const sinOdd = Math.random() < 0.5;
+  const [odd, other] = sinOdd ? ["sin", "cos"] : ["cos", "sin"];
+  const sg = sinOdd ? -1 : 1; // dt = −sin x dx for t = cos x
+  const shown = `${tCo(k)}${tTrig(odd, 3)}${n ? tTrig(other, n) : ""}`;
+  const F = (sign, p1 = n + 1, p2 = n + 3) => tJoin([tTerm(sign * k, p1, tTrig(other, n + 1)), tTerm(-sign * k, p2, tTrig(other, n + 3))]);
+  const tn = (m) => tPow("t", m);
+  const rows = [
+    tEq(`${tCo(k)}\\int\\left(1-${tTrig(other, 2)}\\right)${n ? tTrig(other, n) : ""}\\,\\${odd} x\\,dx`),
+    tBracket(`t=\\${other} x`, `dt=${sinOdd ? "-" : ""}\\${odd} x\\,dx`),
+    tEq(`${tCo(sg * k)}\\int\\left(${tn(n)}-${tn(n + 2)}\\right)dt`),
+    tEq(tJoin([tTerm(sg * k, n + 1, tn(n + 1)), tTerm(-sg * k, n + 3, tn(n + 3))])),
+  ];
+  return topMake("oddPower", shown, F(sg), rows, [-3, 3], [
+    { kind: sinOdd ? "subSign" : "sign", F: F(-sg) },
+    { kind: "subPow", F: F(sg, 1, 1) },
+  ]);
+}
+
+// ∫ k·tan²x dx: tan²x = 1/cos²x − 1.
+function genTopTanSq() {
+  const k = pick([1, 2, 3]);
+  const F = (s) => tJoin([tTerm(k, 1, "\\tan x"), tTerm(-s * k, 1, "x")]);
+  const rows = [tEq(`${tCo(k)}\\int\\left(\\frac{1}{\\cos^{2}x}-1\\right)dx`)];
+  return topMake("tanSq", `${tCo(k)}\\tan^{2}x`, F(1), rows, [-1.4, 1.4], [{ kind: "sign", F: F(-1) }]);
+}
+
+// ∫ sin²(ax) or cos²(ax) dx: the double angle.
+function genTopSquareTrig() {
+  const a = pick([1, 2, 3]);
+  const fn = pick(["sin", "cos"]);
+  const s = fn === "sin" ? -1 : 1;
+  const ax = a === 1 ? "x" : `${a}x`;
+  const shown = a === 1 ? `\\${fn}^{2}x` : `\\${fn}^{2}\\left(${ax}\\right)`;
+  const F = (n, d) => tJoin([tTerm(1, 2, "x"), tTerm(n, d, `\\sin\\left(${2 * a}x\\right)`)]);
+  const rows = [tEq(`\\int\\frac{1${s < 0 ? "-" : "+"}\\cos\\left(${2 * a}x\\right)}{2}\\,dx`)];
+  return topMake("squareTrig", shown, F(s, 4 * a), rows, [-3, 3], [
+    { kind: "sign", F: F(-s, 4 * a) },
+    { kind: "subFactor", F: F(s, 2) },
+  ]);
+}
+
+// ∫ k·sin²x·cos²x dx = k∫ sin²(2x)/4 dx: the double angle twice.
+function genTopSinCosSq() {
+  const k = pick([1, 2, 4, 8]);
+  const F = (n, d) => tJoin([tTerm(k, 8, "x"), tTerm(-k * n, d, "\\sin\\left(4x\\right)")]);
+  const rows = [
+    tEq(`${tCo(k)}\\int\\frac{\\sin^{2}\\left(2x\\right)}{4}\\,dx`),
+    tEq(`${tCo(k)}\\int\\frac{1-\\cos\\left(4x\\right)}{8}\\,dx`),
+  ];
+  return topMake("sinCosSq", `${tCo(k)}\\sin^{2}x\\cos^{2}x`, F(1, 32), rows, [-3, 3], [
+    { kind: "subFactor", F: F(1, 8) },
+    { kind: "sign", F: F(-1, 32) },
+  ]);
+}
+
+// --- bosses: parts with a twist ----------------------------------------------------
+
+// ∫ k·x/cos²x dx: v = tan x, and ∫tan x needs t = cos x.
+function genTopXSec() {
+  const k = pick([1, 2, 3]);
+  const c = tCo(k);
+  const F = (s) => tJoin([tTerm(k, 1, "x\\tan x"), tTerm(s * k, 1, "\\ln|\\cos x|")]);
+  const rows = [
+    tUdv("x", "\\frac{1}{\\cos^{2}x}", "1", "\\tan x"),
+    tEq(tWrap(c, "x\\tan x-\\int\\frac{\\sin x}{\\cos x}\\,dx")),
+    tBracket("t=\\cos x", "dt=-\\sin x\\,dx"),
+    tEq(tWrap(c, "x\\tan x+\\int\\frac{dt}{t}")),
+  ];
+  return topMake("xSec", `\\frac{${tNum(k, "x")}}{\\cos^{2}x}`, F(1), rows, [-1.45, 1.45], [{ kind: "subSign", F: F(-1) }]);
+}
+
+// ∫ k·x/sin²x dx: v = −cot x, and ∫cot x needs t = sin x.
+function genTopXCsc() {
+  const k = pick([1, 2, 3]);
+  const c = tCo(k);
+  const F = (s) => tJoin([tTerm(-k, 1, "x\\cot x"), tTerm(s * k, 1, "\\ln|\\sin x|")]);
+  const rows = [
+    tUdv("x", "\\frac{1}{\\sin^{2}x}", "1", "-\\cot x"),
+    tEq(tWrap(c, "-x\\cot x+\\int\\frac{\\cos x}{\\sin x}\\,dx")),
+    tBracket("t=\\sin x", "dt=\\cos x\\,dx"),
+    tEq(tWrap(c, "-x\\cot x+\\int\\frac{dt}{t}")),
+  ];
+  return topMake("xCsc", `\\frac{${tNum(k, "x")}}{\\sin^{2}x}`, F(1), rows, [-3, 3], [{ kind: "partsMinus", F: F(-1) }]);
+}
+
+// ∫ arcsin(x/a) dx: then x/√(a²−x²) needs t = a² − x².
+function genTopAsin() {
+  const a = pick([1, 2, 3]);
+  const A = a * a;
+  const as = a === 1 ? "\\arcsin x" : `\\arcsin\\left(\\frac{x}{${a}}\\right)`;
+  const root = `\\sqrt{${A}-x^{2}}`;
+  const F = (n, d) => tJoin([`x${as}`, tTerm(n, d, root)]);
+  const rows = [
+    tUdv(as, "1", `\\frac{1}{${root}}`, "x"),
+    tEq(`x${as}-\\int\\frac{x}{${root}}\\,dx`),
+    tBracket(`t=${A}-x^{2}`, "dt=-2x\\,dx"),
+    tEq(`x${as}+\\frac{1}{2}\\int\\frac{dt}{\\sqrt{t}}`),
+    tEq(`x${as}+\\sqrt{t}`),
+  ];
+  return topMake("asin", as, F(1, 1), rows, [-a + 0.03, a - 0.03], [
+    { kind: "sign", F: F(-1, 1) },
+    { kind: "subConst", F: F(1, 2) },
+    { kind: "subConst", F: F(2, 1) },
+  ]);
+}
+
+// ∫ e^{sin x}·sin x·cos x dx (or with sin 2x, or cos in the power): t = sin x
+// (or cos x), then ∫ t·eᵗ dt by parts.
+function genTopExpSin() {
+  const g = pick(["sin", "cos"]);
+  const twice = Math.random() < 0.5;
+  const m = (twice ? 2 : 1) * (g === "cos" ? -1 : 1);
+  const e = `e^{\\${g} x}`;
+  const shown = `${e}${twice ? "\\sin\\left(2x\\right)" : "\\sin x\\cos x"}`;
+  const terms = [[1, `${e}\\${g} x`], [-1, e]];
+  const F = (n, d, ts = terms) => tJoin(ts.map(([s, b]) => tTerm(n * s, d, b)));
+  const rows = [];
+  if (twice) rows.push(tEq(`\\int 2${e}\\sin x\\cos x\\,dx`));
+  rows.push(
+    tBracket(`t=\\${g} x`, `dt=${g === "cos" ? "-\\sin" : "\\cos"} x\\,dx`),
+    tEq(`${tCo(m)}\\int te^{t}\\,dt`),
+    tUdv("t", "e^{t}", "1", "e^{t}"),
+    tEq(tWrap(tCo(m), "te^{t}-e^{t}")),
+  );
+  const slips = [{ kind: "partsMinus", F: F(m, 1, tPartsMinus(terms)) }];
+  if (g === "cos") slips.push({ kind: "subSign", F: F(-m, 1) });
+  if (twice) slips.push({ kind: "subConst", F: F(m, 2) });
+  return topMake("expSin", shown, F(m, 1), rows, [-4, 4], slips);
+}
+
+// --- the pools and the rooms' plans ---------------------------------------------------
+
+const TOP_POOLS = {
+  A: [genTopExpPf, genTopSinPf, genTopLnPf],
+  B: [genTopX3, genTopRoot],
+  C: [genTopXAtan, genTopLnSq, genTopAtan],
+  trick: [genTopCosh, genTopOnePlusExp, genTopRootAtan, genTopLnRoot],
+  hard: [genTopXRoot, genTopX3Root, genTopCubicOverSquare, genTopOddPower, genTopTanSq, genTopSquareTrig, genTopSinCosSq],
+  boss: [genTopXSec, genTopXCsc, genTopAsin, genTopExpSin],
+};
+// "Old" exercises: the harder forms of the towers' rooms only.
+const TOP_OLD = {
+  pf: ["pfBoss", "repDegree2", "irrDegree2", "irrBoss"],
+  pf2: ["cubRepQuad", "cubIrrBoss"],
+  parts: ["partsSquare", "partsPolyBoss", "partsLnPow", "partsLnBoss"],
+  sub: ["subA", "subC"],
+};
+
+// Room 1: two old exercises from two different towers and two combos from two
+// different families, shuffled. Room 2: a combo (from a family room 1 didn't
+// use, when known), a trick, a hard one, a boss - in that order.
+// `cubic`: false for a group without rational functions II.
+function drawTopPlan(kind, { cubic = true, avoid = [] } = {}) {
+  if (kind === "top1") {
+    const towers = shuffled(["rational", "parts", "sub"]).slice(0, 2)
+      .map((t) => (t === "rational" ? (cubic && Math.random() < 0.4 ? "pf2" : "pf") : t));
+    const fams = shuffled(["A", "B", "C"]).slice(0, 2);
+    return shuffled([`old:${towers[0]}`, `old:${towers[1]}`, `combo:${fams[0]}`, `combo:${fams[1]}`]);
+  }
+  const left = ["A", "B", "C"].filter((f) => !avoid.includes(f));
+  return [`combo:${pick(left.length ? left : ["A", "B", "C"])}`, "trick", "hard", "boss"];
+}
+
+function generateTopExercise(entry) {
+  const [what, which] = entry.split(":");
+  if (what === "old") return GENERATORS[pick(TOP_OLD[which])]();
+  const pool = TOP_POOLS[what === "combo" ? which : what];
+  let p;
+  do p = pick(pool)();
+  while (topSampleZones(p).length < 4);
+  return p;
+}
+
+// --- dispatch (problemLatex & co. send kind "top" here) ------------------------------
+
+const topFnCache = new Map();
+function topFn(latex) {
+  if (!topFnCache.has(latex)) topFnCache.set(latex, buildEvaluator(latex));
+  return topFnCache.get(latex);
+}
+
+const topProblemLatex = (p) => `\\int ${p.shown}\\,dx`;
+// A solution that opens with parts puts the u, v′ rows above the integral,
+// as the parts tower does.
+function topSolutionLatex(p) {
+  const [r0, ...rest] = p.rows;
+  const lines = r0.startsWith("&u=")
+    ? [r0, `${topProblemLatex(p)} ${rest[0]}`, ...rest.slice(1)]
+    : [`${topProblemLatex(p)} ${r0}`, ...rest];
+  return `\\begin{aligned}${lines.join(" \\\\ ")}\\end{aligned}`;
+}
+
+// A slip's "problem" carries only its wrong F; its integrand is F′.
+function topIntegrandFn(p) {
+  if (p.deriv) {
+    const G = topFn(p.deriv);
+    return (x) => (G(x + 1e-5) - G(x - 1e-5)) / 2e-5;
+  }
+  return topFn(p.shown);
+}
+
+// Five short stretches where the integrand and F are defined and tame.
+function topSampleZones(p) {
+  const f = topFn(p.shown);
+  const F = topFn(p.F);
+  const [lo, hi] = p.range;
+  const ok = (x) => {
+    const fx = f(x);
+    const Fx = F(x);
+    return Number.isFinite(fx) && Number.isFinite(Fx) && Math.abs(fx) < 1e3 && Math.abs(Fx) < 1e4;
+  };
+  // Tame on all of [x − 0.03, x + 0.03]: finite, and no jump across a pole
+  // between the points looked at (a sign flip with big values on both sides).
+  const tame = (x) => {
+    let prev = null;
+    for (let i = -6; i <= 6; i++) {
+      const y = x + i * 0.005;
+      if (!ok(y)) return false;
+      const fy = f(y);
+      if (prev !== null && Math.abs(fy - prev) > 0.5 * (Math.abs(fy) + Math.abs(prev)) + 1) return false;
+      prev = fy;
+    }
+    return true;
+  };
+  let good = [];
+  for (let i = 0; i <= 240; i++) {
+    const x = lo + ((hi - lo) * i) / 240;
+    if (tame(x)) good.push(x);
+  }
+  // Where the integrand is next to 0 a slip can't be told from the answer
+  // (sin³x·cos²x near x = 0): keep away from there when there is room.
+  const lively = good.filter((x) => Math.abs(f(x)) > 0.1);
+  if (lively.length >= 5) good = lively;
+  const n = Math.min(5, good.length);
+  const zones = [];
+  for (let j = 0; j < n; j++) {
+    const x = good[Math.round((j * (good.length - 1)) / Math.max(n - 1, 1))];
+    zones.push([x - 0.02, x + 0.02]);
+  }
+  return zones;
+}
+
+const topNearMissVariants = (p) => p.slips.map((s) => ({ kind: s.kind, problem: { kind: "top", deriv: s.F } }));
+
+Object.assign(NEAR_MISS_TEXT, {
+  pfCoef: "כמעט! בדקו את המקדמים בפירוק לשברים חלקיים.",
+  partsMinus: `כמעט! בדקו את הסימן: ${ltr("∫uv′ dx = uv − ∫u′v dx")}.`,
+  topCoef: "כמעט! המבנה נכון - בדקו את המקדמים.",
+  subSignShift: `כמעט! בדקו את הסימן: אם ${ltr("t = x+a")} אז ${ltr("x = t−a")}.`,
 });
 
 // ---------------------------------------------------------------------------
