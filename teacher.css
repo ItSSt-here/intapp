@@ -75,3 +75,9 @@ thead .t-name { background: #faf8f3; z-index: 1; }
 .t-move { font: inherit; font-size: 0.8rem; padding: 2px; }
 
 .t-legend { font-size: 0.8rem; color: var(--muted); margin-top: 10px; }
+
+.t-search { display: flex; gap: 4px; }
+.t-search input { font: inherit; width: 150px; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 8px; text-align: right; }
+.t-search input:focus { outline: none; border-color: var(--accent); }
+.t-found td { outline: 2px solid var(--accent); outline-offset: -2px; }
+.t-found .t-name { background: var(--accent-tint); }

@@ -2,7 +2,7 @@
 // Sign-in is with Google; the database rules (firestore.rules) let only the
 // lecturer's address list the students, change a group or delete one.
 import { ROOMS, MEDAL_LIST } from "./rooms.js";
-import { FIREBASE_VERSION, FIREBASE_CONFIG, GROUPS } from "./cloud.js";
+import { FIREBASE_VERSION, FIREBASE_CONFIG, GROUPS, validId, idKey } from "./cloud.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -16,10 +16,13 @@ const PLACES = [
 ];
 // What each group studies (software engineering has no rational functions II).
 const groupHas = (group, place) => !(group === "software" && place === "pf2");
+// Without a floor II, floor I is just "rational functions".
+const pfName = (group, name) => (groupHas(group, "pf2") ? name : name.replace(/ I$/, ""));
 
 let fb = null;
 let students = []; // { key, name, group, store, updatedAt }
 let tab = "software";
+let found = null; // the key of the student the ID search found
 
 // --- Firebase -------------------------------------------------------------------
 
@@ -87,7 +90,7 @@ async function load() {
 }
 
 const roomsOf = (group) =>
-  PLACES.filter(([p]) => groupHas(group, p)).map(([p, label]) => [label, ROOMS.filter((r) => r.place === p)]);
+  PLACES.filter(([p]) => groupHas(group, p)).map(([p, label]) => [pfName(group, label), ROOMS.filter((r) => r.place === p)]);
 const medalsOf = (group) => MEDAL_LIST.filter((m) => groupHas(group, m.id));
 
 function roomCell(st, id) {
@@ -134,13 +137,13 @@ function render() {
     ${places.map(([label, rs]) => `<th colspan="${rs.length}" class="t-place">${label}</th>`).join("")}
     <th colspan="${medals.length}" class="t-place">מדליות</th><th rowspan="2"></th></tr>`;
   const head2 = `<tr>${rooms.map((r) => `<th class="t-room${r.kind === "review" ? " review" : ""}" title="${esc(r.title)}">${esc(r.title)}</th>`).join("")}
-    ${medals.map((m) => `<th class="t-room">${esc(m.title)}</th>`).join("")}</tr>`;
+    ${medals.map((m) => `<th class="t-room">${esc(pfName(tab, m.title))}</th>`).join("")}</tr>`;
 
   const cell = (c) =>
     `<td class="t-cell${c.score != null ? " " + tier(c.score) : ""}${c.run ? " t-run" : ""}${c.partial ? " t-partial" : ""}">${c.text}${c.gold ? ' <span class="t-gold">★</span>' : ""}</td>`;
   const rows = list
     .map(
-      (st) => `<tr data-key="${st.key}">
+      (st) => `<tr data-key="${st.key}"${st.key === found ? ' class="t-found"' : ""}>
         <td class="t-name">${esc(st.name)}</td><td class="t-when">${when(st.updatedAt)}</td>
         ${rooms.map((r) => cell(roomCell(st, r.id))).join("")}
         ${medals.map((m) => cell(medalCell(st, m))).join("")}
@@ -170,6 +173,7 @@ $("tabs").addEventListener("click", (e) => {
   const b = e.target.closest("[data-tab]");
   if (!b) return;
   tab = b.dataset.tab;
+  found = null;
   render();
 });
 
@@ -204,6 +208,31 @@ $("table").addEventListener("click", async (e) => {
     console.warn(err);
     alert("המחיקה נכשלה.");
   }
+});
+
+// Search by ID number: hashed here the same way the game does, and matched
+// against the students' keys. The number itself goes nowhere.
+$("idSearch").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = validId($("idInput").value);
+  found = null;
+  if (!id) {
+    render();
+    $("status").textContent = "מספר תעודת הזהות לא תקין.";
+    return;
+  }
+  const key = await idKey(id);
+  const st = students.find((s) => s.key === key);
+  if (!st) {
+    render();
+    $("status").textContent = "לא נמצא סטודנט עם תעודת הזהות הזאת.";
+    return;
+  }
+  found = key;
+  tab = st.group;
+  render();
+  $("status").textContent = `נמצא: ${st.name} (${GROUPS[st.group] || st.group})`;
+  $("table").querySelector(".t-found")?.scrollIntoView({ block: "center", behavior: "smooth" });
 });
 
 $("refreshBtn").addEventListener("click", () => load().catch(showLoadError));

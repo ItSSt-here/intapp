@@ -99,7 +99,7 @@ export function validId(raw) {
   return sum % 10 === 0 && !/^0+$/.test(id) ? id : null;
 }
 
-async function idKey(id) {
+export async function idKey(id) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("intapp-student:" + id));
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

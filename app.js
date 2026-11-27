@@ -3067,6 +3067,8 @@ const student = TEST_MODE ? null : currentStudent();
 const viewGroup = TEST_MODE ? new URLSearchParams(location.search).get("group") : student?.group;
 // Software engineering doesn't study rational functions II (cubic floor).
 const hasPf2 = () => viewGroup !== "software";
+// Without a floor II, floor I is just "rational functions".
+const PF1_NAME = hasPf2() ? "פונקציות רציונליות I" : "פונקציות רציונליות";
 // Beside the title: who is playing, and a way out on a shared computer.
 if (student) {
   const el = document.getElementById("whoLine");
@@ -3567,7 +3569,7 @@ function padlockSvg(n, open) {
 // Upgrades: a gold rim for the review room (and, rational functions only, a
 // star for the optional room).
 
-const MEDALS = MEDAL_LIST.filter((m) => m.id !== "pf2" || hasPf2());
+const MEDALS = MEDAL_LIST.filter((m) => m.id !== "pf2" || hasPf2()).map((m) => (m.id === "pf" ? { ...m, title: PF1_NAME } : m));
 
 const MEDAL_COLORS = { high: "#3f8a5c", mid: "#c08a12", low: "#b5523b" };
 
@@ -3867,9 +3869,9 @@ function towerNavItems() {
     {
       go: "pf",
       mark: "½",
-      name: "פונקציות רציונליות I",
+      name: PF1_NAME,
       sub: "מכנה ממעלה 2",
-      full: "פונקציות רציונליות I · מכנה ממעלה 2",
+      full: `${PF1_NAME} · מכנה ממעלה 2`,
       locked: !stairsOpen(),
       done: coreDone(),
       here: place === "pf",
@@ -4383,7 +4385,7 @@ function renderRationalFloor() {
   const light = floorLighting("pf", CORE_IDS);
   towerEl.innerHTML = `
     <div class="floor-map floor-alive">
-      <div class="floor-label${light.label}">פונקציות רציונליות I · מכנה ממעלה 2 <span class="floor-en" dir="ltr">(rational functions I)</span>${medalMiniHtml("pf")}</div>
+      <div class="floor-label${light.label}">${PF1_NAME} · מכנה ממעלה 2 <span class="floor-en" dir="ltr">(rational functions${hasPf2() ? " I" : ""})</span>${medalMiniHtml("pf")}</div>
       ${mapTipHtml()}
       <div class="floor-grid">
         ${mapTorch(1, 9, light.core)}${mapTorch(3, 9, light.core)}${mapTorch(4, 1, light.all)}
