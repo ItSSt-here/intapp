@@ -4387,11 +4387,46 @@ function renderMedalView() {
           </div>` : ""}
       </div>`;
   };
+  // The summit's crown on a pedestal of its own, after the medals: both its
+  // rooms won (it takes no medals - its door can be opened early).
+  const crowned = TOP_IDS.every(isConquered);
+  const crownSpot = `
+      <div class="medal-spot crown-spot${crowned ? " lit" : ""}">
+        <div class="medal-alcove">
+          <div class="medal-beam" aria-hidden="true"></div>
+          <div class="medal-big">${crownSvg(crowned)}</div>
+          ${PEDESTAL_SVG}
+        </div>
+        <div class="medal-score">${crowned ? "הכתר הושג" : "הכתר עוד לא הושג"}</div>
+        <ul class="medal-checklist">${TOP_IDS.map((id) => item(isConquered(id), ROOM_BY_ID[id].title)).join("")}</ul>
+      </div>`;
   $("medalStage").innerHTML = `
     <div class="medal-hall">
       ${torchHtml("l")}${torchHtml("r")}
       ${states.map(spot).join("")}
+      ${crownSpot}
     </div>`;
+}
+
+// The summit's crown, drawn like the medals (same box and ribbon): gold, or a
+// dashed outline while not won.
+function crownSvg(won) {
+  const shape = "M22 82L14 36L40 58L60 22L80 58L106 36L98 82Z";
+  const ribbon = `
+    <path class="medal-ribbon" d="M10 94h100l-6 9 6 9H10l6-9z"/>
+    <text class="medal-ribbon-text" x="60" y="106.5" text-anchor="middle">פסגת האינטגרלים</text>`;
+  return won
+    ? `<svg class="medal crown" viewBox="0 0 120 116" role="img" aria-label="הכתר">
+        <path d="${shape}" class="crown-body"/>
+        <rect x="22" y="76" width="76" height="10" rx="2" class="crown-band"/>
+        <circle cx="60" cy="22" r="5" class="crown-gem"/><circle cx="14" cy="36" r="4" class="crown-gem"/><circle cx="106" cy="36" r="4" class="crown-gem"/>
+        <text x="60" y="70" text-anchor="middle" class="crown-int">∫</text>
+        ${ribbon}
+      </svg>`
+    : `<svg class="medal empty crown" viewBox="0 0 120 116" role="img" aria-label="הכתר עוד לא הושג">
+        <path d="${shape}" class="medal-outline"/>
+        ${ribbon}
+      </svg>`;
 }
 
 // The medals button beside the map: glows while a medal waits unseen.
@@ -5031,19 +5066,28 @@ const mapTipHtml = () =>
           <button type="button" class="map-tip-close" data-tip-close aria-label="סגירה">✕</button>
         </div>`;
 
-// Top-down plan of the ground floor (basic integrals): one room after the
-// other. One line, right to left (RTL): entrance · hall · room 1 · hall ·
-// room 2 · hall · a landing with the stairs up to the two towers (row 3).
-// The marker stands in the hall in front of a door; the way on goes through
-// the room. A side hall goes up from the last hall to the extension room
-// (row 1).
+// Top-down plan of the ground floor (basic integrals), right to left (RTL):
+// the rooms on the top row - room 1, a hall, room 2, a hall into a round hall
+// at the end (all three rows of the last column). The entrance is below
+// room 1: a hall goes straight up into it through its bottom wall. A side
+// hall goes down from the last hall to the extension room, below room 2.
 function renderBasicFloor() {
+  // The round hall: the summit's door at the top of its wall, the towers'
+  // stairs as niches at 4, 6 and 8 o'clock, the way in at 2 o'clock and a
+  // torch at 10, round a mosaic with ∫ in the middle.
   const stairs = `
-    <div class="cell stairs-landing" style="grid-column:7;grid-row:3">
-      ${stairsHtml("stairsPf", "פונקציות רציונליות", "מגדל הפונקציות הרציונליות")}
-      ${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}
-      ${stairsHtml("stairsSub", "הצבה", "מגדל ההצבה")}
-      ${summitDoorHtml()}
+    <div class="cell stairs-landing round-hall" style="grid-column:5;grid-row:1 / 4">
+      <div class="rh-wrap">
+      <div class="rh-wall" aria-hidden="true"></div>
+      <div class="rh-room">
+        <div class="rh-emblem" aria-hidden="true"><span>∫</span></div>
+        <div class="rh-torch" aria-hidden="true">${torchHtml("l")}</div>
+        <div class="rh-spot rh-top">${summitDoorHtml()}</div>
+        <div class="rh-spot rh-sub">${stairsHtml("stairsSub", "הצבה", "מגדל ההצבה")}</div>
+        <div class="rh-spot rh-parts">${stairsHtml("stairsParts", "אינטגרציה בחלקים", "מגדל האינטגרציה בחלקים")}</div>
+        <div class="rh-spot rh-pf">${stairsHtml("stairsPf", "פונקציות רציונליות", "מגדל הפונקציות הרציונליות")}</div>
+      </div>
+      </div>
     </div>`;
   // The floor waking up (see floorLighting): the big torch after rooms 1-2.
   const light = floorLighting("ground", FLOOR1_IDS);
@@ -5051,20 +5095,20 @@ function renderBasicFloor() {
     <div class="floor-map floor-alive">
       <div class="floor-label${light.label}">קומת הקרקע · אינטגרלים בסיסיים <span class="floor-en" dir="ltr">(basic integrals)</span></div>
       ${mapTipHtml()}
-      <div class="floor-grid floor-basic">
-        ${mapTorch(3, 1, light.core)}
-        <div class="cell ext-cell" style="grid-column:6;grid-row:1">${roomCardHtml(ROOM_BY_ID.more)}</div>
+      <div class="floor-grid floor-basic floor-ground">
+        <div class="cell" style="grid-column:1;grid-row:1">${roomCardHtml(ROOM_BY_ID.basic)}</div>
+        <div class="hall" style="grid-column:2;grid-row:1" data-spot="linear" aria-hidden="true"></div>
+        <div class="cell" style="grid-column:3;grid-row:1">${roomCardHtml(ROOM_BY_ID.linear)}</div>
+        <div class="hall hall-landing" style="grid-column:4;grid-row:1" data-spot="landing" data-node="landing" aria-hidden="true"></div>
+        <!-- Down from the last hall, in through the extension room's top wall. -->
+        <div class="hall hall-v hall-side" style="grid-column:4;grid-row:1" aria-hidden="true"></div>
+        <!-- From the entrance straight up, in through room 1's bottom wall. -->
+        <div class="hall hall-v hall-up" style="grid-column:1;grid-row:2" data-spot="basic" aria-hidden="true"></div>
         <div class="cell entrance" style="grid-column:1;grid-row:3" data-node="entrance">
           ${torchHtml("l")}${DOOR_SVG}${torchHtml("r")}<span class="door-label">כניסה</span>
         </div>
-        <div class="hall" style="grid-column:2;grid-row:3" data-spot="basic" aria-hidden="true"></div>
-        <div class="cell" style="grid-column:3;grid-row:3">${roomCardHtml(ROOM_BY_ID.basic)}</div>
-        <div class="hall" style="grid-column:4;grid-row:3" data-spot="linear" aria-hidden="true"></div>
-        <div class="cell" style="grid-column:5;grid-row:3">${roomCardHtml(ROOM_BY_ID.linear)}</div>
-        <div class="hall-branch" style="grid-column:6;grid-row:2 / 4" aria-hidden="true">
-          <div class="hall hall-v" data-spot="more"></div>
-          <div class="hall" data-spot="landing" data-node="landing"></div>
-        </div>
+        ${mapTorch(2, 3, light.core)}
+        <div class="cell ext-cell" style="grid-column:3 / 5;grid-row:3">${roomCardHtml(ROOM_BY_ID.more)}</div>
         ${stairs}
         <div class="map-marker" aria-hidden="true">
           <span class="marker-pin"></span>
@@ -5280,16 +5324,18 @@ function renderCubicFloor() {
 // The ground floor: a line, then a landing with the stairs to the two
 // towers; the extension room up a side hall from the last hall.
 const BASIC_FLOOR_NODES = {
-  entrance: { nav: { left: "basic" } },
-  basic: { nav: { left: "linear", right: "entrance" } },
-  linear: { nav: { right: "basic", left: "landing" } },
-  // The hall past room 2: up to the extension room, on to the stairs.
-  landing: { nav: { right: "linear", left: "stairsPf", up: "more" } },
-  stairsPf: { nav: { right: "landing", left: "stairsParts", up: "more" } },
-  stairsParts: { nav: { right: "stairsPf", left: "stairsSub", up: "more" } },
-  stairsSub: { nav: { right: "stairsParts", left: "stairsTop", up: "more" } },
-  stairsTop: { nav: { right: "stairsSub", up: "more" } },
-  more: { nav: { down: "landing", left: "stairsParts", right: "linear" } },
+  entrance: { nav: { up: "basic", left: "basic" } }, // the entrance is below room 1
+  basic: { nav: { left: "linear", down: "entrance", right: "entrance" } },
+  linear: { nav: { right: "basic", left: "landing", down: "more" } },
+  // The hall past room 2: down to the extension room, on into the round
+  // hall - the way in at 2 o'clock, the stairs at 4, 6 and 8, the summit's
+  // door at 12.
+  landing: { nav: { right: "linear", left: "stairsPf", up: "stairsTop", down: "more" } },
+  stairsPf: { nav: { right: "landing", up: "landing", left: "stairsParts", down: "stairsParts" } },
+  stairsParts: { nav: { right: "stairsPf", left: "stairsSub", up: "stairsTop" } },
+  stairsSub: { nav: { right: "stairsParts", down: "stairsParts", up: "stairsTop" } },
+  stairsTop: { nav: { left: "stairsSub", down: "stairsParts", right: "landing" } },
+  more: { nav: { up: "landing", left: "landing", right: "linear" } },
 };
 
 // The summit: the door back down, room 1, room 2.
@@ -5385,6 +5431,11 @@ function nodePoint(id) {
     const hall = towerEl.querySelector(`.hall[data-spot="${id === "entrance" ? linePath()[1] : id}"]`);
     if (hall && hall.offsetWidth) {
       const h = hall.getBoundingClientRect();
+      // The ground floor's entrance is below room 1: its threshold is the
+      // foot of the hall going up.
+      if (id === "entrance" && hall.classList.contains("hall-up")) {
+        return { x: h.left + h.width / 2 - grid.left, y: h.bottom - 10 - grid.top };
+      }
       return { x: (id === "entrance" ? h.right - 6 : h.left + h.width / 2) - grid.left, y: h.top + h.height / 2 - grid.top };
     }
     const r = nodeEl(id).getBoundingClientRect(); // phone layout: no halls
@@ -5404,6 +5455,39 @@ function corridorY(which) {
 
 const dropRepeats = (pts) => pts.filter((p, i) => i === 0 || Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) > 1);
 
+// Along a line: to the line's level, along it, then to the place.
+function lineRoute(a, b) {
+  const y = nodePoint(linePath()[1]).y;
+  return dropRepeats([a, { x: a.x, y }, { x: b.x, y }, b]);
+}
+
+// The ground floor's ways off the line, each from a place to the last hall:
+// up the side hall from the extension room, or across the round hall's floor
+// from a staircase (or the summit's door) to where the hall comes in.
+const inRoundHall = (id) => STAIRS_PLACE[id] && id !== "trophy";
+function groundLeg(id) {
+  const grid = towerEl.querySelector(".floor-grid").getBoundingClientRect();
+  const l = nodePoint("landing");
+  const p = nodePoint(id);
+  if (id === "more") {
+    const s = towerEl.querySelector(".hall-side").getBoundingClientRect();
+    const x = s.left + s.width / 2 - grid.left;
+    return [p, { x, y: p.y }, { x, y: l.y }, l];
+  }
+  const f = towerEl.querySelector(".rh-room").getBoundingClientRect();
+  const r = f.width / 2;
+  const dy = l.y - (f.top + r - grid.top);
+  return [p, { x: f.left + r - grid.left + Math.sqrt(Math.max(0, r * r - dy * dy)) - 14, y: l.y }, l];
+}
+function groundRoute(from, to) {
+  const off = (id) => id === "more" || inRoundHall(id);
+  if (inRoundHall(from) && inRoundHall(to)) return [nodePoint(from), nodePoint(to)]; // straight across the floor
+  if (!off(from) && !off(to)) return lineRoute(nodePoint(from), nodePoint(to));
+  const there = off(from) ? groundLeg(from) : lineRoute(nodePoint(from), nodePoint("landing"));
+  const on = off(to) ? groundLeg(to).reverse() : lineRoute(nodePoint("landing"), nodePoint(to));
+  return [...there, ...on];
+}
+
 // The way between two places: out into the corridor, along it, and in -
 // through the gate when going between the lower floor and the upper area.
 function routePoints(from, to) {
@@ -5413,8 +5497,8 @@ function routePoints(from, to) {
     // Along the line, through the rooms; off it (the side hall, the
     // landing's stairs) straight up or down from the line.
     if (!hallsShown()) return [a, b];
-    const y = nodePoint(linePath()[1]).y;
-    return dropRepeats([a, { x: a.x, y }, { x: b.x, y }, b]);
+    if (currentPlace() === "ground") return dropRepeats(groundRoute(from, to));
+    return lineRoute(a, b);
   }
   if (getComputedStyle(towerEl.querySelector(".doorway")).display === "none") return [a, b]; // phone layout
   const fa = mapNodes()[from].area;
@@ -5958,7 +6042,8 @@ let restartTimer = null;
 
 function syncRestart() {
   const rec = view.room && roomRecord(view.room.id);
-  restartBtn.hidden = !(rec && rec.run && (rec.run.node > 0 || rec.run.score < START_SCORE));
+  // Only once a point is lost: with a full score there is nothing to start over for.
+  restartBtn.hidden = !(rec && rec.run && rec.run.score < START_SCORE);
   resetRestartBtn();
 }
 
@@ -6435,8 +6520,11 @@ function showConquest(room, { score, prevBest, wins, before }) {
     if (subLeft.length) next = `החדר הבא: "${ROOM_BY_ID[subLeft[0]].title}"`;
     else if (!before.medals.find((m) => m.id === "sub").earned) next = "המדליה מחכה בחדר המדליות";
   } else if (room.place === "top") {
-    if (!isConquered("top2")) next = `החדר הבא: "${ROOM_BY_ID.top2.title}"`;
-    else if (room.id === "top2" && before.firstWin) next = "הכתר מחכה על הטירה";
+    // The crown wants both rooms (room 2 may be won first, its way opened early).
+    const topLeft = TOP_IDS.filter((id) => !isConquered(id));
+    if (topLeft.length && room.id === "top1") next = `החדר הבא: "${ROOM_BY_ID.top2.title}"`;
+    else if (topLeft.length) next = `לכתר חסר עוד "${ROOM_BY_ID[topLeft[0]].title}"`;
+    else if (before.firstWin) next = "הכתר מחכה על הטירה ובחדר המדליות";
   } else if (room.place === "pf2") {
     const cubLeft = CUB_IDS.filter((id) => !isConquered(id));
     if (cubLeft.length) next = `החדר הבא: "${ROOM_BY_ID[cubLeft[0]].title}"`;

@@ -2179,7 +2179,7 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .floor-grid.floor-basic {
     /* Halls and stairs kept slim: a won room's progress row (dots, score,
        wins) needs about 200px. */
-    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px 300px; /* three stairs and the summit door */
+    grid-template-columns: 104px 58px minmax(0, 1fr) 58px minmax(0, 1fr) 58px 300px; /* the round hall: three stairs and the summit door */
     grid-template-rows: auto 34px auto;
     gap: 0;
   }
@@ -2205,22 +2205,8 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
   .floor-basic .map-marker:not(.walking) { z-index: 7; } /* standing: its label over the cards */
   .floor-basic > .cell:has(.info-wrap.open, .info-wrap:hover) { z-index: 8; }
   .floor-basic .entrance { align-self: center; padding-top: 18px; }
-  /* The extension room, above the last hall, wider than the hall's column. */
+  /* The extension room, wider than the hall's column. */
   .floor-basic .ext-cell { justify-self: center; width: 230px; }
-  /* The last hall and the side hall up to the extension room: the hall sits
-     level with the line (row 3), the side hall rises from it. */
-  .hall-branch { display: grid; grid-template-rows: 34px 1fr 50px 1fr; }
-  .hall-branch .hall { grid-row: 3; height: auto; align-self: stretch; }
-  .hall-branch .hall-v {
-    grid-row: 1 / 3;
-    position: relative;
-    z-index: 1;
-    justify-self: center;
-    width: 46px;
-    margin: -4px 0 -3px;
-    border-block: none;
-    border-inline: 3px solid var(--jamb);
-  }
   .floor-basic .entrance .torch-l { left: -2px; }
   .floor-basic .entrance .torch-r { right: -2px; }
 }
@@ -2520,3 +2506,151 @@ body:has(.test-panel) .sound-btn { bottom: 62px; }
 .summit-door { flex-grow: 1.35; }
 .summit-door .stairs-steps { max-width: 110px; }
 .summit-door .door-lintel { fill: #8d806a; stroke: #3e362c; stroke-width: 2; }
+
+/* ---- The round hall at the end of the ground floor's line ---- */
+/* From 760px: the landing becomes a round stone hall over the last column's
+   three rows - a thick stone wall, a floor of radial slabs round a mosaic
+   with ∫, the summit's door at the top of the wall and the towers' stairs as
+   niches round its far side. The hall from room 2 runs in on the right.
+   Narrower, it stays a row of stairs. */
+@media (min-width: 760px) {
+  .floor-basic .ext-cell { justify-self: end; } /* below room 2, at the side hall */
+  .floor-basic > .round-hall {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    min-height: 280px;
+    background: none;
+    border: 0;
+    z-index: auto; /* so the hall from room 2 can pass between its wall and its floor */
+  }
+  .rh-wrap { position: relative; width: calc(100% - 30px); max-width: 290px; aspect-ratio: 1; }
+  /* The wall: a stone ring with joints (a disc under the floor). */
+  .rh-wall {
+    position: absolute;
+    inset: -14px;
+    z-index: 3;
+    border-radius: 50%;
+    background: repeating-conic-gradient(from 0deg, #8d806a 0 13deg, #5e5446 13deg 14deg);
+    border: 2px solid #3e362c;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+  }
+  /* The floor: radial slabs and two rings, over the wall - and over the end
+     of the hall that runs in through the wall, so its opening follows the
+     circle. */
+  .rh-room {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle closest-side, transparent 0 44%, rgba(62, 54, 44, 0.5) 44% 45%, transparent 45% 76%, rgba(62, 54, 44, 0.4) 76% 77%, transparent 77%),
+      repeating-conic-gradient(from 6deg, #e7ddc9 0 15deg, #ddd1ba 15deg 30deg);
+    box-shadow: 0 0 0 1.5px #3e362c, inset 0 0 0 3px rgba(62, 54, 44, 0.35), inset 0 0 34px rgba(40, 30, 15, 0.4);
+  }
+  .rh-emblem {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 23%;
+    aspect-ratio: 1;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle, #f1e6c8 0 58%, #c9a227 58% 63%, #b9ac8f 63% 71%, #c9a227 71% 75%, transparent 75%),
+      repeating-conic-gradient(#d7c9a8 0 22.5deg, #cbbd9b 22.5deg 45deg);
+    box-shadow: 0 0 0 2px rgba(62, 54, 44, 0.45);
+    pointer-events: none;
+  }
+  .rh-emblem span { font: italic 700 2rem Georgia, serif; color: rgba(122, 90, 0, 0.75); transform: translateY(-2px); }
+
+  .round-hall .rh-spot { position: absolute; display: flex; }
+  /* Each staircase a niche in the wall: a dark recess behind it. */
+  .round-hall .rh-spot > .stairs {
+    flex: 1 1 auto;
+    padding: 4px 2px 12px;
+    gap: 2px;
+    background: radial-gradient(ellipse at 50% 30%, rgba(43, 39, 34, 0.22), rgba(43, 39, 34, 0.06) 70%);
+    border-radius: 40% 40% 8px 8px / 30% 30% 8px 8px;
+  }
+  .round-hall .stairs-steps { max-width: 46px; }
+  .round-hall .stairs-label { font-size: 0.66rem; }
+  /* Round the mosaic like a clock: the summit's door at 12, the stairs at
+     4, 6 and 8 (each spot placed by its centre), the way in at 2 and a torch
+     at 10 to balance it. */
+  .round-hall .rh-top { top: 1%; left: 50%; width: 27%; transform: translateX(-50%); }
+  .round-hall .rh-top .summit-door { background: none; }
+  .round-hall .summit-door .stairs-steps { max-width: 64px; }
+  .round-hall .rh-sub,
+  .round-hall .rh-parts,
+  .round-hall .rh-pf { width: 24%; transform: translate(-50%, -50%); }
+  .round-hall .rh-spot .stairs-label { min-height: 2.4em; line-height: 1.2; display: flex; align-items: flex-end; justify-content: center; } /* one line or two: the steps level */
+  .round-hall .rh-pf { left: 79%; top: 67%; }
+  .round-hall .rh-parts { left: 50%; top: 83%; }
+  .round-hall .rh-sub { left: 21%; top: 67%; }
+  .rh-torch { position: absolute; left: 13%; top: 24%; width: 0; height: 0; }
+  .rh-torch .torch { left: -20px; top: -60px; transform: scale(0.5); transform-origin: 50% 65%; }
+  /* The way in: the hall after room 2 runs on through the wall. */
+  .floor-ground .hall-landing { margin-inline-end: -70px; position: relative; z-index: 4; }
+}
+
+/* ---- The summit's crown in the medals room ---- */
+.crown .crown-body { fill: #e2b33a; stroke: #9c7414; stroke-width: 3; stroke-linejoin: round; }
+.crown .crown-band { fill: #c9962a; stroke: #9c7414; stroke-width: 2; }
+.crown .crown-gem { fill: #fff6d6; stroke: #9c7414; stroke-width: 2; }
+.crown .crown-int { font: italic 700 26px Georgia, serif; fill: #7a5a00; }
+
+/* Tablets: the round hall is smaller - smaller niches and mosaic. */
+@media (min-width: 760px) and (max-width: 1199px) {
+  .round-hall .stairs-steps { max-width: 30px; }
+  .round-hall .rh-pf .stairs-label { white-space: nowrap; }
+  .round-hall .summit-door .stairs-steps { max-width: 48px; }
+  .round-hall .stairs-label { font-size: 0.58rem; }
+  .rh-emblem { width: 19%; }
+  .rh-emblem span { font-size: 1.5rem; }
+}
+
+/* ---- The ground floor: the rooms on top, the entrance below room 1 ---- */
+/* The rooms run along the top row (right to left) into the round hall; the
+   entrance is below room 1, with a hall straight up into it through its
+   bottom wall, and the side hall goes down from the last hall into the
+   extension room, below room 2. Both cut through the room's wall: a doorway
+   over the frame, with no line across the opening. */
+@media (min-width: 760px) {
+  .floor-grid.floor-basic.floor-ground {
+    grid-template-columns: minmax(0, 1fr) 58px minmax(0, 1fr) 90px 340px; /* the last hall wide: the side hall comes down well inside the extension room */
+    grid-template-rows: auto 48px auto;
+    margin-top: 34px; /* room of the rooms' torches and banners, under the floor's name */
+  }
+  .floor-ground .entrance { align-self: start; justify-self: center; width: 112px; padding-top: 0; z-index: 8; } /* its door and torches over the end of the hall */
+  .floor-ground .rh-wrap { max-width: 320px; }
+  .floor-ground .ext-cell { align-self: start; }
+  .floor-ground .hall-v {
+    justify-self: center;
+    width: 46px;
+    height: auto;
+    border-block: none;
+    border-inline: 3px solid var(--jamb);
+    position: relative;
+    z-index: 7;
+  }
+  /* From the entrance's door up through room 1's bottom wall: the opening
+     is as deep as the room's frame (its border and inner line). */
+  .floor-ground .hall-up { align-self: stretch; margin: -6px 0 -4px; }
+  /* From the last hall's floor (over its lower border, so the opening has
+     no line across it) down through the extension room's top wall. The
+     hall is centred in row 1: 50% of the row is its middle. */
+  .floor-ground .hall-side {
+    align-self: start;
+    top: calc(50% + 22px);
+    height: calc(50% - 22px + 48px + 6px);
+    margin: 0;
+  }
+}
+@media (min-width: 760px) and (max-width: 1199px) {
+  .floor-grid.floor-basic.floor-ground { grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr) 72px 280px; }
+}
